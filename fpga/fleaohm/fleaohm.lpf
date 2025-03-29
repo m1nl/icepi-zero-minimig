@@ -214,3 +214,33 @@ LOCATE COMP "PS2_data1" SITE "M1" ;
 LOCATE COMP "PS2_data2" SITE "J1" ;
 LOCATE COMP "GPIO_9" SITE "J19" ;
 LOCATE COMP "GPIO_11" SITE "K19" ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/state*" TO CELL "virtual_top/*" 3.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/*" 3.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/sdram/cache/*" 3.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr*" TO CELL "virtual_top/sdram/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr*" TO CELL "virtual_top/sdram/cache/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr*" TO CELL "virtual_top/sdram/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/cache/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write2*" TO CELL "virtual_top/sdram/cache/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/*tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/*tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/ALU/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/data_write/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/*" 4.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/sdram/cache/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/sdram/*" 3.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr*" TO CELL "virtual_top/minimig/CPU1/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr*" TO CELL "virtual_top/sdram/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr*" TO CELL "*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/cache/*" 2.000000 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/*" 2.000000 X ;
+
+MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[*]" TO CELL "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[*]" 2.000000 X ;
+
+MULTICYCLE FROM CLKNET "virtual_top.CLK_28" TO CLKNET "sysclk" 4.000000 X ;
+MULTICYCLE FROM CLKNET "sysclk" TO CLKNET "virtual_top.CLK_28" 2.000000 X ;
+

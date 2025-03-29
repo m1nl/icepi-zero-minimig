@@ -117,10 +117,6 @@ constant reset_cycles : integer := 131071;
 
 	signal sysclk : std_logic;
 
---	signal slowclk : std_logic;
---	signal fastclk : std_logic;
---	signal pll_locked : std_logic;
-
 -- SPI signals
 
 	signal diskled :std_logic;
@@ -155,11 +151,8 @@ constant reset_cycles : integer := 131071;
 	signal rs232_rxd : std_logic;
 	signal rs232_txd : std_logic;
 
-	--alias sigma_l : std_logic is GPIO(18);
-	--alias sigma_r : std_logic is GPIO(20);
-
-	signal audio_l : std_logic_vector(15 downto 0);
-	signal audio_r : std_logic_vector(15 downto 0);
+	signal audio_l : std_logic_vector(23 downto 0);
+	signal audio_r : std_logic_vector(23 downto 0);
 	
 -- IO
 
@@ -182,9 +175,6 @@ constant reset_cycles : integer := 131071;
     signal   cnt:     integer range 0 to cnt_div-1; 
     signal   ce:      std_logic;
 
-    signal   left_sampled:	std_logic_vector(23 downto 0);
-    signal   right_sampled:	std_logic_vector(23 downto 0);	
-
 	signal ps2k_data_in : std_logic;
 	signal ps2k_clk_in : std_logic;
 	signal ps2k_data_out : std_logic;
@@ -194,16 +184,6 @@ constant reset_cycles : integer := 131071;
 	signal ps2m_data_out : std_logic;
 	signal ps2m_clk_out : std_logic;
 begin
-
-	--u01 : entity work.DVI_PLL -- 
-	--port map(
-		--CLKI			=>	sys_clock,
-		--CLKOP			=>	open, -- 112.5MHz
-		--CLKOS			=>  clk28m,
-		--CLKOS2			=>	clk_dvi, -- 140.625 MHz
-		--CLKOS3			=>	clk_dvin -- 140.625 MHz
-
-		--);  	
 
 
 -- Joystick bits(5-0) = fire2,fire,right,left,down,up mapped to GPIO header
@@ -274,10 +254,6 @@ PORT map
 		DVI_B	=> dvi_blue,
 		DVI_STROBE => dvi_pixel,
 		DVI_DE => dvi_window,
-		--LVDS_Red      => LVDS_Red,
-		--LVDS_Green    => LVDS_Green, 
-		--LVDS_Blue     => LVDS_Blue,
-		--LVDS_ck       => LVDS_ck,
 	
 		SDRAM_DQ	=> Dram_Data,
 		SDRAM_A => Dram_Addr,
@@ -291,11 +267,8 @@ PORT map
 		SDRAM_CLK => Dram_Clk,
 		SDRAM_CKE => Dram_CKE,
 
-		AUDIO_L => left_sampled,
-		AUDIO_R => right_sampled,
-
---		DAC_left	=> GPIO_19,
---		DAC_right	=> GPIO_13,
+		AUDIO_L => audio_l,
+		AUDIO_R => audio_r,
 
 		PS2_DAT_I => ps2k_data_in,
 		PS2_DAT_O => ps2k_data_out,
@@ -332,92 +305,12 @@ ps2m_data_in <= PS2_data2;
 ps2m_clk_in <= PS2_clk2;
 PS2_data2 <= '0' when ps2m_data_out='0' else 'Z';
 PS2_clk2 <= '0' when ps2m_clk_out='0' else 'Z';	
-
-
---process(clk28m)
---begin
-  --if rising_edge(clk28m) then
-	--red <= std_logic_vector(vga_red);
-	--green <= std_logic_vector(vga_green);
-	--blue <= std_logic_vector(vga_blue);  
---	blank <= hsync AND vsync;
-	--blank <= videoblank;	
-	--dvi_hsync <= hsync;
-	--dvi_vsync <= vsync;
-  --end if;
---end process;    
-	
-  --Inst_DVI: entity work.dvid 
-  --PORT MAP (
-    --clk		      => clk_dvi,
-    --clk_n         => clk_dvin,	 
-    --clk_pixel     => clk28m,
-    --clk_pixel_en  => true, 
-	
-    --red_p         => red,
-    --green_p       => green,
-    --blue_p        => blue,
-    --blank         => blank,
-    --hsync         => dvi_hsync, 
-    --vsync         => dvi_vsync,
-	--EnhancedMode  => true,
-	--IsProgressive  => true, 
-	--IsPAL  		  => true, 
-	--Is30kHz  	  => true,
-	--Limited_Range  => false,
-	--Widescreen    => true,
-	--HDMI_audio_L  => left_sampled,
-	--HDMI_audio_R  => right_sampled,
-	--HDMI_LeftEnable  => l_audio_ena,
-	--HDMI_RightEnable => l_audio_ena,
-	--red_s         => LVDS_Red,
-    --green_s       => LVDS_Green, 
-    --blue_s        => LVDS_Blue,
-    --clock_s       => LVDS_ck 
-
-  --); 	
-	
-audio_l(0)<='0';
-audio_r(0)<='0';
-
---VGA_HS<=not vga_hsync;
---VGA_VS<=not vga_vsync;
---VGA_R<=unsigned(vga_red(7 downto 4));
---VGA_G<=unsigned(vga_green(7 downto 4));
---VGA_B<=unsigned(vga_blue(7 downto 4));
 	
 slave_tx_o<=rs232_txd;
 rs232_rxd<=slave_rx_i;
 
 joyc<=(others=>'1');
 joyd<=(others=>'1');
-
---process(clk28m)
---begin
-  --if rising_edge(clk28m) then
-    --if cnt=cnt_div-1 then
-      --ce  <= '1';
-      --cnt <= 0; 
-    --else
-      --ce  <= '0';
-      --cnt <= cnt +1 ;
-    --end if;
-  --end if;
---end process;
---process(clk28m)
---begin
-  --if rising_edge(clk28m) then
-	--if ce='1' then
-	   --l_audio_ena <= true;
-	--else
-	   --l_audio_ena <= false;
-    --end if;
-  --end if;
---end process;  
-
--- FIXME - instantiate sigma-delta DAC
---		DAC_left	=> GPIO_19,
---		DAC_right	=> GPIO_13,
 
 	-- Instantiate DVI out:
 	genvideo: block
@@ -576,6 +469,42 @@ joyd<=(others=>'1');
 --		dviout_b_n : component ODDRX1F port map (D0 => tmds_b_n(0), D1=>tmds_b_n(1), Q => gpdi_dn(0), SCLK =>clk_tmds, RST=>'0');
 
 	end block;
+
+audio : block 
+	signal DAC_L : std_logic;
+	signal DAC_R : std_logic;
+
+	COMPONENT hybrid_pwm_sd
+		PORT
+		(
+			clk		:	 IN STD_LOGIC;
+			terminate : in std_logic:='0';
+			d_l		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+			q_l		:	 OUT STD_LOGIC;
+			d_r		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+			q_r		:	 OUT STD_LOGIC
+		);
+	END COMPONENT;
+
+begin
+	-- Audio output mapped to GPIO header
+	GPIO_13 <= DAC_R; 
+	GPIO_19 <= DAC_L;
+	
+	audiosd : COMPONENT hybrid_pwm_sd
+	PORT map
+	(
+		clk => sysclk,
+		terminate => '0',
+		d_l(15) => not audio_l(23),
+		d_l(14 downto 0) => audio_l(22 downto 8),
+		q_l => DAC_L,
+		d_r(15) => not audio_r(23),
+		d_r(14 downto 0) => audio_r(22 downto 8),
+		q_r => DAC_R
+	);
+
+end block;
 
 end arch;
 
