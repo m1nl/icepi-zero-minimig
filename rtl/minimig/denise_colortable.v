@@ -40,7 +40,6 @@ reg           ehb_sel;
 denise_colortable_ram_mf clut
 (
   .clock      (clk    ),
-  .reset      (reset  ),
   .enable     (1'b1   ),
   .wraddress  (wr_adr ),
   .wren       (wr_en  ),

@@ -5,7 +5,6 @@
 module denise_colortable_ram_mf (
 	input [32/8-1:0] byteena_a,
 	input clock,
-	input reset,
 	input [32-1:0] data,
 	input enable,
 	input [8-1:0] rdaddress,
@@ -22,7 +21,7 @@ colortable_ram colortable (
 	.WE(wren),
 	.RdClock(clock), 
     .RdClockEn(enable),
-	.Reset(reset),
+	.Reset(1'b0),
 	.WrClock(clock),
 	.WrClockEn(enable),
 	.Q(q)

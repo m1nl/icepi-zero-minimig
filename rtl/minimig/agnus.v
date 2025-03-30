@@ -51,7 +51,7 @@
 //
 
 
-module agnus
+module agnus #(parameter wide_hblank=1'b0)
 (
   input clk,            // clock
   input  clk7_en,            // 28MHz clock
@@ -462,7 +462,7 @@ agnus_blitter bl1
 //--------------------------------------------------------------------------------------
 
 //instantiate beam counters
-agnus_beamcounter  bc1
+agnus_beamcounter #(.wide_hblank(wide_hblank)) bc1
 (
   .clk(clk),
   .clk7_en(clk7_en),

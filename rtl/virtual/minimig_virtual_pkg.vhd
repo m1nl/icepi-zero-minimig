@@ -26,9 +26,9 @@ package minimig_virtual_pkg is
 	(
 		-- JTAG "pins"
 		sys_tdo : out std_logic;
-		sys_tdi : in std_logic;
-		sys_tck : in std_logic;
-		sys_tms : in std_logic;
+		sys_tdi : in std_logic := '1';
+		sys_tck : in std_logic := '1';
+		sys_tms : in std_logic := '1';
 		
 		CLK_114		:	 out STD_LOGIC;
 		CLK_28		:	 out STD_LOGIC;

@@ -146,7 +146,7 @@
 // SB:
 // 2012-03-23 - fixed sprite enable signal (coppermaster demo)
 
-module minimig #(parameter useaga=1'b1)
+module minimig #(parameter useaga=1'b1, parameter wide_hblank=1'b0)
 (
 	// JTAG inputs
 	output sys_tdo,
@@ -551,7 +551,7 @@ assign init_b = vsync_t;
 //--------------------------------------------------------------------------------------
 
 //instantiate agnus
-agnus AGNUS1
+agnus #(.wide_hblank(wide_hblank)) AGNUS1
 (
 	.clk(clk),
 	.clk7_en(clk7_en),

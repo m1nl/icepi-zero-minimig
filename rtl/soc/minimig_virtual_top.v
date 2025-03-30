@@ -676,7 +676,7 @@ assign _ram_oe=1'b1;
 assign _ram_we=1'b1;
 `else
 
-minimig #(.useaga(haveaga)) minimig
+minimig #(.useaga(haveaga),.wide_hblank(1'b1)) minimig
 (
 	// JTAG
 	.sys_tdo(sys_tdo),

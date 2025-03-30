@@ -446,7 +446,14 @@ ddr_sdramclk:   ODDRX1F port map (D0=>'0',   D1=>'1',   Q=>sdram_clk, SCLK=>sysc
 		signal clk_tmds : std_logic;
 		
 		signal heartbeat_ctr : unsigned(27 downto 0);
-		
+		-- Video signal with blanking applied.
+		signal br : std_logic_vector(7 downto 0);
+		signal bg : std_logic_vector(7 downto 0);
+		signal bb : std_logic_vector(7 downto 0);
+		signal bhs : std_logic;
+		signal bvs : std_logic;
+		signal bpe : std_logic;
+		signal bde : std_logic;
 	begin
 	
 		--process(clk_tmds) begin
@@ -506,6 +513,25 @@ ddr_sdramclk:   ODDRX1F port map (D0=>'0',   D1=>'1',   Q=>sdram_clk, SCLK=>sysc
 		);
 
 		clk_video <= vidclks(2);
+		
+		-- Blank and buffer the video signal
+		process(clk_video) begin
+			if rising_edge(clk_video) then
+				if dvi_window='1' then
+					br<=dvi_red;
+					bg<=dvi_green;
+					bb<=dvi_blue;
+				else
+					br<=(others => '0');
+					bg<=(others => '0');
+					bb<=(others => '0');
+				end if;
+				bhs <= dvi_hsync;
+				bvs <= dvi_vsync;
+				bpe <= dvi_pixel;
+				bde <= dvi_window;
+			end if;
+		end process;
 
 		dvi_inst : component dvi
 		generic map (
@@ -515,14 +541,14 @@ ddr_sdramclk:   ODDRX1F port map (D0=>'0',   D1=>'1',   Q=>sdram_clk, SCLK=>sysc
 			pclk => clk_video,
 			tmds_clk => clk_tmds,
 
-			in_vga_red => dvi_red,
-			in_vga_green => dvi_green,
-			in_vga_blue => dvi_blue,
+			in_vga_red => br,
+			in_vga_green => bg,
+			in_vga_blue => bb,
 
-			in_vga_vsync => dvi_vsync,
-			in_vga_hsync => dvi_hsync,
-			in_vga_pixel => dvi_pixel,
-			in_vga_window => dvi_window,
+			in_vga_vsync => bvs,
+			in_vga_hsync => bhs,
+			in_vga_pixel => bpe,
+			in_vga_window => bde,
 
 			out_tmds_red => tmds_r,
 			out_tmds_green => tmds_g,
@@ -543,10 +569,10 @@ ddr_sdramclk:   ODDRX1F port map (D0=>'0',   D1=>'1',   Q=>sdram_clk, SCLK=>sysc
 		dviout_g_n : component ODDRX1F port map (D0 => tmds_g_n(0), D1=>tmds_g_n(1), Q => gpdi_dn(1), SCLK =>clk_tmds, RST=>'0');
 		dviout_b_n : component ODDRX1F port map (D0 => tmds_b_n(0), D1=>tmds_b_n(1), Q => gpdi_dn(0), SCLK =>clk_tmds, RST=>'0');
 
-		vga_pmod_high(7 downto 4)<="1111"; -- std_logic_vector(vga_red);
-		vga_pmod_high(3 downto 0)<="1111"; -- std_logic_vector(vga_blue);
-		vga_pmod_low(7 downto 4)<="1111"; -- std_logic_vector(vga_green);
-		vga_pmod_low(3 downto 0)<="1111"; -- "00"&vga_vsync&vga_hsync;
+		vga_pmod_high(7 downto 4)<=std_logic_vector(dvi_red(7 downto 4));
+		vga_pmod_high(3 downto 0)<=std_logic_vector(dvi_blue(7 downto 4));
+		vga_pmod_low(7 downto 4)<=std_logic_vector(dvi_green(7 downto 4));
+		vga_pmod_low(3 downto 0)<="00"&dvi_vsync&dvi_hsync;
 
 	end block;
 
