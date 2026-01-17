@@ -925,14 +925,23 @@ video_vga_dither #(.outbits(vga_width), .flickerreduce(1)) dither
 	
 		
 always @(posedge CLK_114) begin
-	VGA_VS <= dithered_vs ^ (vsyncpol & !selcsync);
-	VGA_HS <= dithered_hs ^ (hsyncpol & !selcsync);
-
-	VGA_R <= dithered_red[7:8-vga_width];
-	VGA_G <= dithered_green[7:8-vga_width];
-	VGA_B <= dithered_blue[7:8-vga_width];
-	VGA_STROBE <= rtg_ena ? rtg_pixel : vga_stb;
-	VGA_DE <= rtg_de;
+	if(haveaga) begin
+		VGA_VS <= dithered_vs ^ (vsyncpol & !selcsync);
+		VGA_HS <= dithered_hs ^ (hsyncpol & !selcsync);
+		VGA_R <= dithered_red[7:8-vga_width];
+		VGA_G <= dithered_green[7:8-vga_width];
+		VGA_B <= dithered_blue[7:8-vga_width];
+		VGA_STROBE <= rtg_ena ? rtg_pixel : vga_stb;
+		VGA_DE <= rtg_de;
+	end else begin
+		VGA_VS <= VGA_VS_INT ^ (vsyncpol & !selcsync);
+		VGA_HS <= VGA_HS_INT ^ (hsyncpol & !selcsync);
+		VGA_R <= VGA_R_INT[7:8-vga_width];
+		VGA_G <= VGA_G_INT[7:8-vga_width];
+		VGA_B <= VGA_B_INT[7:8-vga_width];
+		VGA_STROBE <= rtg_ena ? rtg_pixel : vga_stb;
+		VGA_DE <= rtg_de;
+	end
 end
 
 always @(posedge CLK_114) begin

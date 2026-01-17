@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<BaliProject version="3.2" title="minimig_icesugarpro" device="LFE5U-25F-6BG256C" default_implementation="Minimig_IceSugarPro">
+<BaliProject version="3.2" title="minimig_icepi-zero" device="LFE5U-25F-6BG256C" default_implementation="Minimig_IcePi-Zero">
     <Options/>
-    <Implementation title="Minimig_IceSugarPro" dir="Minimig_IceSugarPro" description="Minimig_IceSugarPro" synthesis="synplify" default_strategy="Strategy1">
-        <Options def_top="jcapture" top="minimig_icesugarpro_top"/>
+    <Implementation title="Minimig_IcePi-Zero" dir="Minimig_IcePi-Zero" description="Minimig_IcePi-Zero" synthesis="synplify" default_strategy="Strategy1">
+        <Options def_top="minimig_icepizero_top" top="minimig_icepizero_top"/>
         <Source name="board_config.vhd" type="VHDL" type_short="VHDL">
             <Options/>
-        </Source>
-        <Source name="../../rtl/soc/minimig_icesugarpro_top.vhd" type="VHDL" type_short="VHDL">
-            <Options top_module="minimig_icesugarpro_top"/>
         </Source>
         <Source name="../../rtl/soc/minimig_virtual_top.v" type="Verilog" type_short="Verilog">
             <Options/>
@@ -378,9 +375,12 @@
         <Source name="../../rtl/tmds/tmds_encoder_pipelined.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
-        <Source name="icesugarpro.lpf" type="Logic Preference" type_short="LPF">
+        <Source name="../../rtl/soc/minimig_icepi-zero_top.vhd" type="VHDL" type_short="VHDL">
+            <Options top_module="minimig_icepizero_top"/>
+        </Source>
+        <Source name="icepi-zero.lpf" type="Logic Preference" type_short="LPF">
             <Options/>
         </Source>
     </Implementation>
-    <Strategy name="Strategy1" file="minimig_icesugarpro1.sty"/>
+    <Strategy name="Strategy1" file="minimig_icepizero.sty"/>
 </BaliProject>
