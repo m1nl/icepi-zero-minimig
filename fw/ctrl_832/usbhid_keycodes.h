@@ -143,3 +143,13 @@ const unsigned short usb2ami[256] = {
   0x67,  // 87: R Amiga
 };
 
+#define HIDKEY_NUMLOCK 0x53
+#define HIDKEY_UP 0x52
+#define HIDKEY_DOWN 0x51
+#define HIDKEY_LEFT 0x50
+#define HIDKEY_RIGHT 0x4f
+#define HIDQUAL_LCTRL 0x01
+#define HIDQUAL_LALT 0x04
+
+
+

@@ -34,6 +34,8 @@ port(
 	usb_dp : inout std_logic_vector(1 downto 0);
 	usb_dn : inout std_logic_vector(1 downto 0);
 
+	gpio : inout std_logic_vector(27 downto 0);
+
 	gpdi_dp : out std_logic_vector(3 downto 0)	-- Quasi-differential output for digital video.
 	-- gpdi_dn : out std_logic_vector(3 downto 0)  -- Don't declare the _n pins - the _p pins are declared as
 	                                               -- LVCMOS33D so their conjugate pairs will be used automatically.
@@ -41,6 +43,9 @@ port(
 end entity;
 
 architecture rtl of minimig_icepizero_top is
+
+	alias sigma_l is gpio(0);
+	alias sigma_r is gpio(1);
 
 	-- Internal signals
 
@@ -141,6 +146,7 @@ begin
 			RESET_N => reset_n,
 			LED_POWER => led(4),
 			LED_DISK => led(3),
+			LED_USB => led(2 downto 1),
 			MENU_BUTTON => button(1),
 			CTRL_TX => usb_tx,
 			CTRL_RX => usb_rx,
@@ -386,41 +392,32 @@ begin
 
 	end block;
 
-	-- LEDS.  Not so much a "blinky" as a "pulsey"...
-	pwmblock : block
-		signal pwmcounter : unsigned(15 downto 0);
-		signal redctr : unsigned(16 downto 0);
-		signal greenctr : unsigned(16 downto 0);
-		signal bluectr : unsigned(16 downto 0);
-		signal redctr_i : unsigned(15 downto 0);
-		signal greenctr_i : unsigned(15 downto 0);
-		signal bluectr_i : unsigned(15 downto 0);
+	audioblock : block
+		COMPONENT hybrid_pwm_sd
+		PORT
+		(
+			clk		:	 IN STD_LOGIC;
+			terminate : in std_logic:='0';
+			d_l		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+			q_l		:	 OUT STD_LOGIC;
+			d_r		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
+			q_r		:	 OUT STD_LOGIC
+		);
+		END COMPONENT;
 	begin
-		redctr_i <= redctr(16 downto 1) when redctr(16)='0' else not redctr(16 downto 1);
-		greenctr_i <= greenctr(16 downto 1) when greenctr(16)='0' else not greenctr(16 downto 1);
-		bluectr_i <= bluectr(16 downto 1) when bluectr(16)='0' else not bluectr(16 downto 1);
-		process(clk_sys) begin
-			if rising_edge(clk_sys) then
-				pwmcounter<=pwmcounter + 1;
-				if pwmcounter=X"FFFF" then
-					redctr<=redctr+13;
-					greenctr<=greenctr+7;
-					bluectr<=bluectr+19;
-					led(0)<='1';
-					led(1)<='1';
-					led(2)<='1';
-				end if;
-				if redctr_i = pwmcounter then
-					led(0)<='0';
-				end if; 
-				if greenctr_i = pwmcounter then
-					led(1)<='0';
-				end if; 
-				if bluectr_i = pwmcounter then
-					led(2)<='0';
-				end if; 
-			end if;
-		end process;
+	
+		audiosd : COMPONENT hybrid_pwm_sd
+		PORT map
+		(
+			clk => clk_sys,
+			terminate => '0',
+			d_l(15) => not audio_l(23),
+			d_l(14 downto 0) => audio_l(22 downto 8),
+			q_l => sigma_l,
+			d_r(15) => not audio_r(23),
+			d_r(14 downto 0) => audio_r(22 downto 8),
+			q_r => sigma_r
+		);
 	end block;
 
 end architecture;

@@ -85,6 +85,9 @@ entity cfide is
 		
 		usb_dp : inout std_logic_vector(1 downto 0);
 		usb_dn : inout std_logic_vector(1 downto 0);
+		
+		usb_connected : out std_logic_vector(1 downto 0);
+		joykeys : out std_logic_vector(6 downto 0);
 
 		-- 28Mhz signals
 		clk_28	: in std_logic;
@@ -575,10 +578,11 @@ end process;
 			q : out std_logic
 		);
 		end component;
-		
+
+		signal usb_rst_n : std_logic;
 		signal usb_atn : std_logic;
 		signal usb_ack : std_logic;
-		signal usb_connected : std_logic_vector(1 downto 0);
+		signal usb_cnct : std_logic_vector(1 downto 0);
 		signal usb_data : std_logic_vector(15 downto 0);
 		signal usbtick : std_logic;
 		
@@ -598,29 +602,48 @@ end process;
 		host : component usb_hid_host 
 		port map (
 			usbclk => sysclk,
-			usbrst_n => n_reset,
+			usbrst_n => usb_rst_n,
 			usbtick => usbtick,
 			usb_dm => usb_dn,
 			usb_dp => usb_dp,
 			atn => usb_atn,
-			connected => usb_connected,
+			connected => usb_cnct,
 			q => usb_data,
 			ack => usb_ack
 		);
 
+		usb_connected <= usb_cnct;
+
 		process(sysclk) begin
 			if rising_edge(sysclk) then
 				usb_ack <= '0';
-				if usb_select='1' and req='1' and wr='0' then
-					case addr(4 downto 2) is
-						when "000" =>
-							usbtohost <= (0 => usb_atn, 1=>usb_connected(0), 2=>usb_connected(1), others => '0');
-						when "001" =>
-							usbtohost <= usb_data;
-							usb_ack <= ack;  -- Ack and req should only be high simultaneously for one cycle.
-						when others =>
-							null;
-					end case;
+				usb_rst_n <= '1';
+				if usb_select='1' and req='1' then
+					if wr='1' then
+						case addr(4 downto 2) is
+							when "000" =>
+								usb_rst_n <= '0';
+							when "010" =>
+								joykeys <= d(6 downto 0);
+							when others =>
+								null;
+						end case;					
+					else
+						case addr(4 downto 2) is
+							when "000" =>
+								usbtohost <= (0 => usb_atn, 1=>usb_cnct(0), 2=>usb_connected(1), others => '0');
+							when "001" =>
+								usbtohost <= usb_data;
+								usb_ack <= ack;  -- Ack and req should only be high simultaneously for one cycle.
+							when others =>
+								null;
+						end case;
+					end if;
+				end if;		
+				
+				if n_reset = '0' then
+					usb_rst_n <= '0';
+					joykeys <= (others => '1');
 				end if;
 			end if;
 		end process;

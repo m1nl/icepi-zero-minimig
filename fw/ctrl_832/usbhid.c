@@ -2,6 +2,7 @@
 #include "usbhid.h"
 #include "usbhid_keycodes.h"
 #include "c64keys.h"
+#include "menu.h"
 
 #define KEYPAGES 5
 unsigned int usbhid_prevtable[KEYPAGES];
@@ -26,8 +27,7 @@ int usbhid_testkey(unsigned char code) {
 }
 
 static void usbhid_setkey(unsigned char code) {
-	int t=1<<(code&31);
-	usbhid_keytable[code>>5]|=t;
+	usbhid_keytable[code>>5]|=1<<(code&31);
 }
 
 //		kbd_mouse_data <= c64_translated_key_stb ? c64_translated_key[7:0] : AMIGA_KEY;
@@ -42,21 +42,77 @@ static void usbhid_send(int type,int code) {
 	HW_KEYBOARD(REG_KEYBOARD_OUT)=t;
 }
 
+int joykeys_status;
+
+/* Returns 1 if the code should be passed through to the core */
+static int usbhid_joykeys(int code) {
+	static char joyemu=0;
+
+	if(code==HIDKEY_NUMLOCK) {
+		joyemu ^=1;
+		InfoMessage(joyemu ? "Joystick keys on" : "Joystick keys off");
+		return(0);
+	}
+
+	if(!joyemu)
+		return(1);
+
+	switch(code) {
+		case HIDKEY_UP :
+			joykeys_status |= 8;
+			return(0);
+			break;
+		case HIDKEY_DOWN :
+			joykeys_status |= 4;
+			return(0);
+			break;
+		case HIDKEY_LEFT :
+			joykeys_status |= 2;
+			return(0);
+			break;
+		case HIDKEY_RIGHT :
+			joykeys_status |= 1;
+			return(0);
+			break;
+		default : 
+			break;
+	}
+	return(1);
+}
+
+static int usbhid_joyquals(int quals) {
+	if(quals&HIDQUAL_LCTRL) {
+		quals ^= HIDQUAL_LCTRL;
+		joykeys_status |= 0x10;		
+	}
+	if(quals&HIDQUAL_LALT) {
+		quals ^= HIDQUAL_LALT;
+		joykeys_status |= 0x20;		
+	}
+	return(quals);
+}
+
 static void usbhid_handlekb(struct usbhidport *port) {
 	int i;
 	int code=0;
+		
 	for(i=0;i<KEYPAGES;++i) {
 		usbhid_prevtable[i]=usbhid_keytable[i];
 		usbhid_keytable[i]=0;
 	}
-	usbhid_keytable[4]=port->pkt[0];
+
+	joykeys_status=0;
+
+	usbhid_keytable[4]=usbhid_joyquals(port->pkt[0]);
 	for(i=0;i<6;++i) {
 		int key=port->pkt[2+i];
-		if(key && key<128) {
+		if(key && usbhid_joykeys(key) && key<128) {
 			usbhid_setkey(key);
-//			printf("key %d\n",key);
 		}
 	}
+
+	HW_USBHID(REG_USBHID_JOYKEYS)=~joykeys_status;
+	
 	for(i=0;i<KEYPAGES;++i) {
 		int t=usbhid_prevtable[i]^usbhid_keytable[i];
 		int k=usbhid_keytable[i];
@@ -125,10 +181,11 @@ void usbhid_handleport(struct usbhidport *port,int v) {
 					port->flags|=1;
 				if(r==5 && port->pkt[b]==1)  // Boot protocol?
 					port->flags|=2;
-				if(r==6)
+				if(r==6) {
 					port->type=port->pkt[b];
-				if(r==6)
-					printf("P: %d, t: %d, f: %d\n",port->type, port->flags);
+					printf("P: %d, t: %d, f: %d\n",port==&usbhid_ports[0] ? 0 : 1,port->type, port->flags);
+					InfoMessage(port->type==KEYBOARD ? "Keyboard connected" : port->type==MOUSE ? "Mouse connected" : "Unknown device connected");
+				}
 			}
 			break;
 			
@@ -141,6 +198,7 @@ __constructor(102.usbhid) void usbhid_init() {
 	usbhid_initport(&usbhid_ports[0]);
 	usbhid_initport(&usbhid_ports[1]);
 	puts("USB HID init\n");
+	HW_USBHID(REG_USBHID_STATUS)=0; /* Trigger a reset */
 }
 
 void usbhid_handle()

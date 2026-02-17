@@ -237,9 +237,6 @@ int main(void) {
 
 	ColdBoot();
 
-	FileOpen(&file,"SYSINFO ADF");
-	InsertFloppy(&df[0]);
-
 //	cd_setcuefile(&cd,"EXODUS_THELASTWAR.CUE");
 //	cd_playaudio(&cd,4);
 

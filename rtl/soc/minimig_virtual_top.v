@@ -62,6 +62,7 @@ module minimig_virtual_top	#(
   // LED outputs
   output wire           LED_POWER,  // LED green
   output wire           LED_DISK,   // LED red
+  output wire [1:0]     LED_USB,
   
   // UART
   output wire           CTRL_TX,    // UART Transmitter
@@ -240,10 +241,11 @@ wire [  2-1:0] sdram_ba;
 // mist
 wire           user_io_sdo;
 wire           minimig_sdo;
-wire [  16-1:0] joya;
-wire [  16-1:0] joyb;
-wire [  16-1:0] joyc;
-wire [  16-1:0] joyd;
+wire [   6:0] joysticka;
+wire [   6:0] joystickb;
+wire [   6:0] joyc;
+wire [   6:0] joyd;
+wire [   6:0] joykeys;
 
 // UART
 wire minimig_rxd;
@@ -781,8 +783,8 @@ minimig #(.useaga(haveaga),.wide_hblank(1'b1)) minimig
 	.rts          (                 ),  // RS232 request to send
 	.midi_rx      (1'b1             ),
 	//I/O
-	._joy1        (JOYA             ),  // joystick 1 [fire7:fire,up,down,left,right] (default mouse port)
-	._joy2        (JOYB             ),  // joystick 2 [fire7:fire,up,down,left,right] (default joystick port)
+	._joy1        (joysticka        ),  // joystick 1 [fire7:fire,up,down,left,right] (default mouse port)
+	._joy2        (joystickb        ),  // joystick 2 [fire7:fire,up,down,left,right] (default joystick port)
 	._joy3        (JOYC             ),  // joystick 3 [fire7:fire,up,down,left,right]
 	._joy4        (JOYD             ),  // joystick 4 [fire7:fire,up,down,left,right]
 	//  .mouse_btn    (mouse_buttons    ),  // mouse buttons
@@ -794,13 +796,6 @@ minimig #(.useaga(haveaga),.wide_hblank(1'b1)) minimig
 	.kbd_mouse_type (kbd_mouse_type ),  // type of data
 	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
 	.kms_level    (kms_level        ),
-//	.mouse0_btn   (mouse0_btn       ),
-//	.mouse1_btn   (mouse1_btn       ),
-//	.kbd_reset_n  (kbd_reset_n),
-//	.kbd_mouse_data (kbd_mouse_data ),  // mouse direction data, keycodes
-	//  .kbd_mouse_type (kbd_mouse_type ),  // type of data
-//	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
-//	.kms_level    (1'b0             ), // kms_level        ),
 	._15khz       (_15khz           ), // scandoubler disable
 	.rtc          (rtc              ), // real-time clock
 	.pwr_led      (LED_POWER        ), // power led
@@ -941,10 +936,16 @@ cfide #(
 		
 		.usb_dp(usb_dp),
 		.usb_dn(usb_dn),
+		.usb_connected(LED_USB),
+		
+		.joykeys(joykeys),
 
 		.clk_28(CLK_28),
 		.tick_in(aud_tick)
 	);
+	
+assign joysticka = JOYA;
+assign joystickb = JOYB & joykeys;
 
 wire [  8-1:0] dithered_red;
 wire [  8-1:0] dithered_green;

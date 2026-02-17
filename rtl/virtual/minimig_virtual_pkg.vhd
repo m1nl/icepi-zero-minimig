@@ -38,6 +38,7 @@ package minimig_virtual_pkg is
 		MENU_BUTTON :   IN STD_LOGIC;
 		LED_POWER	:	 OUT STD_LOGIC;
 		LED_DISK		:	 OUT STD_LOGIC;
+		LED_USB         :    OUT STD_LOGIC_VECTOR(1 downto 0);
 		CTRL_TX		:	 OUT STD_LOGIC;
 		CTRL_RX		:	 IN STD_LOGIC;
 		AMIGA_TX		:	 OUT STD_LOGIC;
