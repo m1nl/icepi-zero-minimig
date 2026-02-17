@@ -34,7 +34,8 @@ entity cfide is
 		haveiec : integer := 0;
 		havereconfig : integer := 0;
 		havecart : integer := 0;
-		haveclockport : integer := 0
+		haveclockport : integer := 0;
+		haveamiga : integer := 0
 	);
    port ( 
 		sysclk	: in std_logic;
@@ -45,7 +46,7 @@ entity cfide is
 		q		: out std_logic_vector(15 downto 0);		
 		req 	: in std_logic;
 		wr 	: in std_logic;
-		ack 	: out std_logic;
+		ack 	: buffer std_logic;
 
 		sd_di		: in std_logic;		
 		sd_cs 	: out std_logic_vector(7 downto 0);
@@ -68,9 +69,9 @@ entity cfide is
 		interrupt	: out std_logic;
 		c64_keys	: in std_logic_vector(63 downto 0) :=X"FFFFFFFFFFFFFFFF";
 		c64_present : in std_logic := '0';
-		amiga_key	: out std_logic_vector(7 downto 0);
+		amiga_key	: out std_logic_vector(15 downto 0);
 		amiga_key_stb	: out std_logic;
-		
+
 		amiga_addr : in std_logic_vector(7 downto 0);
 		amiga_d : in std_logic_vector(15 downto 0);
 		amiga_q : out std_logic_vector(15 downto 0);
@@ -81,6 +82,9 @@ entity cfide is
 		rtc_q : out std_logic_vector(63 downto 0);
 		reconfig : out std_logic;
 		iecserial : out std_logic;
+		
+		usb_dp : inout std_logic_vector(1 downto 0);
+		usb_dn : inout std_logic_vector(1 downto 0);
 
 		-- 28Mhz signals
 		clk_28	: in std_logic;
@@ -139,6 +143,9 @@ signal amigatohost  : std_logic_vector(15 downto 0);
 signal amiga_select : std_logic;
 signal amiga_req_d : std_logic;
 
+signal usb_select : std_logic;
+signal usbtohost : std_logic_vector(15 downto 0);
+
 signal rtc_select : std_logic;
 signal reconfigpresent : std_logic;
 signal spirtcpresent : std_logic;
@@ -154,6 +161,7 @@ q(15 downto 0) <=	IOdata WHEN rs232_select='1' or SPI_select='1' ELSE
 		audio_q when audio_select='1' else
 		keyboard_q when keyboard_select='1' else
 		amigatohost when amiga_select='1' else
+		usbtohost when usb_select='1' else
 		platformdata;
 
 spirtcpresent <= '1' when havespirtc=1 else '0';
@@ -173,8 +181,8 @@ begin
 		if req='1' then
 			if rs232_select='1' or SPI_select='1' then
 				ack<=IOcpuena;
-			else
---			if timer_select='1' or platform_select='1' or audio_select='1' then
+			elsif timer_select='1' or platform_select='1' or audio_select='1' or usb_select='1' or interrupt_select='1'
+						or keyboard_select='1' or amiga_select='1' or rtc_select='1' then
 				ack<='1';
 			end if;
 		end if;
@@ -196,6 +204,7 @@ interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
 keyboard_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
 amiga_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"8" else '0';
 rtc_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"7" else '0';
+usb_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
 
 
 -- RTC handling at 0fffff70
@@ -222,6 +231,8 @@ end process;
 
 
 -- Amiga interface at 0fffff80
+gen_amiga : if haveamiga=1 generate
+begin
 
 process (clk_28,n_reset)
 begin
@@ -245,6 +256,13 @@ begin
 		end if;	
 	end if;
 end process;
+end generate;
+
+gen_noamiga : if haveamiga=0 generate
+begin
+amiga_ack <= amiga_select;
+end generate;
+
 
 
 -- C64 Keyboard handling at 0fffff90
@@ -255,7 +273,7 @@ begin
 		amiga_key_stb<='0';
 		if keyboard_select='1' and req='1' then
 			if  wr='1' then
-				amiga_key<=d(7 downto 0);
+				amiga_key<=d(15 downto 0);
 				amiga_key_stb<='1';
 			end if;
 			case addr(3 downto 2) is
@@ -340,9 +358,12 @@ begin
 				IF rs232_select='1' AND req='1' and wr='1' THEN
 					IF txbusy='0' THEN
 						uart_ld <= '1';
-						support_state <= io_aktion;
 						IOcpuena <= '1';
 					END IF;
+					if uart_ld='1' and txbusy = '1' then
+						uart_ld <= '0';
+						support_state <= io_aktion;
+					end if;
 				ELSIF SPI_select='1' and req='1' THEN
 					IF SD_busy='0' THEN
 						support_state <= io_aktion;
@@ -351,9 +372,6 @@ begin
 				END IF;
 					
 			WHEN io_aktion =>
-				if shift(9)='1' then
-					uart_ld <= '0';
-				end if;
 				if req='0' then
 					support_state <= idle;
 				else
@@ -525,5 +543,89 @@ begin
 	end if;
 end process; 
 
+	-- USB
+
+	usbblock : block
+		component usb_hid_host is
+		generic (
+			fifodepth : integer := 6
+		);
+		port (
+			usbclk : in std_logic;
+			usbrst_n : in std_logic;
+			usbtick : in std_logic;
+			usb_dm : inout std_logic_vector(1 downto 0);
+			usb_dp : inout std_logic_vector(1 downto 0);
+			atn : out std_logic;
+			connected : out std_logic_vector(1 downto 0);
+			q : out std_logic_vector(15 downto 0);
+			ack : in std_logic
+		);
+		end component;
+		
+		component frac_pulse is
+		generic (
+			freq_in : integer;
+			freq_out : integer;
+			counterwidth : integer := 16
+		);
+		port (
+			clk : in std_logic;
+			reset_n : in std_logic;
+			q : out std_logic
+		);
+		end component;
+		
+		signal usb_atn : std_logic;
+		signal usb_ack : std_logic;
+		signal usb_connected : std_logic_vector(1 downto 0);
+		signal usb_data : std_logic_vector(15 downto 0);
+		signal usbtick : std_logic;
+		
+	begin
+
+		tick : component frac_pulse 
+		generic map (
+			freq_in => 113,
+			freq_out => 12
+		)
+		port map (
+			clk => sysclk,
+			reset_n => n_reset,
+			q => usbtick
+		);
+
+		host : component usb_hid_host 
+		port map (
+			usbclk => sysclk,
+			usbrst_n => n_reset,
+			usbtick => usbtick,
+			usb_dm => usb_dn,
+			usb_dp => usb_dp,
+			atn => usb_atn,
+			connected => usb_connected,
+			q => usb_data,
+			ack => usb_ack
+		);
+
+		process(sysclk) begin
+			if rising_edge(sysclk) then
+				usb_ack <= '0';
+				if usb_select='1' and req='1' and wr='0' then
+					case addr(4 downto 2) is
+						when "000" =>
+							usbtohost <= (0 => usb_atn, 1=>usb_connected(0), 2=>usb_connected(1), others => '0');
+						when "001" =>
+							usbtohost <= usb_data;
+							usb_ack <= ack;  -- Ack and req should only be high simultaneously for one cycle.
+						when others =>
+							null;
+					end case;
+				end if;
+			end if;
+		end process;
+	
+	end block;	
+	
 end;  
 

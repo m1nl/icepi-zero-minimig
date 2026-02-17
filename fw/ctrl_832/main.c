@@ -61,6 +61,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "audio.h"
 #include "rtc.h"
 #include "version.h"
+#include "usbhid.h"
 
 #include <stdio.h>
 
@@ -215,6 +216,8 @@ int main(void) {
 	debugmsg[0]=0;
 	debugmsg2[0]=0;
 
+	puts("In main\n");
+
 	ClearError(ERROR_ALL);
 
 	if(!Init())
@@ -232,7 +235,10 @@ int main(void) {
 
     DISKLED_ON;
 
-	ColdBoot()
+	ColdBoot();
+
+	FileOpen(&file,"SYSINFO ADF");
+	InsertFloppy(&df[0]);
 
 //	cd_setcuefile(&cd,"EXODUS_THELASTWAR.CUE");
 //	cd_playaudio(&cd,4);
@@ -252,6 +258,8 @@ int main(void) {
 
 		if(!ErrorFatal)
 			HandleFpga(); /* Stop talking to the disk subsystems if a fatal error occurs */
+
+		usbhid_handle();
 
         HandleUI();
     }

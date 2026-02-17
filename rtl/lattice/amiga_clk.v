@@ -8,6 +8,7 @@ module amiga_clk (
   input  wire           clk_in,     // input clock        ( 27.000000MHz)
   output wire           clk_114,    // SDRAM ctrl   clock (114.750000MHz)
   output wire           clk_sdram,  // SDRAM output clock (114.750000MHz, -146.25 deg)
+  output wire           clk_56,
   output wire           clk_28,     // 28MHz output clock ( 28.375160MHz)
   output wire           clk7_en,    // 7MHz output clock enable (on 28MHz clock domain)
   output wire           clk7n_en,   // 7MHz negedge output clock enable (on 28MHz clock domain)
@@ -25,12 +26,13 @@ module amiga_clk (
 // device-specific PLL/DCM
 
 
-amiga_clk_lattice amiga_clk_i (
+amiga_clk_lattice_pll amiga_clk_i (
   .areset   (rst      ),
   .inclk0   (clk_in   ),
   .c0       (clk_sdram),
   .c1       (clk_114  ),
   .c2       (clk_28   ),
+  .c3       (clk_56   ),
   .locked   (locked   )
 );
 

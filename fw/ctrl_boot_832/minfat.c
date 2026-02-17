@@ -46,7 +46,7 @@ JB:
 
 #include "minfat.h"
 #include "swap.h"
-#include "small_printf.h"
+//#include "small_printf.h"
 //#include "hexdump.h"
 
 #define tolower(x) (x|32)

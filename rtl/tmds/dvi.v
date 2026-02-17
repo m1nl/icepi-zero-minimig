@@ -31,26 +31,63 @@ module dvi #(parameter DDR_ENABLED=1) (
            input in_vga_pixel,
            input in_vga_window,
 
-           output [DDR_ENABLED:0] out_tmds_red,
-           output [DDR_ENABLED:0] out_tmds_green,
-           output [DDR_ENABLED:0] out_tmds_blue,
-           output [DDR_ENABLED:0] out_tmds_clk,
-           output [DDR_ENABLED:0] out_tmds_red_n,
-           output [DDR_ENABLED:0] out_tmds_green_n,
-           output [DDR_ENABLED:0] out_tmds_blue_n,
-           output [DDR_ENABLED:0] out_tmds_clk_n
+           output reg [DDR_ENABLED:0] out_tmds_red,
+           output reg [DDR_ENABLED:0] out_tmds_green,
+           output reg [DDR_ENABLED:0] out_tmds_blue,
+           output reg [DDR_ENABLED:0] out_tmds_clk,
+           output reg [DDR_ENABLED:0] out_tmds_red_n,
+           output reg [DDR_ENABLED:0] out_tmds_green_n,
+           output reg [DDR_ENABLED:0] out_tmds_blue_n,
+           output reg [DDR_ENABLED:0] out_tmds_clk_n
        );
 
 localparam OUT_TMDS_MSB = DDR_ENABLED ? 1 : 0;
-
 
 /* */
 wire [9:0] tmds_red;
 wire [9:0] tmds_green;
 wire [9:0] tmds_blue;
+
+`define USE4BITENCODER
+
+`ifdef USE4BITENCODER
+
+tinytmds enc_red (
+	.clk(pclk),
+	.reset_n(1'b1),
+	.blank(~in_vga_window),
+	.hs(1'b0),
+	.vs(1'b0),
+	.d(in_vga_red),
+	.q(tmds_red)
+);
+
+tinytmds enc_green (
+	.clk(pclk),
+	.reset_n(1'b1),
+	.blank(~in_vga_window),
+	.hs(1'b0),
+	.vs(1'b0),
+	.d(in_vga_green),
+	.q(tmds_green)
+);
+
+tinytmds enc_blue (
+	.clk(pclk),
+	.reset_n(1'b1),
+	.blank(~in_vga_window),
+	.hs(in_vga_hsync),
+	.vs(in_vga_vsync),
+	.d(in_vga_blue),
+	.q(tmds_blue)
+);
+
+`else
+
 tmds_encoder tmsds_encoder_i0(pclk, in_vga_pixel, in_vga_window, in_vga_red,   1'b0,         1'b0,         tmds_red);
 tmds_encoder tmsds_encoder_i1(pclk, in_vga_pixel, in_vga_window, in_vga_green, 1'b0,         1'b0,         tmds_green);
 tmds_encoder tmsds_encoder_i2(pclk, in_vga_pixel, in_vga_window, in_vga_blue,  in_vga_vsync, in_vga_hsync, tmds_blue);
+`endif
 
 /* */
 reg       tmds_shift_load   = 0;
@@ -59,10 +96,6 @@ reg [9:0] tmds_shift_red    = 0;
 reg [9:0] tmds_shift_green  = 0;
 reg [9:0] tmds_shift_blue   = 0;
 reg [9:0] tmds_shift_clk    = 0;
-reg [9:0] tmds_shift_red_n    = 0;
-reg [9:0] tmds_shift_green_n  = 0;
-reg [9:0] tmds_shift_blue_n   = 0;
-reg [9:0] tmds_shift_clk_n    = 0;
 
 wire [9:0] tmds_pixel_clk = 10'b00000_11111;
 /* ddr 5 shifts a 2 bits, sdr 10 shifts a 1 bit */
@@ -74,17 +107,11 @@ always @(posedge tmds_clk) tmds_shift_load  <= max_shifts_reached;
 reg [9:0] tmds_red_r;
 reg [9:0] tmds_green_r;
 reg [9:0] tmds_blue_r;
-reg [9:0] tmds_red_ri;
-reg [9:0] tmds_green_ri;
-reg [9:0] tmds_blue_ri;
 
 always @(posedge tmds_clk) begin
 	tmds_red_r <= tmds_red;
 	tmds_green_r <= tmds_green;
 	tmds_blue_r <= tmds_blue;
-	tmds_red_ri <= ~tmds_red;
-	tmds_green_ri <= ~tmds_green;
-	tmds_blue_ri <= ~tmds_blue;
 end
 
 always @(posedge tmds_clk) begin
@@ -92,20 +119,18 @@ always @(posedge tmds_clk) begin
     tmds_shift_green  <= tmds_shift_load ? tmds_green_r     : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_green [9: DDR_ENABLED ? 2 : 1]};
     tmds_shift_blue   <= tmds_shift_load ? tmds_blue_r      : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_blue  [9: DDR_ENABLED ? 2 : 1]};
     tmds_shift_clk    <= tmds_shift_load ? tmds_pixel_clk : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_clk   [9: DDR_ENABLED ? 2 : 1]};
-    tmds_shift_red_n    <= tmds_shift_load ? tmds_red_ri       : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_red_n   [9: DDR_ENABLED ? 2 : 1]};
-    tmds_shift_green_n  <= tmds_shift_load ? tmds_green_ri     : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_green_n [9: DDR_ENABLED ? 2 : 1]};
-    tmds_shift_blue_n   <= tmds_shift_load ? tmds_blue_ri      : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_blue_n  [9: DDR_ENABLED ? 2 : 1]};
-    tmds_shift_clk_n    <= ~(tmds_shift_load ? tmds_pixel_clk : {DDR_ENABLED ? 2'b00 : 1'b0, tmds_shift_clk   [9: DDR_ENABLED ? 2 : 1]});
 end
 
-assign out_tmds_clk   = tmds_shift_clk    [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_red   = tmds_shift_red    [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_green = tmds_shift_green  [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_blue  = tmds_shift_blue   [ OUT_TMDS_MSB : 0 ];
+always @(posedge tmds_clk) begin
+	out_tmds_clk   = tmds_shift_clk    [ OUT_TMDS_MSB : 0 ];
+	out_tmds_red   = tmds_shift_red    [ OUT_TMDS_MSB : 0 ];
+	out_tmds_green = tmds_shift_green  [ OUT_TMDS_MSB : 0 ];
+	out_tmds_blue  = tmds_shift_blue   [ OUT_TMDS_MSB : 0 ];
 
-assign out_tmds_clk_n   = tmds_shift_clk_n    [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_red_n   = tmds_shift_red_n    [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_green_n = tmds_shift_green_n  [ OUT_TMDS_MSB : 0 ];
-assign out_tmds_blue_n  = tmds_shift_blue_n   [ OUT_TMDS_MSB : 0 ];
+	out_tmds_clk_n   = ~tmds_shift_clk    [ OUT_TMDS_MSB : 0 ];
+	out_tmds_red_n   = ~tmds_shift_red    [ OUT_TMDS_MSB : 0 ];
+	out_tmds_green_n = ~tmds_shift_green  [ OUT_TMDS_MSB : 0 ];
+	out_tmds_blue_n  = ~tmds_shift_blue   [ OUT_TMDS_MSB : 0 ];
+end
 
 endmodule

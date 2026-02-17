@@ -1241,6 +1241,13 @@ localparam MMCB = 1'b1;
 localparam MMCB = 1'b0;
 `endif
 
+wire allow32bit;
+`ifdef MINIMIG_32BIT
+assign allow32bit= &cpu_config[1:0];
+`else
+assign allow32bit = 1'b0;
+`endif 
+
 minimig_autoconfig#(.TOCCATA_SND(MMTOC),.CONTROL_BOARD(MMCB)) autoconfig
 (
 	.clk(clk),

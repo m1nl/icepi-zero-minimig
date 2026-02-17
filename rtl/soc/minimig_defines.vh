@@ -7,10 +7,12 @@
 `define MINIMIG_EXTRA_KEYBOARD
 `define MINIMIG_ALTERA
 `define MINIMIG_CYCLONE3
-`define MINIMIG_VIDEO_FILTER
+//`define MINIMIG_VIDEO_FILTER
 `define MINIMIG_PARALLEL_AUDIO  // Use own sigma-delta for audio
+`ifndef MINIMIG_USB
 `define MINIMIG_PS2_KEYBOARD
 `define MINIMIG_PS2_MOUSE
+`endif
 `define MINIMIG_HOST_DIRECT // The host can access memory directly, so doesn't need to upload over SPI
 `endif
 

@@ -13,10 +13,10 @@ void akiko_inthandler()
 	ad=HW_AKIKO(REG_AKIKO_DATA);
 	if(aa&AKIKO_REQ)
 	{
-		if(aa&AKIKO_WRITE)
-			printf("Akiko write: %x, %x\n",aa,ad);
-		else
-			printf("Akiko read: %x\n",aa);
+//		if(aa&AKIKO_WRITE)
+//			printf("Akiko write: %x, %x\n",aa,ad);
+//		else
+//			printf("Akiko read: %x\n",aa);
 		HW_AKIKO(REG_AKIKO_DATA)=0;
 	}
 

@@ -45,6 +45,8 @@
 #if 1
 #define EnableCard()  HW_SPI(HW_SPI_CS)=0x02
 #define DisableCard() HW_SPI(HW_SPI_CS)=0x03
+#define EnableUIO()   HW_SPI(HW_SPI_CS)=0x08
+#define DisableUIO()  HW_SPI(HW_SPI_CS)=0x09
 #define EnableFpga()  HW_SPI(HW_SPI_CS)=0x10
 #define DisableFpga() HW_SPI(HW_SPI_CS)=0x11
 #define EnableOsd()   HW_SPI(HW_SPI_CS)=0x20

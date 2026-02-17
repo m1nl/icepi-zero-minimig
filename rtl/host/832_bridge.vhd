@@ -56,6 +56,10 @@ signal rom_wr : std_logic;
 signal rom_select : std_logic;
 signal hw_select : std_logic;
 
+signal jtag_reset_n : std_logic;
+
+signal cpu_reset_n : std_logic;
+
 component hostcache
 port
 (
@@ -74,6 +78,8 @@ end component;
 
 begin
 
+cpu_reset_n <= nReset and jtag_reset_n;
+
 gendebugbridge:
 if debug=1 generate
 
@@ -88,7 +94,7 @@ generic map (
 )
 port map(
 	clk => clk, 
-	reset_n => nReset,
+	reset_n => cpu_reset_n,
 	addr => cpu_addr,
 	d => cpu_d,
 	q => cpu_q,
@@ -129,7 +135,7 @@ generic map (
 )
 port map(
 	clk => clk, 
-	reset_n => nReset,
+	reset_n => cpu_reset_n,
 	addr => cpu_addr,
 	d => cpu_d,
 	q => cpu_q,
@@ -141,6 +147,69 @@ port map(
 );
 
 end generate;
+
+
+-- JCapture debug infrastructure
+capture : block
+
+	constant jcapture_width : integer := 32;
+
+	component jcapture
+	generic (
+		capturewidth : integer := 32;
+		capturedepth : integer := 9;
+		triggerwidth : integer := 32;
+		id : integer := 16#35ac#
+	);
+	port (
+		clk : in std_logic;
+		reset_n : in std_logic;
+		stb : in std_logic;
+		d : in std_logic_vector(capturewidth-1 downto 0);
+		q : out std_logic_vector(capturewidth-1 downto 0);
+		update : out std_logic
+	);
+	end component;
+
+	signal capture : std_logic_vector(jcapture_width-1 downto 0);
+	signal cap_q : std_logic_vector(jcapture_width-1 downto 0);
+	signal cap_upd : std_logic;
+
+begin
+
+	capture(0) <= cpu_req;
+	capture(1) <= cpu_ack;
+	capture(31 downto 2) <= cpu_addr;
+
+	jtag_reset_n <= '1';
+
+--	capture_inst : component jcapture
+--	generic map (
+--		capturewidth => jcapture_width,
+--		triggerwidth => jcapture_width
+--	)
+--	port map (
+--		clk => clk,
+--		reset_n => nReset,
+--		stb => '1',
+--		d => capture,
+--		q => cap_q,
+--		update => cap_upd
+--	);
+
+--	process(clk) begin
+--		if rising_edge(clk) then
+--			if cap_upd='1' then
+--				jtag_reset_n <= not cap_q(0);
+--			end if;
+--			if nReset = '0' then
+--				jtag_reset_n <= '1';
+--			end if;
+--		end if;
+--	end process;
+
+end block;
+
 
 bootrom: entity work.OSDBoot_832_ROM
 	generic map
@@ -189,7 +258,7 @@ begin
 
 		case state is
 			when waiting =>
-				if cpu_ack='0' and cpu_req='1' then
+				if hw_ack='0' and cpu_ack='0' and cpu_req='1' then
 					if rom_select='1' then
 						rom_wr<=cpu_wr;
 						state<=rom;

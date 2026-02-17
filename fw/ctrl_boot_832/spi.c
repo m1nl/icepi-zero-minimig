@@ -24,7 +24,7 @@ int SDHCtype;
 #define cmd_CMD55(x) cmd_write(0xff0077,0)
 #define cmd_CMD58(x) cmd_write(0xff007A,0)
 
-// #define DBG(x) puts(x)
+//#define DBG(x) puts(x)
 #define SPI_DEBUG 0
 #define DBG(X)
 
@@ -83,10 +83,10 @@ int cmd_write(unsigned long cmd, unsigned long lba)
 		SPI(0xff);
 		result=SPI_READ();
 	}
-	#ifdef SPI_DEBUG
-	putchar('0'+(result>>4));
-	putchar('0'+(result&15));
-	#endif
+	if(SPI_DEBUG) {
+		putchar('0'+(result>>4));
+		putchar('0'+(result&15));
+	}
 
 	return(result);
 }

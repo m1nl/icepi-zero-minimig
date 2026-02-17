@@ -3,7 +3,6 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-use work.Toplevel_Config.all;
 use work.minimig_virtual_pkg.all;
 
 entity minimig_icepizero_top is
@@ -31,6 +30,9 @@ port(
 	sd_mosi : out std_logic;
 	sd_csn : out std_logic;
 	sd_miso : in std_logic;
+	
+	usb_dp : inout std_logic_vector(1 downto 0);
+	usb_dn : inout std_logic_vector(1 downto 0);
 
 	gpdi_dp : out std_logic_vector(3 downto 0)	-- Quasi-differential output for digital video.
 	-- gpdi_dn : out std_logic_vector(3 downto 0)  -- Don't declare the _n pins - the _p pins are declared as
@@ -56,10 +58,7 @@ architecture rtl of minimig_icepizero_top is
 	signal audio_r_msb : std_logic;
 	signal audio_r : std_logic_vector(23 downto 0);
 
-	signal clk_sdram : std_logic;
 	signal clk_sys : std_logic;
-	signal clk_video_src : std_logic;
-
 	signal dvi_red     : std_logic_vector(7 downto 0);
 	signal dvi_green   : std_logic_vector(7 downto 0);
 	signal dvi_blue    : std_logic_vector(7 downto 0);
@@ -68,12 +67,6 @@ architecture rtl of minimig_icepizero_top is
 	signal dvi_window : std_logic;
 	signal dvi_pixel : std_logic;
 
-	signal sdram_drive_dq : std_logic;
-	signal sdram_dq_in : std_logic_vector(15 downto 0);
-	signal sdram_dq_out : std_logic_vector(15 downto 0);
-
-	signal trace : std_logic_vector(63 downto 0);
-	signal capreset : std_logic;
 	signal reset_n : std_logic;
 
 	signal amiga_txd : std_logic;
@@ -116,6 +109,13 @@ begin
 	ps2k_dat_in <= '1';
 	ps2m_clk_in <= '1';
 	ps2m_dat_in <= '1';
+	
+	joya<=(others=>'1');
+	joyb<=(others=>'1');
+	joyc<=(others=>'1');
+	joyd<=(others=>'1');
+
+	amiga_rxd <= '1';
 
 	virtual_top : COMPONENT minimig_virtual_top
 	generic map
@@ -138,10 +138,10 @@ begin
 		(
 			CLK_IN => clk,
 			CLK_114 => clk_sys,
-			RESET_N => '1',
+			RESET_N => reset_n,
 			LED_POWER => led(4),
 			LED_DISK => led(3),
-			MENU_BUTTON => '1',
+			MENU_BUTTON => button(1),
 			CTRL_TX => usb_tx,
 			CTRL_RX => usb_rx,
 			AMIGA_TX => amiga_txd,
@@ -193,7 +193,10 @@ begin
 			SD_MOSI => sd_mosi,
 			SD_CLK => sd_clk,
 			SD_CS => sd_csn,
-			SD_ACK => '1'
+			SD_ACK => '1',
+			
+			usb_dp => usb_dp,
+			usb_dn => usb_dn
 		);
 
 	-- Instantiate DVI out:
@@ -279,7 +282,7 @@ begin
 			--led_blue <= heartbeat_ctr(heartbeat_ctr'high);
 		--end process;
 
-		process(clk_video) begin
+		process(clk_sys) begin
 
 			-- Clock multiplexing:  Video timings are derived from the 114Hz clock.
 			-- dvi_pixel is high for one cycle at the start of each pixel, so by counting
@@ -380,10 +383,6 @@ begin
 		dviout_r : component ODDRX1F port map (D0 => tmds_r(0), D1=>tmds_r(1), Q => gpdi_dp(2), SCLK =>clk_tmds, RST=>'0');
 		dviout_g : component ODDRX1F port map (D0 => tmds_g(0), D1=>tmds_g(1), Q => gpdi_dp(1), SCLK =>clk_tmds, RST=>'0');
 		dviout_b : component ODDRX1F port map (D0 => tmds_b(0), D1=>tmds_b(1), Q => gpdi_dp(0), SCLK =>clk_tmds, RST=>'0');
---		dviout_c_n : component ODDRX1F port map (D0 => tmds_clk_n(0), D1=>tmds_clk_n(1), Q => gpdi_dn(3), SCLK =>clk_tmds, RST=>'0');
---		dviout_r_n : component ODDRX1F port map (D0 => tmds_r_n(0), D1=>tmds_r_n(1), Q => gpdi_dn(2), SCLK =>clk_tmds, RST=>'0');
---		dviout_g_n : component ODDRX1F port map (D0 => tmds_g_n(0), D1=>tmds_g_n(1), Q => gpdi_dn(1), SCLK =>clk_tmds, RST=>'0');
---		dviout_b_n : component ODDRX1F port map (D0 => tmds_b_n(0), D1=>tmds_b_n(1), Q => gpdi_dn(0), SCLK =>clk_tmds, RST=>'0');
 
 	end block;
 

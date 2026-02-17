@@ -3,10 +3,10 @@
 	SPI and FAT code borrowed from the Minimig project.
 */
 
+#include <stdio.h>
 #include "spi.h"
 #include "minfat.h"
 #include "checksum.h"
-#include "small_printf.h"
 #include "uart.h"
 
 /* #define STANDALONE to disable anything that requires the Minimig core to be functional,
@@ -72,11 +72,36 @@ void cvx(int val,char *buf)
 }
 
 
+void memcheck()
+{
+	int t;
+	volatile char *cbase=(volatile char *)0x10000;
+	volatile int *ibase=(volatile int *)cbase;
+	ibase[0]=0x11223344;
+	ibase[1]=0xffeeddcc;
+	ibase[2]=0x88776655;
+	ibase[3]=0x99aabbcc;
+	for(t=0;t<4;++t)
+		printf("%x\n",ibase[t]);
+	cbase[3]=0x55;
+	cbase[6]=0xaa;
+	cbase[9]=0x33;
+	cbase[12]=0xcc;
+	t=ibase[0x2000];
+	t=ibase[0x4000]; // Should result in cacheline being flushed
+	t=ibase[0];
+	for(t=0;t<4;++t)
+		printf("%x\n",ibase[t]);
+
+}
+
 int main(int argc,char **argv)
 {
 	int i;
 	int err=0;
 	SPI_slow();
+	printf("Sanity check: %x\n",42);
+	memcheck();
 
 #ifndef STANDALONE
 	EnableOsd();
@@ -119,6 +144,7 @@ int main(int argc,char **argv)
 					char *sector=(char *)prg_start;
 					int offset=0;
 					err=0x0ff;
+					puts("Booting...\n");
 					_boot();
 				}
 				else

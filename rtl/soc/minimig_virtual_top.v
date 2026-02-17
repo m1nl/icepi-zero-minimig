@@ -21,9 +21,12 @@
 
 // board type define
 `define MINIMIG_VIRTUAL
+`define MINIMIG_USB
 //`define HOSTONLY
 
 `include "minimig_defines.vh"
+
+`default_nettype none
 
 module minimig_virtual_top	#(
 	parameter hostonly=0,
@@ -129,6 +132,9 @@ module minimig_virtual_top	#(
   output wire           SD_CS,
   input wire            SD_ACK,
   output wire           RTC_CS,
+  
+  inout wire [1:0]      usb_dp,
+  inout wire [1:0]      usb_dn,
   output wire				RECONFIG,
   output wire				IECSERIAL,
   input wire			FREEZE
@@ -238,11 +244,6 @@ wire [  16-1:0] joya;
 wire [  16-1:0] joyb;
 wire [  16-1:0] joyc;
 wire [  16-1:0] joyd;
-//wire [  8-1:0] kbd_mouse_data;
-//wire           kbd_mouse_strobe;
-//wire           kms_level;
-//wire [  2-1:0] kbd_mouse_type;
-//wire [  3-1:0] mouse_buttons;
 
 // UART
 wire minimig_rxd;
@@ -307,11 +308,13 @@ wire rtg_pixel;
 wire selcsync;
 wire rtg_linecompare;
 wire rtg_ena_mm;
+wire rtg_de;
 
 rtg_video rtg (
 	.clk_114(CLK_114),
 	.clk_28(CLK_28),
 	.clk_vid(CLK_114),
+	.reset_n(RESET_N),
 	.rtg_ena(rtg_ena),
 	.rtg_linecompare(rtg_linecompare),
 	.reg_addr(rtg_reg_addr),
@@ -433,6 +436,7 @@ VideoStream #(.fifodepth(9),.burstdepth(3),.signalwidth(16)) myaudiostream
 	.q(aud_sample)
 );
 
+wire clk_56;
 
 //// amiga clocks ////
 amiga_clk amiga_clk (
@@ -441,12 +445,14 @@ amiga_clk amiga_clk (
   .clk_114      (CLK_114          ), // output clock c0 (114.750000MHz)
   .clk_sdram    (clk_sdram        ), // output clock c2 (114.750000MHz, -146.25 deg)
   .clk_28       (CLK_28           ), // output clock c1 ( 28.687500MHz)
+  .clk_56       (clk_56           ),
   .clk7_en      (clk7_en          ), // output clock 7 enable (on 28MHz clock domain)
   .clk7n_en     (clk7n_en         ), // 7MHz negedge output clock enable (on 28MHz clock domain)
   .c1           (c1               ), // clk28m clock domain signal synchronous with clk signal
   .c3           (c3               ), // clk28m clock domain signal synchronous with clk signal delayed by 90 degrees
   .cck          (cck              ), // colour clock output (3.54 MHz)
   .eclk         (eclk             ), // 0.709379 MHz clock enable output (clk domain pulse)
+  .ntsc         (1'b0             ),
   .locked       (PLL_LOCKED       )  // pll locked output
 );
 
@@ -636,6 +642,7 @@ wire CONF_DATA0;
 //assign SPI_DO = (CONF_DATA0 == 1'b0)?user_io_sdo:
 //    (((SPI_SS2 == 1'b0)|| (SPI_SS3 == 1'b0))?minimig_sdo:1'bZ);
 
+assign CONF_DATA0 = SPI_CS[3];
 assign SD_CLK = SPI_SCK;
 assign SD_CS = SPI_CS[1];
 assign SD_MOSI = SPI_DI;
@@ -646,28 +653,73 @@ assign RTC_CS = SPI_CS[7];
 
 // Keyboard-related signals
 
-wire	[7:0] c64_translated_key;
+wire	[15:0] c64_translated_key;
 wire	c64_translated_key_stb;
 reg	[7:0] kbd_mouse_data;
 wire	kbd_reset_n;
 reg	kbd_mouse_stb;
 reg	kbd_mouse_stb_r;
-reg	clk7_en_d;
+
+reg           mouse_idx;
+reg [  2-1:0] kbd_mouse_type;
+reg kms_level;
+reg [  3-1:0] mouse0_buttons;
+reg [  3-1:0] mouse1_buttons;
+
+
+localparam capturewidth = 18;
+wire [capturewidth-1:0] capture;
+wire [capturewidth-1:0] capout;
+wire cap_upd;
+
+assign capture[0] = kbd_mouse_stb;
+assign capture[8:1] = kbd_mouse_data;
+assign capture[10:9] = kbd_mouse_type;
+assign capture[13:11] = mouse0_buttons;
+assign capture[16:14] = mouse1_buttons;
+assign capture[17] = kms_level;
+
+//jcapture #(.capturewidth(capturewidth),.triggerwidth(capturewidth)) cap_inst (
+//	.clk(CLK_114),
+//	.reset_n(reset_out),
+//	.stb(1'b1),
+//	.d(capture),
+//	.q(capout),
+//	.update(cap_upd)
+//);
+
 
 assign kbd_reset_n = AMIGA_RESET_N;
 
-always @(posedge CLK_114) begin
-	clk7_en_d<=clk7_en;
-	if(clk7_en && !clk7_en_d) begin	// Detect rising edge of clk7_en which is on clk28
-		kbd_mouse_stb<=kbd_mouse_stb_r;
-		kbd_mouse_stb_r<=1'b0;
-	end
-	if(c64_translated_key_stb || AMIGA_KEY_STB) begin
-		kbd_mouse_data <= c64_translated_key_stb ? c64_translated_key : AMIGA_KEY;
-		kbd_mouse_stb_r<=1'b1;
-	end
+always @(posedge CLK_28) begin
+	kbd_mouse_stb <= kbd_mouse_stb_r;
+	kms_level <= kms_level ^ kbd_mouse_stb;
 end
 
+always @(posedge CLK_114) begin
+
+	if(kbd_mouse_stb) begin
+		kbd_mouse_stb_r<=1'b0;
+	end
+
+	if(c64_translated_key_stb || AMIGA_KEY_STB) begin
+		kbd_mouse_data <= c64_translated_key_stb ? c64_translated_key[7:0] : AMIGA_KEY;
+		kbd_mouse_type <= c64_translated_key_stb ? c64_translated_key[15:14] : 2'b10;
+		mouse0_buttons <= c64_translated_key_stb ? c64_translated_key[10:8] : 3'b000;
+		mouse1_buttons <= c64_translated_key_stb ? c64_translated_key[13:11] : 3'b000;
+		kbd_mouse_stb_r<=1'b1;
+	end
+
+//	if(cap_upd) begin
+//		kbd_mouse_stb_r <= 1'b1;
+//		kbd_mouse_data <= capout[8:1];
+//		kbd_mouse_type <= capout[10:9];
+//		mouse0_buttons <= capout[13:11];
+//		mouse1_buttons <= capout[16:14];
+//		mouse_idx <= capout[0];
+//	end
+
+end
 
 //// minimig top ////
 `ifdef HOSTONLY
@@ -727,19 +779,28 @@ minimig #(.useaga(haveaga),.wide_hblank(1'b1)) minimig
 	.txd          (AMIGA_TX         ),  // RS232 send
 	.cts          (1'b0             ),  // RS232 clear to send
 	.rts          (                 ),  // RS232 request to send
+	.midi_rx      (1'b1             ),
 	//I/O
 	._joy1        (JOYA             ),  // joystick 1 [fire7:fire,up,down,left,right] (default mouse port)
 	._joy2        (JOYB             ),  // joystick 2 [fire7:fire,up,down,left,right] (default joystick port)
 	._joy3        (JOYC             ),  // joystick 3 [fire7:fire,up,down,left,right]
 	._joy4        (JOYD             ),  // joystick 4 [fire7:fire,up,down,left,right]
 	//  .mouse_btn    (mouse_buttons    ),  // mouse buttons
-	.mouse0_btn   (3'b000           ),
-	.mouse1_btn   (3'b000           ),
-	.kbd_reset_n  (kbd_reset_n),
+	.mouse0_btn   (mouse0_buttons   ),  // mouse buttons for first mouse
+	.mouse1_btn   (mouse1_buttons   ),  // mouse buttons for second mouse
+	.mouse_idx    (mouse_idx        ),  // mouse index
+	.kbd_reset_n  (1'b1             ),  // Aux keyboard reset (not used with MiST)
 	.kbd_mouse_data (kbd_mouse_data ),  // mouse direction data, keycodes
-	//  .kbd_mouse_type (kbd_mouse_type ),  // type of data
+	.kbd_mouse_type (kbd_mouse_type ),  // type of data
 	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
-	.kms_level    (1'b0             ), // kms_level        ),
+	.kms_level    (kms_level        ),
+//	.mouse0_btn   (mouse0_btn       ),
+//	.mouse1_btn   (mouse1_btn       ),
+//	.kbd_reset_n  (kbd_reset_n),
+//	.kbd_mouse_data (kbd_mouse_data ),  // mouse direction data, keycodes
+	//  .kbd_mouse_type (kbd_mouse_type ),  // type of data
+//	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
+//	.kms_level    (1'b0             ), // kms_level        ),
 	._15khz       (_15khz           ), // scandoubler disable
 	.rtc          (rtc              ), // real-time clock
 	.pwr_led      (LED_POWER        ), // power led
@@ -877,6 +938,9 @@ cfide #(
 		.rtc_q(rtc),
 		.reconfig(RECONFIG),
 		.iecserial(IECSERIAL),
+		
+		.usb_dp(usb_dp),
+		.usb_dn(usb_dn),
 
 		.clk_28(CLK_28),
 		.tick_in(aud_tick)

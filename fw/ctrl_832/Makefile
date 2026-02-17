@@ -18,7 +18,7 @@ LIBDIR = $(832DIR)/lib832
 BUILD_DIR = 832obj
 INCLUDE_DIR = $(832DIR)/include
 
-PROJECT=832OSDAD
+PROJECT=832OSDU0
 
 ### flags ###
 
@@ -52,7 +52,7 @@ ALL_SOURCES=$(BUILD_DIR)/hardware.o $(BUILD_DIR)/config.o $(BUILD_DIR)/fat.o $(B
 	$(BUILD_DIR)/boot.o $(BUILD_DIR)/hdd.o $(BUILD_DIR)/main.o $(BUILD_DIR)/menu.o $(BUILD_DIR)/mmc.o $(BUILD_DIR)/spi.o \
 	$(BUILD_DIR)/osd.o $(BUILD_DIR)/rafile.o $(BUILD_DIR)/swap.o $(BUILD_DIR)/hexdump.o $(BUILD_DIR)/uart.o $(BUILD_DIR)/errors.o \
 	$(BUILD_DIR)/audiotrack.o $(BUILD_DIR)/bincue.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/c64keys.o $(BUILD_DIR)/akiko.o \
-	$(BUILD_DIR)/audio.o $(BUILD_DIR)/drivesounds.o $(BUILD_DIR)/rtc.o
+	$(BUILD_DIR)/audio.o $(BUILD_DIR)/drivesounds.o $(BUILD_DIR)/rtc.o $(BUILD_DIR)/usbhid.o
 
 
 ### build rules ###

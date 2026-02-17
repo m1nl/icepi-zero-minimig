@@ -90,6 +90,8 @@ package minimig_virtual_pkg is
 		SD_CLK	:	 OUT STD_LOGIC;
 		SD_CS		:	 OUT STD_LOGIC;
 		SD_ACK	:	 IN STD_LOGIC;
+		usb_dp  :    INOUT std_logic_vector(1 downto 0);
+		usb_dn  :    INOUT std_logic_vector(1 downto 0);
 		RTC_CS   :   OUT STD_LOGIC;
 		RECONFIG	:	 OUT STD_LOGIC;
 		IECSERIAL:	 OUT STD_LOGIC;

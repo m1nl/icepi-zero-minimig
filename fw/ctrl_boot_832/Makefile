@@ -24,7 +24,7 @@ PROJECT=OSDBoot_832
 
 ### flags ###
 
-CFLAGS  = -+ -c99 -Dprg_start=0x2000 -DOSDNAME=\"832OSDADBIN\" -O=1311 -size -unsigned-char -DNULL=0 -I. -I$(INCLUDE_DIR)/ -I$(COMMON_DIR)/ -I../OSD/
+CFLAGS  = -+ -c99 -Dprg_start=0x2000 -DOSDNAME=\"832OSDU0BIN\" -O=1311 -size -unsigned-char -DNULL=0 -I. -I$(INCLUDE_DIR)/ -I$(COMMON_DIR)/ -I../OSD/
 ASFLAGS = -eb
 LDFLAGS  = -eb -s_STACKSIZE=0x240
 ROMGENFLAGS = 

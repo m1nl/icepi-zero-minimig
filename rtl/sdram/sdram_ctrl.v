@@ -253,6 +253,21 @@ assign hostRD = sdata_reg;
 assign hostena=slot1_type==HOST ? cache_fill_1 : 1'b0;
 
 
+reg cpu_ir;
+reg cpu_dr;
+reg cpu_we;
+always @(posedge sysclk) begin
+`ifdef MINIMIG_NO_DATA_CACHE
+	cpu_ir <= ~cpustate[0];
+	cpu_dr <= 1'b0;
+`else
+	cpu_ir <= !(|cpustate[1:0]);            // cpu instruction read
+	cpu_dr <= cpustate[1] && !cpustate[0];  // cpu data read
+`endif
+	cpu_we <= &cpustate[1:0];
+end
+
+
 ////////////////////////////////////////
 // cpu cache
 ////////////////////////////////////////
@@ -301,14 +316,6 @@ assign longword_en = cpuLongword && cpuAddr_r[3:1]!=3'b111 && cpustate[1:0]==2'b
 assign cpuena = ccachehit;
 assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_fill_2 && slot2_type == CPU_READCACHE);
 
-reg cpu_ir;
-reg cpu_dr;
-reg cpu_we;
-always @(posedge sysclk) begin
-	cpu_ir <= !(|cpustate[1:0]);            // cpu instruction read
-	cpu_dr <= cpustate[1] && !cpustate[0];  // cpu data read
-	cpu_we <= &cpustate[1:0];
-end
 
 //// chip line read ////
 always @ (posedge sysclk) begin
