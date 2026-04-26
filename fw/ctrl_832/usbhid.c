@@ -3,6 +3,7 @@
 #include "usbhid_keycodes.h"
 #include "c64keys.h"
 #include "menu.h"
+#include "osd.h"
 
 #define KEYPAGES 5
 unsigned int usbhid_prevtable[KEYPAGES];
@@ -47,6 +48,7 @@ int joykeys_status;
 /* Returns 1 if the code should be passed through to the core */
 static int usbhid_joykeys(int code) {
 	static char joyemu=0;
+	int rc=osd_visible ? code : 0; // Swallow keycodes unless OSD is visible.
 
 	if(code==HIDKEY_NUMLOCK) {
 		joyemu ^=1;
@@ -60,19 +62,19 @@ static int usbhid_joykeys(int code) {
 	switch(code) {
 		case HIDKEY_UP :
 			joykeys_status |= 8;
-			return(0);
+			return(rc);
 			break;
 		case HIDKEY_DOWN :
 			joykeys_status |= 4;
-			return(0);
+			return(rc);
 			break;
 		case HIDKEY_LEFT :
 			joykeys_status |= 2;
-			return(0);
+			return(rc);
 			break;
 		case HIDKEY_RIGHT :
 			joykeys_status |= 1;
-			return(0);
+			return(rc);
 			break;
 		default : 
 			break;
@@ -102,6 +104,10 @@ static void usbhid_handlekb(struct usbhidport *port) {
 	}
 
 	joykeys_status=0;
+
+	/* Test for Ctrl-Amiga-Amiga key combo */
+	if(!(port->pkt[0] ^ (HIDQUAL_LCTRL | HIDQUAL_LALT | HIDQUAL_RALT)))
+		OsdReset();
 
 	usbhid_keytable[4]=usbhid_joyquals(port->pkt[0]);
 	for(i=0;i<6;++i) {
@@ -136,6 +142,7 @@ static void usbhid_handlekb(struct usbhidport *port) {
 		else
 			code+=32;
 	}
+
 }
 
 static void usbhid_handlemouse(struct usbhidport *port) {

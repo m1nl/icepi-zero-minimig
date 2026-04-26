@@ -811,6 +811,7 @@ void OsdWaitVBL(void)
 {
 }
 
+int osd_visible=0;
 
 // enable displaying of OSD
 void OsdShow(unsigned char mode)
@@ -820,6 +821,7 @@ void OsdShow(unsigned char mode)
     SPI(OSD_CMD_OSD);
     SPI(0x01 | (mode & DISABLE_KEYBOARD));
     DisableOsd();
+    osd_visible=1;
 }
 
 
@@ -831,6 +833,7 @@ void OsdHide(void)
     SPI(OSD_CMD_OSD);
     SPI(0x00);
     DisableOsd();
+    osd_visible=0;
 }
 
 

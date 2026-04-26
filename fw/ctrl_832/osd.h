@@ -144,5 +144,7 @@ char* OsdCoreName();
 void OsdColor(unsigned char color);
 void OsdDoReset(int enter,int leave);
 
+extern int osd_visible;
+
 #endif
 

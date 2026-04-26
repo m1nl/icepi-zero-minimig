@@ -22,6 +22,7 @@
 // board type define
 `define MINIMIG_VIRTUAL
 `define MINIMIG_USB
+`define MINIMIG_ASPECT_CORRECTION
 //`define HOSTONLY
 
 `include "minimig_defines.vh"

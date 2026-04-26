@@ -149,7 +149,12 @@ const unsigned short usb2ami[256] = {
 #define HIDKEY_LEFT 0x50
 #define HIDKEY_RIGHT 0x4f
 #define HIDQUAL_LCTRL 0x01
+#define HIDQUAL_LSHIFT 0x02
 #define HIDQUAL_LALT 0x04
-
+#define HIDQUAL_LGUI 0x08
+#define HIDQUAL_RCTRL 0x10
+#define HIDQUAL_RSHIFT 0x20
+#define HIDQUAL_RALT 0x40
+#define HIDQUAL_RGUI 0x80
 
 
