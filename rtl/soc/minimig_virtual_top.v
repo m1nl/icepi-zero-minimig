@@ -54,6 +54,7 @@ module minimig_virtual_top	#(
   input wire            CLK_IN,
   output wire           CLK_114,
   output wire           CLK_28,
+  output wire           CLK_142,
   output wire           PLL_LOCKED,
   input wire            RESET_N,
   
@@ -445,10 +446,11 @@ wire clk_56;
 amiga_clk amiga_clk (
   .rst          (1'b0             ), // async reset input
   .clk_in       (CLK_IN           ), // input clock     ( 27.000000MHz)
-  .clk_114      (CLK_114          ), // output clock c0 (114.750000MHz)
-  .clk_sdram    (clk_sdram        ), // output clock c2 (114.750000MHz, -146.25 deg)
-  .clk_28       (CLK_28           ), // output clock c1 ( 28.687500MHz)
-  .clk_56       (clk_56           ),
+  .clk_sdram    (clk_sdram        ), // output clock c0 (114.750000MHz, -146.25 deg)
+  .clk_114      (CLK_114          ), // output clock c1 (114.750000MHz)
+  .clk_28       (CLK_28           ), // output clock c2 ( 28.375160MHz)
+  .clk_56       (clk_56           ), // output clock c3
+  .clk_142      (CLK_142          ), // output clock c4 (141.8758MHz)
   .clk7_en      (clk7_en          ), // output clock 7 enable (on 28MHz clock domain)
   .clk7n_en     (clk7n_en         ), // 7MHz negedge output clock enable (on 28MHz clock domain)
   .c1           (c1               ), // clk28m clock domain signal synchronous with clk signal

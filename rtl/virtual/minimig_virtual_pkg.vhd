@@ -29,9 +29,10 @@ package minimig_virtual_pkg is
 		sys_tdi : in std_logic := '1';
 		sys_tck : in std_logic := '1';
 		sys_tms : in std_logic := '1';
-		
+
 		CLK_114		:	 out STD_LOGIC;
 		CLK_28		:	 out STD_LOGIC;
+		CLK_142		:	 out STD_LOGIC;
 		CLK_IN 		:   in std_logic;
 		PLL_LOCKED  :   out std_logic;
 		RESET_N 		:   in STD_LOGIC;

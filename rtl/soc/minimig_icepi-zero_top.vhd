@@ -58,6 +58,9 @@ architecture rtl of minimig_icepizero_top is
 	signal audio_r : std_logic_vector(23 downto 0);
 
 	signal clk_sys : std_logic;
+	signal clk_pixel : std_logic;
+	signal clk_tmds : std_logic;
+
 	signal dvi_red : std_logic_vector(7 downto 0);
 	signal dvi_green : std_logic_vector(7 downto 0);
 	signal dvi_blue : std_logic_vector(7 downto 0);
@@ -123,6 +126,8 @@ begin
 		(
 			CLK_IN => clk,
 			CLK_114 => clk_sys,
+			CLK_28 => clk_pixel,
+			CLK_142 => clk_tmds,
 			RESET_N => reset_n,
 			LED_POWER => led(4),
 			LED_DISK => led(3),
@@ -230,14 +235,6 @@ begin
 			vreset      : out std_logic
 		); end component;
 
-		signal pcnt : unsigned(3 downto 0);
-		signal clksel : std_logic_vector(1 downto 0);
-		signal vidclks : std_logic_vector(3 downto 0);
-		signal clk_video : std_logic;
-		signal clk_tmds : std_logic;
-
-		signal heartbeat_ctr : unsigned(27 downto 0);
-
 		signal vreset : std_logic;
 		signal vpal : std_logic;
 		signal interlace : std_logic;
@@ -248,69 +245,9 @@ begin
 		signal rgb : std_logic_vector(23 downto 0);
 
 	begin
-
-		--process(clk_tmds) begin
-			--if rising_edge(clk_tmds) then
-				--heartbeat_ctr <= heartbeat_ctr+1;
-			--end if;
-			--led_blue <= heartbeat_ctr(heartbeat_ctr'high);
-		--end process;
-
-		process(clk_sys) begin
-
-			-- Clock multiplexing:  Video timings are derived from the 114Hz clock.
-			-- dvi_pixel is high for one cycle at the start of each pixel, so by counting
-			-- the number of clocks between each pulse we can determine the pixel clock and
-			-- thus the appropriate TMDS clock to use.
-			-- We will see a pcnt value of 1 for 56MHz modes and 3 for 28MHz modes
-			-- Since we don't seem to be able to cascade DCSCs, we're stuck with just two
-			-- TDMS clocks, which will be 5*28MHz and 5*56Mhz.
-			if rising_edge(clk_sys) then
-				if dvi_pixel='1' then
-					pcnt <=(others => '0');
-					clksel(0)<='0';
-					case pcnt is
-						when X"1" => -- 56MHz pixel clock in RTG mode
-							clksel(0) <= '0';
-						when others => -- 28MHz pixel clock otherwise
-							clksel(0) <= '1';
-							null;
-					end case;
-				else
-					pcnt<=pcnt+1;
-				end if;
-			end if;
-			clksel(1) <= not clksel(0);
-		end process;
-
-		vidpll : entity work.ecp5pll
-		generic map(
-			in_hz => natural(114.2857e6),
-			out0_hz => natural(142.857125e6),
-			out1_hz => natural(285.71425e6),
-			out2_hz => natural(28.571425e6)
-		)
-		port map (
-			clk_i => clk_sys,
-			clk_o => vidclks
-		);
-
-		--clkmux1 : component DCSC
-		--port map (
-		--	CLK0 => vidclks(0),
-		--	CLK1 => vidclks(1),
-		--	SEL1 => clksel(1),
-		--	SEL0 => clksel(0),
-		--	MODESEL => '1',
-		--	DCSOUT => clk_tmds
-		--);
-
-		clk_tmds <= vidclks(0);
-		clk_video <= vidclks(2);
-
 		video_analyzer_inst : component video_analyzer
 		port map (
-			clk => clk_video,
+			clk => clk_pixel,
 			hs => dvi_hsync,
 			vs => dvi_vsync,
 			pal => vpal,
@@ -328,7 +265,7 @@ begin
 		)
 		port map (
 			clk_pixel_x5 => clk_tmds,
-			clk_pixel => clk_video,
+			clk_pixel => clk_pixel,
 			reset => vreset,
 
 			pal_mode => vpal,
