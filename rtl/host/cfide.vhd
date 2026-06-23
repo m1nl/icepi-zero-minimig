@@ -43,8 +43,8 @@ entity cfide is
 		n_reset	: in std_logic;
 
 		addr	: in std_logic_vector(31 downto 2);
-		d		: in std_logic_vector(15 downto 0);
-		q		: out std_logic_vector(15 downto 0);
+		d		: in std_logic_vector(31 downto 0);
+		q		: out std_logic_vector(31 downto 0);
 		req 	: in std_logic;
 		wr 	: in std_logic;
 		ack 	: buffer std_logic;
@@ -145,10 +145,13 @@ signal keyboard_select : std_logic;
 signal keyboard_q : std_logic_vector(15 downto 0);
 signal amigatohost  : std_logic_vector(15 downto 0);
 signal amiga_select : std_logic;
-signal amiga_req_d : std_logic;
+signal amiga_ready_d : std_logic;
 
-signal usb_select : std_logic;
-signal usbtohost : std_logic_vector(15 downto 0);
+signal usb_select_0 : std_logic;
+signal usbtohost_0 : std_logic_vector(31 downto 0);
+
+signal usb_select_1 : std_logic;
+signal usbtohost_1 : std_logic_vector(31 downto 0);
 
 signal rtc_select : std_logic;
 signal reconfigpresent : std_logic;
@@ -158,15 +161,24 @@ signal cartpresent : std_logic;
 signal clockportpresent : std_logic;
 begin
 
--- Peripheral registers are only 16-bits wide.
+-- Peripheral registers, which are only 16-bits wide.
 
-q(15 downto 0) <=	IOdata WHEN rs232_select='1' or SPI_select='1' ELSE
-		std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
-		audio_q when audio_select='1' else
-		keyboard_q when keyboard_select='1' else
-		amigatohost when amiga_select='1' else
-		usbtohost when usb_select='1' else
-		platformdata;
+q(15 downto 0) <=
+	IOdata WHEN rs232_select='1' or SPI_select='1' ELSE
+	std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
+	audio_q when audio_select='1' else
+	keyboard_q when keyboard_select='1' else
+	amigatohost when amiga_select='1' else
+	usbtohost_0(15 downto 0) when usb_select_0='1' else
+	usbtohost_1(15 downto 0) when usb_select_1='1' else
+	platformdata;
+
+-- Peripheral registers, which are 32-bits wide.
+
+q(31 downto 16) <=
+	usbtohost_0(31 downto 16) when usb_select_0='1' else
+	usbtohost_1(31 downto 16) when usb_select_1='1' else
+	(others => '0');
 
 spirtcpresent <= '1' when havespirtc=1 else '0';
 iecpresent <= '1' when haveiec=1 else '0';
@@ -185,7 +197,7 @@ begin
 		if req='1' then
 			if rs232_select='1' or SPI_select='1' then
 				ack<=IOcpuena;
-			elsif timer_select='1' or platform_select='1' or audio_select='1' or usb_select='1' or interrupt_select='1'
+			elsif timer_select='1' or platform_select='1' or audio_select='1' or usb_select_0='1' or usb_select_1='1' or interrupt_select='1'
 						or keyboard_select='1' or amiga_select='1' or rtc_select='1' then
 				ack<='1';
 			end if;
@@ -208,7 +220,8 @@ interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
 keyboard_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
 amiga_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"8" else '0';
 rtc_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"7" else '0';
-usb_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
+usb_select_0 <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
+usb_select_1 <= '1' when addr(27)='1' and addr(7 downto 4)=X"5" else '0';
 
 
 -- RTC handling at 0fffff70
@@ -221,13 +234,15 @@ begin
 		if rtc_select='1' and req='1' and wr='1' then
 			case addr(3 downto 2) is
 				when "00" =>
-					rtc_q(63 downto 48)<=d;
+					rtc_q(63 downto 48)<=d(15 downto 0);
 				when "01" =>
-					rtc_q(47 downto 32)<=d;
+					rtc_q(47 downto 32)<=d(15 downto 0);
 				when "10" =>
-					rtc_q(31 downto 16)<=d;
+					rtc_q(31 downto 16)<=d(15 downto 0);
 				when "11" =>
-					rtc_q(15 downto 0)<=d;
+					rtc_q(15 downto 0)<=d(15 downto 0);
+				when others =>
+					null;
 			end case;
 		end if;
 	end if;
@@ -289,6 +304,8 @@ begin
 					keyboard_q<=c64_keys(31 downto 16);
 				when "11" =>
 					keyboard_q<=c64_keys(15 downto 0);
+				when others =>
+					null;
 			end case;
 		end if;
 	end if;
@@ -304,8 +321,8 @@ begin
 		interrupt<='0';
 		interrupt_ena<='0';
 	elsif rising_edge(clk_28) then
-		amiga_req_d<=amiga_req;
-		if vbl_int='1' or (amiga_req='1' and amiga_req_d='0') then
+		amiga_ready_d<=amiga_req;
+		if vbl_int='1' or (amiga_req='1' and amiga_ready_d='0') then
 			interrupt<=interrupt_ena;
 		end if;
 		if interrupt_select='1' and req='1' then
@@ -382,7 +399,7 @@ begin
 					IOcpuena <= '1';
 				end if;
 
-			WHEN OTHERS =>
+			WHEN others =>
 				support_state <= idle;
 		END CASE;
 	END IF;
@@ -403,9 +420,9 @@ end process;
 			sd_di_in <= sd_dimm;
 		END IF;
 		IF n_reset ='0' THEN
-			shiftcnt <= (OTHERS => '0');
-			spi_div <= (OTHERS => '0');
-			scs <= (OTHERS => '0');
+			shiftcnt <= (others => '0');
+			spi_div <= (others => '0');
+			scs <= (others => '0');
 			sck <= '0';
 			spi_speed <= "00000000";
 --			dscs <= '0';
@@ -507,7 +524,7 @@ end process;
 -----------------------------------------------------------------
 debugTxD <= not shiftout;
 process(n_reset, clk_28, shift)
-  constant CLKGEN_28_115 : unsigned(9 downto 0) := "0011110110";
+	constant CLKGEN_28_115 : unsigned(9 downto 0) := "0011110110";
 begin
 	if shift="0000000000" then
 		txbusy <= '0';
@@ -562,12 +579,27 @@ usbblock : block
 	signal rom_doutb : std_logic_vector(3 downto 0);
 	signal rom_enb   : std_logic;
 
+	signal usb_typ_0 : std_logic_vector(1 downto 0);
+	signal usb_typ_1 : std_logic_vector(1 downto 0);
+
+	signal usb_full_report_0 : std_logic;
+	signal usb_full_report_1 : std_logic;
+
 	signal usbreset       : std_logic;
 	signal usbreset_sync1 : std_logic;
 	signal usbreset_sync2 : std_logic;
 
-	signal usb_typ_0 : std_logic_vector(1 downto 0);
-	signal usb_typ_1 : std_logic_vector(1 downto 0);
+	type sync3_t is array (0 to 1) of std_logic_vector(2 downto 0);
+	signal hid_sync           : sync3_t := (others => (others => '0'));
+	signal full_report_toggle : std_logic_vector(1 downto 0) := (others => '0');
+
+	signal hid_report_ready_0 : std_logic;
+	signal hid_report_ready_1 : std_logic;
+	signal hid_report_ack_0 : std_logic;
+	signal hid_report_ack_1 : std_logic;
+
+	signal hid_report_0 : std_logic_vector(63 downto 0);
+	signal hid_report_1 : std_logic_vector(63 downto 0);
 
 	component usb_hid_host
 		generic (
@@ -690,7 +722,7 @@ begin
 
 		-- everything else unused
 		typ            => usb_typ_0,
-		full_report    => open,
+		full_report    => usb_full_report_0,
 		connerr        => open,
 		busy           => open,
 
@@ -720,7 +752,7 @@ begin
 
 		game_extra     => open,
 
-		dbg_hid_report => open,
+		dbg_hid_report => hid_report_0,
 		dbg_hid_regs   => open
 	);
 
@@ -736,7 +768,7 @@ begin
 		reset => usbreset,
 		cs    => '1',
 
-		-- USB only
+-- USB only
 		usb_dm_i => usb_dn(1),
 		usb_dp_i => usb_dp(1),
 		usb_dm_o => usb_dn_o(1),
@@ -750,7 +782,7 @@ begin
 
 		-- everything else unused
 		typ            => usb_typ_1,
-		full_report    => open,
+		full_report    => usb_full_report_1,
 		connerr        => open,
 		busy           => open,
 
@@ -780,7 +812,7 @@ begin
 
 		game_extra     => open,
 
-		dbg_hid_report => open,
+		dbg_hid_report => hid_report_1,
 		dbg_hid_regs   => open
 	);
 
@@ -789,17 +821,135 @@ begin
 		if n_reset = '0' then
 			usbreset_sync1 <= '1';
 			usbreset_sync2 <= '1';
+
 		elsif rising_edge(usbclk) then
 			usbreset_sync1 <= '0';
 			usbreset_sync2 <= usbreset_sync1;
 		end if;
 	end process;
 
+	-- Convert pulses to toggles in usbclk domain so they survive CDC regardless of pulse width
+	process (usbclk, n_reset)
+	begin
+		if n_reset = '0' then
+			full_report_toggle <= (others => '0');
+		elsif rising_edge(usbclk) then
+			if usb_full_report_0 = '1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
+			if usb_full_report_1 = '1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
+		end if;
+	end process;
+
+	-- 3-stage shift-register sync in sysclk domain; bit(1) xor bit(2) gives a one-cycle set pulse
+	process (sysclk, n_reset)
+	begin
+		if n_reset = '0' then
+			hid_sync <= (others => (others => '0'));
+		elsif rising_edge(sysclk) then
+			for i in 0 to 1 loop
+				hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
+			end loop;
+		end if;
+	end process;
+
 	usbreset <= usbreset_sync2;
 
-	usb_connected(0) <= usb_oe(0);
-	usb_connected(1) <= usb_oe(1);
-end block;
+	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
+	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
 
+	process (sysclk, n_reset) begin
+		if n_reset = '0' then
+			hid_report_ready_0 <= '0';
+
+		elsif rising_edge(sysclk) then
+			if hid_sync(0)(1) /= hid_sync(0)(2) then
+				hid_report_ready_0 <= '1';
+			end if;
+
+			if hid_report_ack_0 = '1' then
+				hid_report_ready_0 <= '0';
+			end if;
+		end if;
+	end process;
+
+	process (sysclk, n_reset) begin
+		if n_reset = '0' then
+			hid_report_ready_1 <= '0';
+
+		elsif rising_edge(sysclk) then
+			if hid_sync(1)(1) /= hid_sync(1)(2) then
+				hid_report_ready_1 <= '1';
+			end if;
+
+			if hid_report_ack_1 = '1' then
+				hid_report_ready_1 <= '0';
+			end if;
+		end if;
+	end process;
+
+	process (sysclk) begin
+		if rising_edge(sysclk) then
+			hid_report_ack_0 <= '0';
+
+			if usb_select_0 = '1' and req = '1' then
+				if wr = '1' then
+					case addr(3 downto 2) is
+						when "00" =>
+							if d(2) = '1' then
+								hid_report_ack_0 <= '1';
+							end if;
+						when others =>
+							null;
+					end case;
+				else
+					case addr(3 downto 2) is
+						when "00" =>
+							usbtohost_0(31 downto 3) <= (others => '0');
+							usbtohost_0(2 downto 0) <= hid_report_ready_0 & usb_typ_0;
+						when "01" =>
+							usbtohost_0 <= hid_report_0(31 downto 0);
+						when "10" =>
+							usbtohost_0 <= hid_report_0(63 downto 32);
+						when others =>
+							null;
+					end case;
+				end if;
+			end if;
+		end if;
+	end process;
+
+	process (sysclk) begin
+		if rising_edge(sysclk) then
+			hid_report_ack_1 <= '0';
+
+			if usb_select_1 = '1' and req = '1' then
+				if wr = '1' then
+					case addr(3 downto 2) is
+						when "00" =>
+							if d(2) = '1' then
+								hid_report_ack_1 <= '1';
+							end if;
+						when others =>
+							null;
+					end case;
+				else
+					case addr(3 downto 2) is
+						when "00" =>
+							usbtohost_1(31 downto 3) <= (others => '0');
+							usbtohost_1(2 downto 0) <= hid_report_ready_1 & usb_typ_1;
+						when "01" =>
+							usbtohost_1 <= hid_report_1(31 downto 0);
+						when "10" =>
+							usbtohost_1 <= hid_report_1(63 downto 32);
+						when others =>
+							null;
+					end case;
+				end if;
+			end if;
+		end if;
+	end process;
+
+	joykeys <= (others => '1');
+
+end block;
 end;
 -- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:

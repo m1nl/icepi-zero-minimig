@@ -565,7 +565,7 @@ wire [3:0]     hostbytesel;
 wire  [ 16-1:0] host_ramdata;
 wire           host_ramack;
 wire           host_ramreq;
-wire  [ 16-1:0] host_hwdata;
+wire  [ 32-1:0] host_hwdata;
 wire           host_hwack;
 wire           host_hwreq;
 wire           host_we;
@@ -908,7 +908,7 @@ cfide #(
 		.n_reset(reset_out),
 
 		.addr(hostaddr),
-		.d(hostWR[15:0]),
+		.d(hostWR),
 		.req(host_hwreq),
 		.wr(host_we),
 		.ack(host_hwack),

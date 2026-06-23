@@ -23,7 +23,7 @@ entity EightThirtyTwo_Bridge is
 
 		hw_req            : out std_logic;
 		hw_ack            : in std_logic;
-		hw_d					: in std_logic_vector(15 downto 0);
+		hw_d					: in std_logic_vector(31 downto 0);
 		interrupt			: in std_logic
 	);
 end EightThirtyTwo_Bridge;
@@ -38,7 +38,7 @@ signal cpu_ack : std_logic;
 signal cpu_d 	: std_logic_vector(31 downto 0);
 signal cpu_q	: std_logic_vector(31 downto 0);
 signal cpu_addr	: std_logic_vector(31 downto 2);
-signal cpu_wr	: std_logic; 
+signal cpu_wr	: std_logic;
 signal cpu_sel : std_logic_vector(3 downto 0);
 
 signal cache_req : std_logic;
@@ -93,7 +93,7 @@ generic map (
 	debug => true
 )
 port map(
-	clk => clk, 
+	clk => clk,
 	reset_n => cpu_reset_n,
 	addr => cpu_addr,
 	d => cpu_d,
@@ -134,7 +134,7 @@ generic map (
 	debug => false
 )
 port map(
-	clk => clk, 
+	clk => clk,
 	reset_n => cpu_reset_n,
 	addr => cpu_addr,
 	d => cpu_d,
@@ -216,7 +216,7 @@ bootrom: entity work.OSDBoot_832_ROM
 	(
 		maxAddrBitBRAM => 12
 	)
-	PORT MAP 
+	PORT MAP
 	(
 		addr => cpu_addr(12 downto 2),
 		clk   => clk,
@@ -277,7 +277,7 @@ begin
 				rom_wr<='0';
 				cpu_ack<='1';
 				state<=waiting;
-				
+
 			when ram =>
 				if cache_ack='1' then
 					cache_req<='0';
@@ -289,8 +289,7 @@ begin
 
 			when hw =>
 				if hw_ack='1' then
-					cpu_d(31 downto 16)<=(others=>'0');
-					cpu_d(15 downto 0)<=hw_d;
+					cpu_d<=hw_d;
 					wr<='0';
 					hw_req<='0';
 					cpu_ack<='1';
