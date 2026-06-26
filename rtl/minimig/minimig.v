@@ -146,7 +146,7 @@
 // SB:
 // 2012-03-23 - fixed sprite enable signal (coppermaster demo)
 
-module minimig #(parameter useaga=1'b1, parameter usertg=1'b1, parameter wide_hblank=1'b0)
+module minimig #(parameter ntscswitch=1'b1, parameter useaga=1'b1, parameter usertg=1'b1, parameter wide_hblank=1'b0)
 (
 	// JTAG inputs
 	output sys_tdo,
@@ -287,12 +287,6 @@ module minimig #(parameter useaga=1'b1, parameter usertg=1'b1, parameter wide_hb
   output  step_sound,
   output  hdd_sound
 );
-
-//--------------------------------------------------------------------------------------
-
-//	parameter [0:0] NTSC = 1'b0;	//Agnus type (PAL/NTSC)
-
-//--------------------------------------------------------------------------------------
 
 //local signals for data bus
 wire		[15:0] cpu_data_in;		//cpu data bus in
@@ -529,8 +523,8 @@ assign slow_config = memory_config[3:2];
 // NTSC/PAL switching is controlled by OSD menu, change requires reset to take effect
 always @(posedge clk)
   if (clk7_en) begin
-  	if (reset)
-  		ntscmode <= chipset_config[1];
+    if (reset)
+      ntscmode <= chipset_config[1] && ntscswitch;
   end
 
 // vertical sync for the MCU
@@ -541,7 +535,7 @@ always @(posedge clk)
   if (clk7_en) begin
     vsync_del <= _vsync_i;
   end
-  
+
 always @(posedge clk)
   if (clk7_en) begin
     if (~_vsync_i && vsync_del)

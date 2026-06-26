@@ -140,7 +140,8 @@ begin
 			ram_64meg => 0,
 			vga_width => 4,
 			havecart => 0,
-			haveaga => 0
+			haveaga => 0,
+			haventscswitch => 0
 		)
 	PORT map
 		(

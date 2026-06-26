@@ -42,7 +42,8 @@ module minimig_virtual_top	#(
 	parameter ram_64meg = 0,
 	parameter vga_width = 6,
 	parameter havecart = 1,
-	parameter haveaga = 1
+	parameter haveaga = 1,
+	parameter haventscswitch = 1
 )
 (
   // JTAG inputs
@@ -746,7 +747,7 @@ assign _ram_oe=1'b1;
 assign _ram_we=1'b1;
 `else
 
-minimig #(.useaga(haveaga),.usertg(havertg),.wide_hblank(1'b1)) minimig
+minimig #(.ntscswitch(haventscswitch),.useaga(haveaga),.usertg(havertg),.wide_hblank(1'b1)) minimig
 (
 	// JTAG
 	.sys_tdo(sys_tdo),
