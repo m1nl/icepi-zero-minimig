@@ -20,7 +20,8 @@ package minimig_virtual_pkg is
 	  ram_64meg : integer := 0;
 	  vga_width : integer := 5;
 	  havecart : integer := 1;
-	  haveaga : integer :=1
+	  haveaga : integer :=1;
+	  haventscswitch : integer :=1
 	);
 	PORT
 	(

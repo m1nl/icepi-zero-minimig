@@ -955,21 +955,21 @@ begin
 
 	process (sysclk) begin
 		if rising_edge(sysclk) then
---			if usb_typ_0 = "11" then
---				if hid_report_ready_0 = '1' then
---					hid_joy_0 <= not (
---											 '1' &
---											 (usb_game_0(5) or usb_game_0(11)) &
---											 (usb_game_0(4) or usb_game_0(13)) &
---											 (usb_game_0(2) or usb_game_0(10)) &
---											 (usb_game_0(3) or usb_game_0(12)) &
---											 usb_game_0(0) &
---											 usb_game_0(1)
---										 );
---				end if;
---			else
+			if usb_typ_0 = "11" then
+				if hid_report_ready_0 = '1' then
+					hid_joy_0 <= not (
+											 '1' &
+											 (usb_game_0(5) or usb_game_0(11)) &
+											 (usb_game_0(4) or usb_game_0(13)) &
+											 (usb_game_0(2) or usb_game_0(10)) &
+											 (usb_game_0(3) or usb_game_0(12)) &
+											 usb_game_0(0) &
+											 usb_game_0(1)
+										 );
+				end if;
+			else
 				hid_joy_0 <= (others => '1');
---			end if;
+			end if;
 
 			if usb_typ_1 = "11" then
 				if hid_report_ready_1 = '1' then

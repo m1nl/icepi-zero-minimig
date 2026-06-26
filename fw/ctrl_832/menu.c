@@ -1222,7 +1222,7 @@ void HandleUI(void)
 		OsdWrite(2, s, menusub == 1,0);
 		strcpy(s, "       Video : ");
 		strcat(s, config.chipset & CONFIG_NTSC ? "NTSC" : "PAL");
-		OsdWrite(3, s, menusub == 2,0);
+		OsdWrite(3, s, menusub == 2,1);
 		strcpy(s, "     Chipset : ");
 		strcat(s, config_chipset_msg[(config.chipset >> 2) & 7]);
 		OsdWrite(4, s, menusub == 3,0);
