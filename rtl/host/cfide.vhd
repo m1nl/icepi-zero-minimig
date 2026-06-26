@@ -974,7 +974,7 @@ begin
 			if usb_typ_1 = "11" then
 				if hid_report_ready_1 = '1' then
 					hid_joy_1 <= not (
-											 '1' &
+											 usb_game_1(9) &
 											 (usb_game_1(5) or usb_game_1(11)) &
 											 (usb_game_1(4) or usb_game_1(13)) &
 											 (usb_game_1(2) or usb_game_1(10)) &

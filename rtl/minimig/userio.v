@@ -359,7 +359,9 @@ always @ (*) begin
   if (~joy2enable)
 //    if (~_xjoy2[5] || (~_xjoy2[3] && ~_xjoy2[2]))	// Obsolete, dates back to original Minimig.
 //      t_osd_ctrl = KEY_MENU;
-    if (~_xjoy2[4])
+    if (~_xjoy2[6])
+      t_osd_ctrl = KEY_MENU;
+    else if (~_xjoy2[4])
       t_osd_ctrl = KEY_ENTER;
     else if (~_xjoy2[3])
       t_osd_ctrl = KEY_UP;
@@ -375,11 +377,15 @@ always @ (*) begin
 //      t_osd_ctrl = KEY_PGDOWN;
     else
       t_osd_ctrl = osd_ctrl;
-  else
+  else begin
 //    if (~_xjoy2[3] && ~_xjoy2[2])
 //      t_osd_ctrl = KEY_MENU;
 //    else
+    if (~_xjoy2[6])
+      t_osd_ctrl = KEY_MENU;
+    else
       t_osd_ctrl = osd_ctrl;
+  end
 end
 
 // port 1 automatic mouse/joystick switch
