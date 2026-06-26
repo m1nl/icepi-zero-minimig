@@ -14,8 +14,8 @@ module paula_audio_mixer (
   input  [6:0] vol1,      //volume 1 input
   input  [6:0] vol2,      //volume 2 input
   input  [6:0] vol3,      //volume 3 input
-  output reg  [14:0]ldatasum,    //left DAC data
-  output reg  [14:0]rdatasum    //right DAC data
+  output reg  [14:0]ldatasum /* synthesis syn_allow_retiming=0 */,  //left DAC data
+  output reg  [14:0]rdatasum /* synthesis syn_allow_retiming=0 */   //right DAC data
 );
 
 // volume control

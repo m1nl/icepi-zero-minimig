@@ -88,7 +88,9 @@ entity cfide is
 		usb_dn : inout std_logic_vector(1 downto 0);
 
 		usb_connected : out std_logic_vector(1 downto 0);
-		joykeys : out std_logic_vector(6 downto 0);
+
+		joya : out std_logic_vector(6 downto 0);
+		joyb : out std_logic_vector(6 downto 0);
 
 		-- 28Mhz signals
 		clk_28	: in std_logic;
@@ -585,6 +587,9 @@ usbblock : block
 	signal usb_full_report_0 : std_logic;
 	signal usb_full_report_1 : std_logic;
 
+	signal usb_game_0 : std_logic_vector(13 downto 0);
+	signal usb_game_1 : std_logic_vector(13 downto 0);
+
 	signal usbreset       : std_logic;
 	signal usbreset_sync1 : std_logic;
 	signal usbreset_sync2 : std_logic;
@@ -600,6 +605,9 @@ usbblock : block
 
 	signal hid_report_0 : std_logic_vector(63 downto 0);
 	signal hid_report_1 : std_logic_vector(63 downto 0);
+
+	signal hid_joy_0 : std_logic_vector(6 downto 0);
+	signal hid_joy_1 : std_logic_vector(6 downto 0);
 
 	component usb_hid_host
 		generic (
@@ -738,19 +746,19 @@ begin
 		mouse_dx       => open,
 		mouse_dy       => open,
 
-		game_l         => open,
-		game_r         => open,
-		game_u         => open,
-		game_d         => open,
+		game_l         => usb_game_0(0),
+		game_r         => usb_game_0(1),
+		game_u         => usb_game_0(2),
+		game_d         => usb_game_0(3),
 
-		game_a         => open,
-		game_b         => open,
-		game_x         => open,
-		game_y         => open,
-		game_sel       => open,
-		game_sta       => open,
+		game_a         => usb_game_0(4),
+		game_b         => usb_game_0(5),
+		game_x         => usb_game_0(6),
+		game_y         => usb_game_0(7),
+		game_sel       => usb_game_0(8),
+		game_sta       => usb_game_0(9),
 
-		game_extra     => open,
+		game_extra     => usb_game_0(13 downto 10),
 
 		dbg_hid_report => hid_report_0,
 		dbg_hid_regs   => open
@@ -798,19 +806,19 @@ begin
 		mouse_dx       => open,
 		mouse_dy       => open,
 
-		game_l         => open,
-		game_r         => open,
-		game_u         => open,
-		game_d         => open,
+		game_l         => usb_game_1(0),
+		game_r         => usb_game_1(1),
+		game_u         => usb_game_1(2),
+		game_d         => usb_game_1(3),
 
-		game_a         => open,
-		game_b         => open,
-		game_x         => open,
-		game_y         => open,
-		game_sel       => open,
-		game_sta       => open,
+		game_a         => usb_game_1(4),
+		game_b         => usb_game_1(5),
+		game_x         => usb_game_1(6),
+		game_y         => usb_game_1(7),
+		game_sel       => usb_game_1(8),
+		game_sta       => usb_game_1(9),
 
-		game_extra     => open,
+		game_extra     => usb_game_1(13 downto 10),
 
 		dbg_hid_report => hid_report_1,
 		dbg_hid_regs   => open
@@ -833,6 +841,7 @@ begin
 	begin
 		if n_reset = '0' then
 			full_report_toggle <= (others => '0');
+
 		elsif rising_edge(usbclk) then
 			if usb_full_report_0 = '1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
 			if usb_full_report_1 = '1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
@@ -844,17 +853,13 @@ begin
 	begin
 		if n_reset = '0' then
 			hid_sync <= (others => (others => '0'));
+
 		elsif rising_edge(sysclk) then
 			for i in 0 to 1 loop
 				hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
 			end loop;
 		end if;
 	end process;
-
-	usbreset <= usbreset_sync2;
-
-	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
-	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
 
 	process (sysclk, n_reset) begin
 		if n_reset = '0' then
@@ -948,7 +953,49 @@ begin
 		end if;
 	end process;
 
-	joykeys <= (others => '1');
+	process (sysclk) begin
+		if rising_edge(sysclk) then
+--			if usb_typ_0 = "11" then
+--				if hid_report_ready_0 = '1' then
+--					hid_joy_0 <= not (
+--											 '1' &
+--											 (usb_game_0(5) or usb_game_0(11)) &
+--											 (usb_game_0(4) or usb_game_0(13)) &
+--											 (usb_game_0(2) or usb_game_0(10)) &
+--											 (usb_game_0(3) or usb_game_0(12)) &
+--											 usb_game_0(0) &
+--											 usb_game_0(1)
+--										 );
+--				end if;
+--			else
+				hid_joy_0 <= (others => '1');
+--			end if;
+
+			if usb_typ_1 = "11" then
+				if hid_report_ready_1 = '1' then
+					hid_joy_1 <= not (
+											 '1' &
+											 (usb_game_1(5) or usb_game_1(11)) &
+											 (usb_game_1(4) or usb_game_1(13)) &
+											 (usb_game_1(2) or usb_game_1(10)) &
+											 (usb_game_1(3) or usb_game_1(12)) &
+											 usb_game_1(0) &
+											 usb_game_1(1)
+										 );
+				end if;
+			else
+				hid_joy_1 <= (others => '1');
+			end if;
+		end if;
+	end process;
+
+	joya <= hid_joy_0;
+	joyb <= hid_joy_1;
+
+	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
+	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
+
+	usbreset <= usbreset_sync2;
 
 end block;
 end;

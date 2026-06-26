@@ -252,6 +252,7 @@ module minimig #(parameter useaga=1'b1, parameter usertg=1'b1, parameter wide_hb
     input   [15:0]aux_right_1,		// Auxiliary audio channels
     input   [15:0]aux_left_2,		// Auxiliary audio channels
     input   [15:0]aux_right_2,		// Auxiliary audio channels
+    output        cen_44100,
 	//user i/o
   output  [3:0] cpu_config,
   output  [5:0] board_configured,
@@ -1191,16 +1192,14 @@ gayle GAYLE1
 
 assign hdd_sound = drivesound_hdd & hdd_sound_i;
 
-reg         cen_44100;
-reg  [31:0] cen_44100_cnt;
-wire [31:0] cen_44100_cnt_next = cen_44100_cnt + 32'd44100;
+reg [9:0] cen_44100_cnt;
+
+assign cen_44100 = (cen_44100_cnt == 0);
+
 always @(posedge clk) begin
-	cen_44100 <= 0;
-	cen_44100_cnt <= cen_44100_cnt_next;
-	if (cen_44100_cnt_next >= (28*1000000)) begin
-		cen_44100 <= 1;
-		cen_44100_cnt <= cen_44100_cnt_next - (28*1000000);
-	end
+	cen_44100_cnt <= cen_44100_cnt + 1;
+	if (cen_44100_cnt == 648)
+		cen_44100_cnt <= 0;
 end
 
 wire [15:0] cdda_l;
