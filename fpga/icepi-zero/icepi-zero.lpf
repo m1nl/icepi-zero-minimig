@@ -329,12 +329,12 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/addr*" TO CELL "*" 2X ;
 
 MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "virtual_top/amiga_clk/clk_sys" 2X ;
 
-INPUT_SETUP PORT "usb_dp[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-INPUT_SETUP PORT "usb_dp[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-INPUT_SETUP PORT "usb_dn[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-INPUT_SETUP PORT "usb_dn[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# INPUT_SETUP PORT "usb_dp[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# INPUT_SETUP PORT "usb_dp[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# INPUT_SETUP PORT "usb_dn[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# INPUT_SETUP PORT "usb_dn[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
 
-CLOCK_TO_OUT PORT "usb_dp[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-CLOCK_TO_OUT PORT "usb_dp[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-CLOCK_TO_OUT PORT "usb_dn[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-CLOCK_TO_OUT PORT "usb_dn[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# CLOCK_TO_OUT PORT "usb_dp[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# CLOCK_TO_OUT PORT "usb_dp[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# CLOCK_TO_OUT PORT "usb_dn[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+# CLOCK_TO_OUT PORT "usb_dn[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
