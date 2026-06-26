@@ -70,40 +70,58 @@ logic vsync;
 
 logic [1:0] invert;
 
-// PAL / NTSC              start   frame    screen   s_start s_len
+// PAL / NTSC              start    frame   screen s_start   s_len
 logic [54:0] htiming0n = { 11'd0, 11'd908, 11'd720, 11'd24, 11'd72 }; // normal
 logic [54:0] htiming0o = { 11'd0, 11'd908, 11'd768, 11'd24, 11'd72 }; // overscan
 logic [54:0] htiming0w = { 11'd0, 11'd908, 11'd832, 11'd24, 11'd48 }; // wide
 logic [39:0] vtiming0  = {        10'd626, 10'd576,  10'd5,  10'd5 }; // PAL
 logic [39:0] vtiming1  = {        10'd526, 10'd480,  10'd5,  10'd5 }; // NTSC
 
-logic [7:0] cea0 = 8'd17; // CEA is HDMI mode in group 1
-logic [7:0] cea1 = 8'd02;
+logic [7:0] cea0 = 8'd17; // 720x576p @ 50Hz
+logic [7:0] cea1 = 8'd02; // 720x480p @ 59.94/60Hz
+logic [7:0] cea2 = 8'd21; // 720(1440)x576i @ 50Hz
+logic [7:0] cea3 = 8'd06; // 720(1440)x480i @ 59.94/60Hz
 
 logic [54:0] htiming0 = (screen == 2'b10) ? htiming0w :
                         (screen == 2'b01) ? htiming0o :
                                             htiming0n;
 
-logic [102:0]  timing = pal_mode ? { htiming0, vtiming0, cea0 }:
-                                   { htiming0, vtiming1, cea1 };
+logic [102:0]  timing = pal_mode ? { htiming0, vtiming0, interlace ? cea2 : cea0 }:
+                                   { htiming0, vtiming1, interlace ? cea3 : cea1 };
 
-// demux timing parameters
-logic [10:0] start_x           = timing[102:92];
-logic [10:0] frame_width       = timing[ 91:81];
-logic [10:0] screen_width      = timing[ 80:70];
-logic [10:0] hsync_pulse_start = timing[ 69:59];
-logic [10:0] hsync_pulse_size  = timing[ 58:48];
+logic [10:0] start_x;
+logic [10:0] frame_width;
+logic [10:0] screen_width;
+logic [10:0] hsync_pulse_start;
+logic [10:0] hsync_pulse_size;
 
-// if we have a short frame, then the scandoubler outputs two lines less
-// if amiga outputs interlaced video, then the scandoubler outputs one line
-// less resulting in an odd overall frame height
-logic [9:0] frame_height      = timing[47:38] - (short_frame ? 10'd2 : 10'd0) - (interlace ? 10'd1 : 10'd0);
-logic [9:0] screen_height     = timing[37:28];
-logic [9:0] vsync_pulse_start = timing[27:18];
-logic [9:0] vsync_pulse_size  = timing[17: 8];
-logic [7:0] video_id_code     = timing[ 7: 0];
+logic [9:0] frame_height;
+logic [9:0] screen_height;
+logic [9:0] vsync_pulse_start;
+logic [9:0] vsync_pulse_size;
+logic [7:0] video_id_code;
 
-assign invert = 2'b11;
+assign start_x = timing[102:92];
+assign invert  = 2'b11;
+
+always_ff @(posedge clk_pixel) begin
+    // demux timing parameters
+    if (reset) begin
+        frame_width       <= timing[ 91:81];
+        screen_width      <= timing[ 80:70];
+        hsync_pulse_start <= timing[ 69:59];
+        hsync_pulse_size  <= timing[ 58:48];
+
+        // if we have a short frame, then the scandoubler outputs two lines less
+        // if amiga outputs interlaced video, then the scandoubler outputs one line
+        // less resulting in an odd overall frame height
+        frame_height      <= timing[47:38] - (short_frame ? 10'd2 : 10'd0) - (interlace ? 10'd1 : 10'd0);
+        screen_height     <= timing[37:28];
+        vsync_pulse_start <= timing[27:18];
+        vsync_pulse_size  <= timing[17: 8];
+        video_id_code     <= timing[ 7: 0];
+    end
+end
 
 reg [10:0] cx;
 reg  [9:0] cy;
