@@ -249,7 +249,8 @@ wire [   6:0] joysticka;
 wire [   6:0] joystickb;
 wire [   6:0] joyc;
 wire [   6:0] joyd;
-wire [   6:0] joykeys;
+wire [   6:0] extjoya;
+wire [   6:0] extjoyb;
 
 // UART
 wire minimig_rxd;
@@ -372,6 +373,8 @@ always @(posedge CLK_28) begin
 	VGA_HS_INT <= hs;
 	VGA_VS_INT <= vs;
 end
+
+wire cen_44100;
 
 // Audio for CD images
 wire aud_int;
@@ -844,6 +847,7 @@ minimig #(.useaga(haveaga),.usertg(havertg),.wide_hblank(1'b1)) minimig
 	.rdata        (AUDIO_R          ),  // right DAC data
     .aux_left_2   (aud_left         ),  // Auxiliary audio channels
     .aux_right_2  (aud_right        ),  // Auxiliary audio channels
+    .cen_44100    (cen_44100        ),
 	//user i/o
 	.cpu_config   (cpu_config       ), // CPU config
    .board_configured(board_configured),
@@ -952,14 +956,15 @@ cfide #(
 		.usb_dn(usb_dn),
 		.usb_connected(LED_USB),
 
-		.joykeys(joykeys),
+		.joya(extjoya),
+		.joyb(extjoyb),
 
 		.clk_28(CLK_28),
-		.tick_in(aud_tick)
+		.tick_in(cen_44100)
 	);
 
-assign joysticka = JOYA;
-assign joystickb = JOYB & joykeys;
+assign joysticka = JOYA & extjoya;
+assign joystickb = JOYB & extjoyb;
 
 wire [  8-1:0] dithered_red;
 wire [  8-1:0] dithered_green;
