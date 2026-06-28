@@ -10,7 +10,7 @@ module userio_osd
 	input	c1,					//clk28m domain clock enable
 	input	c3,
 	input	sol,				//start of video line
-	input	sof,				//start of video frame 
+	input	sof,				//start of video frame
   input varbeamen,
    input rtg_ena,
 	input	[7:0] osd_ctrl,		//keycode for OSD control (Amiga keyboard codes + additional keys coded as values > 80h)
@@ -159,7 +159,7 @@ always @(posedge clk)
   	else if (verbeam[0])
   		vframe <= 0;
   end
-		
+
 always @(posedge clk)
   if (clk7_en) begin
   	if (sol)
@@ -174,7 +174,7 @@ always @(posedge clk)
     if (sof)
       osd_enabled <= osd_enable;
   end
-    
+
 assign osdframe = vframe & hframe & osd_enabled;
 
 //always @(posedge clk)
@@ -428,9 +428,9 @@ always @ (posedge clk) begin
       if (spi_floppy_cfg_sel)   begin if (dat_cnt == 0) floppy_config <= #1 wrdat[3:0]; end
       if (spi_harddisk0_cfg_sel)begin if (dat_cnt == 0) t_ide_config0 <= #1 wrdat[2:0]; end
       if (spi_harddisk1_cfg_sel)begin if (dat_cnt == 0) t_ide_config1 <= #1 wrdat[2:0]; end
-      if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {anajoy, cd32pad, autofire_config} <= #1 wrdat[3:0]; end
+  //    if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {anajoy, cd32pad, autofire_config} <= #1 wrdat[3:0]; end
       if (spi_features_cfg_sel) begin if (dat_cnt == 0) {pwr_led_dim_n, audio_filter_mode} <= #1 wrdat[2:0]; end
-      //if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {autofire_config} <= #1 wrdat[1:0]; end
+  //    if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {autofire_config} <= #1 wrdat[1:0]; end
   //    if (spi_osd_buffer_sel)   begin if (dat_cnt == 3) highlight <= #1 wrdat[3:0]; end
   //    if (spi_mem_write_sel)    begin if (dat_cnt == 0) end
   //    if (spi_version_sel)      begin if (dat_cnt == 0) end

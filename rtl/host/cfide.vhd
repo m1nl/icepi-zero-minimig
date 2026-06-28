@@ -92,6 +92,8 @@ entity cfide is
 		joya : out std_logic_vector(6 downto 0);
 		joyb : out std_logic_vector(6 downto 0);
 
+		joy_invert : out std_logic;
+
 		-- 28Mhz signals
 		clk_28	: in std_logic;
 		tick_in : in std_logic	-- 44.1KHz - makes it easy to keep timer in lockstep with audio.
@@ -161,6 +163,7 @@ signal spirtcpresent : std_logic;
 signal iecpresent : std_logic;
 signal cartpresent : std_logic;
 signal clockportpresent : std_logic;
+
 begin
 
 -- Peripheral registers, which are only 16-bits wide.
@@ -221,7 +224,7 @@ audio_select <='1' when addr(27)='1' and addr(7 downto 4)=X"B" else '0';
 interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
 keyboard_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
 amiga_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"8" else '0';
-rtc_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"7" else '0';
+rtc_select <= spirtcpresent when addr(27)='1' and addr(7 downto 4)=X"7" else '0';
 usb_select_0 <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
 usb_select_1 <= '1' when addr(27)='1' and addr(7 downto 4)=X"5" else '0';
 
@@ -566,7 +569,9 @@ begin
 	end if;
 end process;
 
-	-- USB
+-----------------------------------------------------------------
+-- USB
+-----------------------------------------------------------------
 
 usbblock : block
 	signal usb_dp_o  : std_logic_vector(1 downto 0);
@@ -608,6 +613,9 @@ usbblock : block
 
 	signal hid_joy_0 : std_logic_vector(6 downto 0);
 	signal hid_joy_1 : std_logic_vector(6 downto 0);
+
+	signal hid_joy_0_sel_d : std_logic;
+	signal hid_joy_1_sel_d : std_logic;
 
 	component usb_hid_host
 		generic (
@@ -698,10 +706,10 @@ begin
 		clk   => usbclk,
 		addra => rom_addra,
 		douta => rom_douta,
-		ena   => '1',
+		ena   => rom_ena,
 		addrb => rom_addrb,
 		doutb => rom_doutb,
-		enb   => '1'
+		enb   => rom_enb
 	);
 
 	u_usb_hid_host_0 : usb_hid_host
@@ -726,7 +734,7 @@ begin
 		-- ROM only
 		rom_addr => rom_addra,
 		rom_dout => rom_douta,
-		rom_en   => rom_ena,
+		rom_en   => open,
 
 		-- everything else unused
 		typ            => usb_typ_0,
@@ -764,6 +772,9 @@ begin
 		dbg_hid_regs   => open
 	);
 
+	rom_ena <= '1';
+	rom_enb <= '1';
+
 	u_usb_hid_host_1 : usb_hid_host
 	generic map (
 		FULL_SPEED       => 1,
@@ -776,7 +787,7 @@ begin
 		reset => usbreset,
 		cs    => '1',
 
--- USB only
+		-- USB only
 		usb_dm_i => usb_dn(1),
 		usb_dp_i => usb_dp(1),
 		usb_dm_o => usb_dn_o(1),
@@ -786,7 +797,7 @@ begin
 		-- ROM only
 		rom_addr => rom_addrb,
 		rom_dout => rom_doutb,
-		rom_en   => rom_enb,
+		rom_en   => open,
 
 		-- everything else unused
 		typ            => usb_typ_1,
@@ -916,7 +927,7 @@ begin
 							usbtohost_0 <= hid_report_0(63 downto 32);
 						when others =>
 							null;
-					end case;
+	end case;
 				end if;
 			end if;
 		end if;
@@ -958,7 +969,7 @@ begin
 			if usb_typ_0 = "11" then
 				if hid_report_ready_0 = '1' then
 					hid_joy_0 <= not (
-											 '1' &
+											 usb_game_0(9) &
 											 (usb_game_0(5) or usb_game_0(11)) &
 											 (usb_game_0(4) or usb_game_0(13)) &
 											 (usb_game_0(2) or usb_game_0(10)) &
@@ -966,6 +977,12 @@ begin
 											 usb_game_0(0) &
 											 usb_game_0(1)
 										 );
+
+					hid_joy_0_sel_d <= usb_game_0(8);
+
+					if hid_joy_0_sel_d = '0' and usb_game_0(8) = '1' then
+						joy_invert <= not joy_invert;
+					end if;
 				end if;
 			else
 				hid_joy_0 <= (others => '1');
@@ -982,6 +999,12 @@ begin
 											 usb_game_1(0) &
 											 usb_game_1(1)
 										 );
+
+					hid_joy_1_sel_d <= usb_game_1(8);
+
+					if hid_joy_1_sel_d = '0' and usb_game_1(8) = '1' then
+						joy_invert <= not joy_invert;
+					end if;
 				end if;
 			else
 				hid_joy_1 <= (others => '1');
@@ -989,14 +1012,13 @@ begin
 		end if;
 	end process;
 
-	joya <= hid_joy_0;
-	joyb <= hid_joy_1;
+	joya <= hid_joy_0 when joy_invert = '0' else hid_joy_1;
+	joyb <= hid_joy_1 when joy_invert = '0' else hid_joy_0;
 
 	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
 	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
 
 	usbreset <= usbreset_sync2;
-
 end block;
 end;
 -- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:

@@ -11,17 +11,17 @@ package minimig_virtual_pkg is
 	( hostonly : integer := 0;
 	  debug : integer := 0;
 	  spimux : integer := 0;
+	  ram_64meg : integer := 0;
+	  vga_width : integer := 5;
 	  haveiec : integer := 0;
 	  havereconfig : integer := 0;
 	  havertg : integer := 1;
 	  haveaudio : integer := 1;
 	  havec2p : integer := 1;
 	  havespirtc : integer := 0;
-	  ram_64meg : integer := 0;
-	  vga_width : integer := 5;
 	  havecart : integer := 1;
-	  haveaga : integer :=1;
-	  haventscswitch : integer :=1
+	  haveaga : integer := 1;
+	  haventscswitch : integer := 1
 	);
 	PORT
 	(
@@ -44,6 +44,7 @@ package minimig_virtual_pkg is
 		LED_POWER	:	 OUT STD_LOGIC;
 		LED_DISK		:	 OUT STD_LOGIC;
 		LED_USB         :    OUT STD_LOGIC_VECTOR(1 downto 0);
+		LED_AUX		:	 OUT STD_LOGIC;
 		CTRL_TX		:	 OUT STD_LOGIC;
 		CTRL_RX		:	 IN STD_LOGIC;
 		AMIGA_TX		:	 OUT STD_LOGIC;
@@ -73,8 +74,11 @@ package minimig_virtual_pkg is
 		SDRAM_BA		:	 OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
 		SDRAM_CLK		:	 OUT STD_LOGIC;
 		SDRAM_CKE		:	 OUT STD_LOGIC;
-		AUDIO_L		:	 OUT STD_LOGIC_VECTOR(23 downto 0);
-		AUDIO_R		:	 OUT STD_LOGIC_VECTOR(23 downto 0);
+		AUDIO_MIX_L		:	 OUT STD_LOGIC_VECTOR(23 downto 0);
+		AUDIO_MIX_R		:	 OUT STD_LOGIC_VECTOR(23 downto 0);
+		AUDIO_PAULA_L		:	 OUT STD_LOGIC_VECTOR(15 downto 0);
+		AUDIO_PAULA_R		:	 OUT STD_LOGIC_VECTOR(15 downto 0);
+		AUDIO_TICK	:	 OUT STD_LOGIC;
 		PS2_DAT_I		:	 IN STD_LOGIC;
 		PS2_CLK_I		:	 IN STD_LOGIC;
 		PS2_MDAT_I		:	 IN STD_LOGIC;

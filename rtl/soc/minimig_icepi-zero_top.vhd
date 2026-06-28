@@ -57,8 +57,9 @@ architecture rtl of minimig_icepizero_top is
 	signal ps2m_clk_in : std_logic;
 	signal ps2m_clk_out : std_logic;
 
-	signal audio_l : std_logic_vector(23 downto 0);
-	signal audio_r : std_logic_vector(23 downto 0);
+	signal audio_l : std_logic_vector(15 downto 0);
+	signal audio_r : std_logic_vector(15 downto 0);
+	signal audio_tick : std_logic;
 
 	signal clk_sys : std_logic;
 	signal clk_pixel : std_logic;
@@ -84,6 +85,9 @@ architecture rtl of minimig_icepizero_top is
 	signal joyd : std_logic_vector(6 downto 0);
 
 	signal auxclks : std_logic_vector(3 downto 0);
+
+	signal led_i : std_logic_vector(4 downto 0);
+	signal led_counter : std_logic_vector(2 downto 0);
 
 	component ODDRX1F
 	port (
@@ -138,7 +142,7 @@ begin
 			havec2p => 0,
 			havespirtc => 0,
 			ram_64meg => 0,
-			vga_width => 4,
+			vga_width => 8,
 			havecart => 0,
 			haveaga => 0,
 			haventscswitch => 0
@@ -151,9 +155,10 @@ begin
 			CLK_28 => clk_pixel,
 			CLK_142 => clk_tmds,
 			RESET_N => reset_n,
-			LED_POWER => led(4),
-			LED_DISK => led(3),
-			LED_USB => led(2 downto 1),
+			LED_POWER => led_i(4),
+			LED_DISK => led_i(3),
+			LED_USB => led_i(1 downto 0),
+			LED_AUX => led_i(2),
 			MENU_BUTTON => button(1),
 			CTRL_TX => usb_tx,
 			CTRL_RX => usb_rx,
@@ -180,8 +185,9 @@ begin
 --			SDRAM_CLK => sdram_clk,
 			SDRAM_CKE => sdram_cke,
 
-			AUDIO_L => audio_l,
-			AUDIO_R => audio_r,
+			AUDIO_PAULA_L => audio_l,
+			AUDIO_PAULA_R => audio_r,
+			AUDIO_TICK => audio_tick,
 
 			PS2_DAT_I => ps2k_dat_in,
 			PS2_CLK_I => ps2k_clk_in,
@@ -196,7 +202,9 @@ begin
 			AMIGA_RESET_N => '1',
 			AMIGA_KEY => (others=>'-'),
 			AMIGA_KEY_STB => '0',
+
 			c64_keys => (others => '1'),
+
 			JOYA => joya,
 			JOYB => joyb,
 			JOYC => joyc,
@@ -219,8 +227,8 @@ begin
 			IT_CONTENT : std_logic := '1';
 			DVI_OUTPUT : std_logic := '0';
 			VIDEO_RATE : integer := 28571400;
-			AUDIO_RATE : integer := 48000;
-			AUDIO_BIT_WIDTH : integer := 24;
+			AUDIO_RATE : integer := 44100;
+			AUDIO_BIT_WIDTH : integer := 16;
 			VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
 			PRODUCT_DESCRIPTION : std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "FPGA" + padding
 			SOURCE_DEVICE_INFORMATION : std_logic_vector(7 downto 0) := x"09"
@@ -282,8 +290,9 @@ begin
 
 		hdmi_inst : component hdmi
 		generic map (
+			VIDEO_RATE => 28571400,
 			AUDIO_RATE => 48000,
-			AUDIO_BIT_WIDTH => 24
+			AUDIO_BIT_WIDTH => 16
 		)
 		port map (
 			clk_pixel_x5 => clk_tmds,
@@ -307,6 +316,21 @@ begin
 
 		rgb <= dvi_red & dvi_green & dvi_blue;
 		gpdi_dp <= tmds_clock & tmds;
+
+		process (clk_pixel)
+		begin
+			if rising_edge(clk_pixel) then
+				if audio_tick = '1' then
+					led <= (others => '0');
+					led_counter <= std_logic_vector(unsigned(led_counter) + 1);
+
+					if unsigned(led_counter) = 0 then
+						led <= led_i;
+					end if;
+				end if;
+			end if;
+		end process;
+
 	end block;
 end architecture;
 -- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:

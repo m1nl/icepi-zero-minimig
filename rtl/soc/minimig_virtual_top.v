@@ -33,14 +33,14 @@ module minimig_virtual_top	#(
 	parameter hostonly=0,
 	parameter debug = 0,
 	parameter spimux = 0,
+	parameter ram_64meg = 0,
+	parameter vga_width = 6,
 	parameter haveiec = 0,
 	parameter havereconfig = 0,
 	parameter havertg = 1,
 	parameter haveaudio = 1,
 	parameter havec2p = 1,
 	parameter havespirtc = 0,
-	parameter ram_64meg = 0,
-	parameter vga_width = 6,
 	parameter havecart = 1,
 	parameter haveaga = 1,
 	parameter haventscswitch = 1
@@ -68,6 +68,7 @@ module minimig_virtual_top	#(
   output wire           LED_POWER,  // LED green
   output wire           LED_DISK,   // LED red
   output wire [1:0]     LED_USB,
+  output wire           LED_AUX,
 
   // UART
   output wire           CTRL_TX,    // UART Transmitter
@@ -107,8 +108,11 @@ module minimig_virtual_top	#(
   output wire           SDRAM_CKE,  // SDRAM Clock Enable
 
   // MINIMIG specific
-  output wire[23:0]     AUDIO_L,    // sigma-delta DAC output left
-  output wire[23:0]     AUDIO_R,    // sigma-delta DAC output right
+  output wire[23:0]     AUDIO_MIX_L,    // sigma-delta DAC output left
+  output wire[23:0]     AUDIO_MIX_R,    // sigma-delta DAC output right
+  output wire[15:0]     AUDIO_PAULA_L,  // sigma-delta DAC output left
+  output wire[15:0]     AUDIO_PAULA_R,  // sigma-delta DAC output right
+  output wire           AUDIO_TICK,
 
   // Keyboard / Mouse
   input                 PS2_DAT_I,      // PS2 Keyboard Data
@@ -139,8 +143,9 @@ module minimig_virtual_top	#(
   input wire            SD_ACK,
   output wire           RTC_CS,
 
-  inout wire [1:0]      usb_dp,
-  inout wire [1:0]      usb_dn,
+  inout wire [1:0]      USB_DP,
+  inout wire [1:0]      USB_DN,
+
   output wire			RECONFIG,
   output wire			IECSERIAL,
   input wire			FREEZE
@@ -252,6 +257,7 @@ wire [   6:0] joyc;
 wire [   6:0] joyd;
 wire [   6:0] extjoya;
 wire [   6:0] extjoyb;
+wire          extjoy_invert;
 
 // UART
 wire minimig_rxd;
@@ -374,8 +380,6 @@ always @(posedge CLK_28) begin
 	VGA_HS_INT <= hs;
 	VGA_VS_INT <= vs;
 end
-
-wire cen_44100;
 
 // Audio for CD images
 wire aud_int;
@@ -844,11 +848,14 @@ minimig #(.ntscswitch(haventscswitch),.useaga(haveaga),.usertg(havertg),.wide_hb
 	//audio
 //	.left         (                 ),  // audio bitstream left
 //	.right        (                 ),  // audio bitstream right
-	.ldata        (AUDIO_L          ),  // left DAC data
-	.rdata        (AUDIO_R          ),  // right DAC data
+	.ldata_mix    (AUDIO_MIX_L      ),  // left DAC data
+	.rdata_mix    (AUDIO_MIX_R      ),  // right DAC data
+	.ldata_paula  (AUDIO_PAULA_L    ),  // left DAC data
+	.rdata_paula  (AUDIO_PAULA_R    ),  // right DAC data
+
     .aux_left_2   (aud_left         ),  // Auxiliary audio channels
     .aux_right_2  (aud_right        ),  // Auxiliary audio channels
-    .cen_44100    (cen_44100        ),
+    .cen_44100    (AUDIO_TICK       ),
 	//user i/o
 	.cpu_config   (cpu_config       ), // CPU config
    .board_configured(board_configured),
@@ -953,19 +960,22 @@ cfide #(
 		.reconfig(RECONFIG),
 		.iecserial(IECSERIAL),
 
-		.usb_dp(usb_dp),
-		.usb_dn(usb_dn),
+		.usb_dp(USB_DP),
+		.usb_dn(USB_DN),
 		.usb_connected(LED_USB),
 
 		.joya(extjoya),
 		.joyb(extjoyb),
+		.joy_invert(extjoy_invert),
 
 		.clk_28(CLK_28),
-		.tick_in(cen_44100)
+		.tick_in(AUDIO_TICK)
 	);
 
 assign joysticka = JOYA & extjoya;
 assign joystickb = JOYB & extjoyb;
+
+assign LED_AUX = extjoy_invert;
 
 wire [  8-1:0] dithered_red;
 wire [  8-1:0] dithered_green;

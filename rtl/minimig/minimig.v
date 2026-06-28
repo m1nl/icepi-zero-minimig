@@ -246,8 +246,11 @@ module minimig #(parameter ntscswitch=1'b1, parameter useaga=1'b1, parameter use
 	output	[7:0] green,		//green
 	output	[7:0] blue,			//blue
 	//audio
-	output	[23:0]ldata,			//left DAC data
-	output	[23:0]rdata, 			//right DAC data
+	output	[23:0]ldata_mix,		//left DAC data
+	output	[23:0]rdata_mix, 		//right DAC data
+	output	[15:0]ldata_paula,		//left DAC data
+	output	[15:0]rdata_paula, 		//right DAC data
+
     input   [15:0]aux_left_1,		// Auxiliary audio channels
     input   [15:0]aux_right_1,		// Auxiliary audio channels
     input   [15:0]aux_left_2,		// Auxiliary audio channels
@@ -377,8 +380,6 @@ wire		index;					//disk index interrupt
 
 wire		[15:0] ldata_toc;  // Toccata left audio channel
 wire		[15:0] rdata_toc;  // Toccata right audio channel
-wire		[15:0] ldata_paula;  // Toccata left audio channel
-wire		[15:0] rdata_paula;  // Toccata right audio channel
 
 //local video signals
 wire		blank;					//blanking signal
@@ -1199,6 +1200,7 @@ end
 wire [15:0] cdda_l;
 wire [15:0] cdda_r;
 
+`ifdef MINIMIG_CDDA
 cdda_fifo cdda_fifo (
 	.clk_sys       ( clk          ),
 	.clk_en        ( 1'b1         ),
@@ -1212,6 +1214,11 @@ cdda_fifo cdda_fifo (
 	.cdda_l        ( cdda_l       ),
 	.cdda_r        ( cdda_r       )
 );
+`else
+assign cdda_l = 16'b0;
+assign cdda_r = 16'b0;
+assign hdd_cdda_req = 1'b0;
+`endif
 
 //instantiate system control
 minimig_syscontrol CONTROL1 
@@ -1360,13 +1367,8 @@ AudioMix tocAudioMix
   .audio_in_l2(ldata_toc),
   .audio_in_r2(rdata_toc),
   .audio_vol2(toccata_vol),
-`ifdef MINIMIG_CDDA
   .audio_in_l3(cdda_l),
   .audio_in_r3(cdda_r),
-`else
-  .audio_in_l3(16'h0),
-  .audio_in_r3(16'h0),
-`endif
   .audio_vol3(cdda_vol),
   .audio_in_l4(aux_left_1),
   .audio_in_r4(aux_right_1),
@@ -1374,8 +1376,8 @@ AudioMix tocAudioMix
   .audio_in_l5(aux_left_2),
   .audio_in_r5(aux_right_2),
   .audio_vol5(aux2_vol),
-  .audio_l(ldata),
-  .audio_r(rdata),
+  .audio_l(ldata_mix),
+  .audio_r(rdata_mix),
   .audio_overflow(aud_overflow)
 );
 
