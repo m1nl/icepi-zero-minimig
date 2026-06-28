@@ -82,9 +82,9 @@ signal audio_buf_d : std_logic;
 
 begin
 
--- ID Register
+-- ID Register (assume C2P or audio is required to make Akiko visible)
 
-id_sel <= '1' when addr(7 downto 2)=X"0"&"00" else '0';
+id_sel <= '1' when addr(7 downto 2)=X"0"&"00" and (havec2p = 1 or haveaudio = 1) else '0';
 id_q <= X"C0CA" when addr(1)='0' else X"CAFE";
 id_ack<=req and id_sel;
 
@@ -92,7 +92,7 @@ req_and_ct_sel <= req and ct_sel;
 
 -- Cornerturn for Chunky to Planar
 
-ct_sel <= '1' when addr(10 downto 8)="000" and addr(5 downto 2)="1110" else '0';	-- Cornerturn at 0xb80038 with mirrors at 78, b8 and f8 
+ct_sel <= '1' when (addr(10 downto 8)="000" and addr(5 downto 2)="1110" and havec2p = 1) else '0';	-- Cornerturn at 0xb80038 with mirrors at 78, b8 and f8
 
 c2p:
 if havec2p=1 generate
@@ -122,7 +122,7 @@ host_req <= req and host_sel;
 
 -- Audio registers
 
-ahi_sel <= '1' when addr(10 downto 8)="010" else '0'; -- Audio registers at 0xb802xx
+ahi_sel <= '1' when addr(10 downto 8)="010" and haveaudio = 1 else '0'; -- Audio registers at 0xb802xx
 
 process(clk)
 begin
@@ -131,13 +131,13 @@ begin
 			audio_intena<='0';
 			audio_int<='0';
 			audio_ena<='0';
-		elsif haveaudio=1 then
+		else
 			-- Trigger an interrupt when the buffer flips
 			audio_buf_d <= audio_buf;
 			if audio_buf_d /= audio_buf then
 				audio_int<=audio_intena;
-			end if;	
-		
+			end if;
+
 			if ahi_sel='1' and req='1'	then
 				if wr='1' then	-- Write cycle
 					case addr(4 downto 1) is
@@ -153,16 +153,13 @@ begin
 					ahi_q(0)<=audio_buf;
 				end if;
 			end if;
-		else
-			audio_intena<='0';
-			audio_int<='0';
-		end if;	
+		end if;
 	end if;
 end process;
 
 -- RTG registers and CLUT
 
-rtg_sel <='1' when addr(10)='1' or addr(9 downto 8)="01" else '0';	-- RTG registers at 0xb801xx
+rtg_sel <= '1' when (addr(10)='1' or addr(9 downto 8)="01") and havertg = 1 else '0';	-- RTG registers at 0xb801xx
 
 rtg_ack <=req and rtg_sel;
 
@@ -171,16 +168,13 @@ begin
 	if rising_edge(clk) then
 		rtg_reg_wr<='0';
 
-		if havertg=1 then
-	
-			-- RTG registers, includes a secondary framebuffer address to support
-			-- screen dragging.
-			if req='1' and wr='1' then
-				if rtg_sel='1' then
-					rtg_reg_wr<='1';
-					rtg_reg_addr<=addr(10 downto 0);
-					rtg_reg_d<=d;
-				end if;
+		-- RTG registers, includes a secondary framebuffer address to support
+		-- screen dragging.
+		if req='1' and wr='1' then
+			if rtg_sel='1' then
+				rtg_reg_wr<='1';
+				rtg_reg_addr<=addr(10 downto 0);
+				rtg_reg_d<=d;
 			end if;
 		end if;
 	end if;
@@ -211,6 +205,6 @@ begin
 
 	end if;
 end process;
-	
+
 end architecture;
 
