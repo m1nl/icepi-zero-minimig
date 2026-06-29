@@ -35,6 +35,7 @@ module minimig_virtual_top	#(
 	parameter spimux = 0,
 	parameter ram_64meg = 0,
 	parameter vga_width = 6,
+	parameter usethrottle = 1,
 	parameter haveiec = 0,
 	parameter havereconfig = 0,
 	parameter havertg = 1,
@@ -494,7 +495,8 @@ always @(posedge CLK_114) begin
 	tg68_rst_sync<=tg68_rst_d;
 end
 
-TG68K #(.havertg(havertg),
+TG68K #(.usethrottle(usethrottle),
+			.havertg(havertg),
 			.haveaudio(haveaudio),
 			.havec2p(havec2p),
 			.havecart(havecart)
