@@ -35,7 +35,8 @@ generic
 		havec2p : integer := 1;
 		havecart : integer := 1;
 		dualsdram : integer := 0;
-		useprofiler : integer := 0
+		useprofiler : integer := 0;
+		usethrottle : integer := 1
 	);
 port(
 	clk           : in      std_logic;
@@ -208,7 +209,7 @@ sel_eth<='0';
 	cpu_disablecache <= not CACR(0);
 
 	-- NMI handling for HRTMon cartridge
-	
+
 	gen_nmi: if havecart=1 generate
 		nmiblock : block
 			SIGNAL NMI_addr         : std_logic_vector(31 downto 0);
@@ -238,7 +239,7 @@ sel_eth<='0';
 	end generate;
 
 	--
-	
+
 	toram <= w_datatg68;
 	wrd <= wr;
 
@@ -248,7 +249,7 @@ sel_eth<='0';
 			z3ram_ena <= ziiiram_active;
 			z3ram2_ena <= ziiiram2_active;
 			z3ram3_ena <= ziiiram3_active;
-			
+
 			ena_32bit <= cpu(1) and (ziiiram_active or ziiiram2_active or ziiiram3_active); -- Use 32-bit addressing when Zorro III RAM is present, and CPU is 68020
 
 			sel_akiko_d<=sel_akiko;
@@ -284,7 +285,7 @@ DUALRAM_ZIII: if dualsdram=1 generate
 -- Also matches third block, 16 meg from 0x46000000 - 0x46ffffff, but excludes 0x47000000 onwards since it would alias onto Bank 0 / chipram
 	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26)='1' else '0';
 -- Third block of ZIII RAM - either 2 or 4 meg, starting at either 0x41000000 or 0x44000000
-	sel_z3ram3      <= '0'; -- '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(24)='1') else '0'; 
+	sel_z3ram3      <= '0'; -- '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(24)='1') else '0';
 end generate;
 
 SINGLERAM_ZIII: if dualsdram=0 generate
@@ -336,7 +337,7 @@ end generate;
 -- map $00-$1F to $00-$1F (chipram), $A0-$FF to $20-$7F. All non-fastram goes into the first
 -- 8M block (i.e. SDRAM bank 0). This map should be the same as in minimig_sram_bridge.v
 -- 8M Zorro II RAM $20-9F goes to $80-$FF (SDRAM bank 1)
-  
+
 -- Boolean logic can handle this mapping.  Furthermore, applying the same
 -- mapping to the other three banks is harmless, so there's no point expending logic
 -- to make it specific to the first bank.
@@ -352,8 +353,8 @@ end generate;
 --
 -- 1010  1    0       A -> 2
 -- 1100  1    0       C -> 4
--- 1110  1    0       E -> 6 
- 
+-- 1110  1    0       E -> 6
+
 -- On 64-meg platforms we need an extra 32 meg merged into the memory map.
 -- If we configure that range second, it should end up in 42000000 - 43ffffff
 -- so the extra 2 or 4 meg will end up at either 41000000 or 4400000, depending
@@ -365,11 +366,11 @@ end generate;
 -- The extra ZIII mapping maps 41000000 -> 200000, (or 44000000 -> 200000)
 -- bits 23 downto 20 are mapped like so:
 -- 0000->0010 (1st 2 meg), 0010->0100 (2nd 2 meg),
--- 0100->0010 (3rd 2 meg, aliases 1st), 0110->0100 (4th 2 meg, aliases 2nd), 
+-- 0100->0010 (3rd 2 meg, aliases 1st), 0110->0100 (4th 2 meg, aliases 2nd),
 -- addr(23) <= addr(23) and not sel_ziii_3;
 -- addr(22) <= (addr(22) and not sel_ziii_3) or (addr(21) and sel_ziii_3);
 -- addr(21) <= addr(21) xor sel_ziii_3;
- 
+
 DUALRAM_ADDR: if dualsdram=1 generate
 
 -- With dual SDRAM setups we have 2 64 meg RAMs, and memory configured like so:
@@ -496,7 +497,7 @@ process(clk,cpuaddr) begin
 			akiko_req<=not clkena;
 			if state(0)='1' then -- write cycle
 				akiko_wr<='1';
-			end if;	
+			end if;
 		end if;
 	end if;
 end process;
@@ -513,7 +514,7 @@ buslogic : block
 	SIGNAL eindd            : std_logic;
 	TYPE   sync_states      IS (sync0, sync1, sync2, sync3, sync4, sync5, sync6, sync7, sync8, sync9);
 	SIGNAL sync_state       : sync_states;
-	signal sel_chip_d       : std_logic; 
+	signal sel_chip_d       : std_logic;
 	signal fast_rd_d        : std_logic;
 	signal clkena_pre		: std_logic;
 begin
@@ -551,7 +552,7 @@ begin
 
 	PROCESS (clk) BEGIN
 		IF rising_edge(clk) THEN
-			IF (reset='0' OR nResetOut='0') THEN
+			IF (reset='0' OR nResetOut='0' OR usethrottle=0) THEN
 				throttle_sel <= "00";
 			elsif clkena='1' then
 				-- If throttling is enabled, block turbo for CPU data reads, and instruction fetch if cache is disabled.
@@ -570,12 +571,14 @@ begin
 
 	process (clk) begin
 		if rising_edge(clk) then
-			if (clkena='1' or freeze='1') and cpu_write='0' and block_turbo='0' then
+			if (reset='0' OR nResetOut='0' OR usethrottle=0) then
+				throttle <= "000";
+			elsif (clkena='1' or freeze='1') and cpu_write='0' and block_turbo='0' then
 				if throttle_sel(1)='1' or (sel_chip='1' and throttle_sel(0)='1') then
-					throttle<="111";
+					throttle <= "111";
 				end if;
 			elsif clkena_in='1' then
-				throttle<='0'&throttle(throttle'high downto 1);
+				throttle <= '0'&throttle(throttle'high downto 1);
 			end if;
 		end if;
 	end process;
@@ -652,7 +655,7 @@ begin
 				addr <= cpuaddr;
 				fast_rd <= '1';
 			end if;
-			
+
 			if fast_rd='1' and clkena_in='1' then
 				fast_rd <= '0';
 			end if;
@@ -662,7 +665,7 @@ begin
 			end if;
 
 			-- Regular chipset path
-			
+
 			IF ena7WRreg='1' THEN
 				CASE S_state IS
 					WHEN "00" =>

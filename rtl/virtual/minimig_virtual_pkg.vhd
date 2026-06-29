@@ -13,6 +13,7 @@ package minimig_virtual_pkg is
 	  spimux : integer := 0;
 	  ram_64meg : integer := 0;
 	  vga_width : integer := 5;
+	  usethrottle : integer := 1;
 	  haveiec : integer := 0;
 	  havereconfig : integer := 0;
 	  havertg : integer := 1;
