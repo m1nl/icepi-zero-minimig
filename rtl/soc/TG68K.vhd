@@ -327,7 +327,7 @@ end generate;
       OR sel_audio='1'
     ) ELSE '0';
 
-  ramcs <= NOT datatg68_selram or slower(0) or block_turbo or sel_nmi_vector or skipfetch; -- (NOT cpu_internal AND sel_ram_d AND NOT sel_nmi_vector) OR slower(0) or block_turbo;
+  ramcs <= NOT datatg68_selram or slower(1) or block_turbo or sel_nmi_vector or skipfetch; -- (NOT cpu_internal AND sel_ram_d AND NOT sel_nmi_vector) OR slower(0) or block_turbo;
 
   cpustate <= longword&ramcs&state(1 downto 0);
   ramlds <= lds_in;
