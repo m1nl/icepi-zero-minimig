@@ -424,12 +424,12 @@ always @ (posedge clk) begin
       if (spi_chip_cfg_sel)     begin if (dat_cnt == 0) t_chipset_config <= #1 wrdat[4:0]; end
       if (spi_cpu_cfg_sel)      begin if (dat_cnt == 0) t_cpu_config <= #1 wrdat[3:0]; end
       if (spi_memory_cfg_sel)   begin if (dat_cnt == 0) t_memory_config <= #1 wrdat[6:0]; end
-      if (spi_video_cfg_sel)    begin if (dat_cnt == 0) {dither, hr_filter, lr_filter, scanline} <= #1 wrdat[7:0]; end
+  //    if (spi_video_cfg_sel)    begin if (dat_cnt == 0) {dither, hr_filter, lr_filter, scanline} <= #1 wrdat[7:0]; end
       if (spi_floppy_cfg_sel)   begin if (dat_cnt == 0) floppy_config <= #1 wrdat[3:0]; end
       if (spi_harddisk0_cfg_sel)begin if (dat_cnt == 0) t_ide_config0 <= #1 wrdat[2:0]; end
       if (spi_harddisk1_cfg_sel)begin if (dat_cnt == 0) t_ide_config1 <= #1 wrdat[2:0]; end
   //    if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {anajoy, cd32pad, autofire_config} <= #1 wrdat[3:0]; end
-      if (spi_features_cfg_sel) begin if (dat_cnt == 0) {pwr_led_dim_n, audio_filter_mode} <= #1 wrdat[2:0]; end
+  //    if (spi_features_cfg_sel) begin if (dat_cnt == 0) {pwr_led_dim_n, audio_filter_mode} <= #1 wrdat[2:0]; end
   //    if (spi_joystick_cfg_sel) begin if (dat_cnt == 0) {autofire_config} <= #1 wrdat[1:0]; end
   //    if (spi_osd_buffer_sel)   begin if (dat_cnt == 3) highlight <= #1 wrdat[3:0]; end
   //    if (spi_mem_write_sel)    begin if (dat_cnt == 0) end
