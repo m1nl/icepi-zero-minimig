@@ -257,7 +257,7 @@ wire [14:0] rdata_prefilter;
 // instantiate mixer
 paula_audio_mixer mix (
   .clk      (clk),
-  .clk7_en (clk7_en),
+  .clk7_en  (clk7_en),
   .sample0  (sample0),
   .sample1  (sample1),
   .sample2  (sample2),
@@ -274,8 +274,12 @@ paula_audio_mixer mix (
 wire [15:0] ldata_postfilter;
 wire [15:0] rdata_postfilter;
 
-assign ldata=ldata_postfilter;
-assign rdata=rdata_postfilter;
+// TODO - allow this to be configured from top design
+// assign ldata=ldata_postfilter;
+// assign rdata=rdata_postfilter;
+
+assign ldata={ldata_prefilter,1'b0};
+assign rdata={rdata_prefilter,1'b0};
 
 audiofilter myaudiofilter
 (
