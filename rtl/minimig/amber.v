@@ -184,7 +184,7 @@ always @(posedge clk) begin
 	if(sd_lbuf_rd=={1'b0,hs_stop[FRAMING_BITS-1:1]})
 		hs_gen<=1'b1;
 	if(sd_lbuf_rd=={1'b0,hb_start[FRAMING_BITS-1:1]})
-		hb_gen<=1'b1;		
+		hb_gen<=1'b1;
 	if(sd_lbuf_rd=={1'b0,hb_stop[FRAMING_BITS-1:1]})
 		hb_gen<=1'b0;
 end
@@ -221,12 +221,12 @@ reg newfrac;
 
 wire hfilter_en = |hires ? hr_filter[0] : lr_filter[0];
 always @(posedge clk) begin
-	centre_offset<= htotal[8:2]; 
+	centre_offset<= htotal[8:2];
 	hb_gen_d <= hb_gen;
 
 	newfrac<=1'b0;
 	if(hb_gen && !hb_gen_d)
-		newfrac <= 1'b1;		// Update the scale factor on the rising edge of HBlank	
+		newfrac <= 1'b1;		// Update the scale factor on the rising edge of HBlank
 end
 
 
@@ -239,13 +239,13 @@ wire [8:0] blue_early_osd = osd_blank ? (osd_pixel ? {OSD_B,1'b0} : {2'b10, blue
 wire osd_pixel_masked = hfilter_en ? 1'b0 : osd_pixel;
 wire osd_blank_masked = hfilter_en ? 1'b0 : osd_blank;
 
-// Blend multiple pixes, applying appropriate weights to the first and last pixel in a span. 
+// Blend multiple pixes, applying appropriate weights to the first and last pixel in a span.
 
 // We're mapping from 16:9 to 4:3, aka 16:9 to 12:9
 // The scale factor is thus 16/12, or 4/3, doubled to 8/3
 // because scandoubled lines are consumed at twice the rate they're recorded.
 
-frac_interp #(.bitwidth(FRAMING_BITS),.fracwidth(hi_fracwidth)) interp_core_h (
+frac_interp #(.bitwidth(FRAMING_BITS),.fracwidth(hi_fracwidth),.ratiostatic(1)) interp_core_h (
 	.clk(clk),
 	.reset_n(1'b1),
 	.num('h8),
@@ -290,7 +290,7 @@ always @(posedge clk) begin
 	if(hi_step_out)
 		sd_wrptr <= sd_wrptr+1;
 	if(hss)
-		sd_wrptr<=centre_offset;	
+		sd_wrptr<=centre_offset;
 	if((!hfilter_en) || (!_vsync_in))
 		sd_wrptr <= sd_lbuf_wr[FRAMING_BITS-1:1];
 end
@@ -312,7 +312,7 @@ always @(posedge clk) begin
 end
 
 // Backfill the buffer with RGB 080808 just so the inactive area isn't black, and doesn't get
-// cropped-and-scaled away by overly-smart TVs / Monitors 
+// cropped-and-scaled away by overly-smart TVs / Monitors
 assign hi_r = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[26:18] : 9'h08) : {red_in[7:0]  , 1'b0};
 assign hi_g = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[17:9] : 9'h08) : {green_in[7:0], 1'b0};
 assign hi_b = hfilter_en ? (_vsync_in & ~blank_d ? hi_rgb[8:0] : 9'h08) : {blue_in[7:0] , 1'b0};
@@ -421,7 +421,7 @@ always @ (posedge clk) begin
     // read
     sd_lbuf_o <= #1 sd_lbuf[{sd_rd_msb,sd_lbuf_rd[9:0]}];
     // delayed data
-    
+
     sd_bbuf[sd_lbuf_rd[FRAMING_BITS-1:0]] <= #1 hb_gen;
     sd_bbuf_o <= sd_bbuf[sd_lbuf_rd[FRAMING_BITS-1:0]];
 

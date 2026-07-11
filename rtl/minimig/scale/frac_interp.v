@@ -1,4 +1,4 @@
-module frac_interp #(parameter bitwidth=10, parameter fracwidth=16) (
+module frac_interp #(parameter bitwidth=10, parameter fracwidth=16, parameter ratiostatic=0) (
 	input  clk,
 	input  reset_n,
 	input  [bitwidth-1:0] num, // Larger value
@@ -22,17 +22,26 @@ module frac_interp #(parameter bitwidth=10, parameter fracwidth=16) (
 wire div_done;
 wire [bitwidth+fracwidth-1:0] step;
 wire [bitwidth+fracwidth-1:0] remain; /* not used */
-	
-unsigned_division #(.bitwidth(bitwidth+fracwidth)) div (
-	.clk(clk),
-	.reset_n(reset_n),
-	.dividend({num,{fracwidth{1'b0}}}),
-	.divisor({{fracwidth{1'b0}},den}),
-	.quotient(step),
-	.remainder(remain),
-	.req(newfraction),
-	.ack(div_done)
-);
+
+generate
+	if (ratiostatic) begin
+		assign step = {num, {fracwidth{1'b0}}} / {{fracwidth{1'b0}}, den};
+		assign remain = {num, {fracwidth{1'b0}}} % {{fracwidth{1'b0}}, den};
+		assign div_done = 1;
+
+	end else begin
+		unsigned_division #(.bitwidth(bitwidth+fracwidth)) div (
+			.clk(clk),
+			.reset_n(reset_n),
+			.dividend({num,{fracwidth{1'b0}}}),
+			.divisor({{fracwidth{1'b0}},den}),
+			.quotient(step),
+			.remainder(remain),
+			.req(newfraction),
+			.ack(div_done)
+		);
+	end
+endgenerate
 
 reg [bitwidth+fracwidth-1:0] spos;
 wire [bitwidth-1:0] spos_whole = spos[bitwidth+fracwidth-1:fracwidth];
@@ -58,7 +67,7 @@ always @(posedge clk) begin
 			fraction<=0;
 			fraction_inv <= {1'b1,{fracwidth{1'b0}}};
 		end
-			
+
 		if(|offset)
 			offset<=offset-1;
 		else begin
@@ -67,7 +76,7 @@ always @(posedge clk) begin
 				dpos<=dpos+1'b1;
 		end
 	end
-	
+
 	if (newfraction || reset_n)
 		ready <= 1'b0;
 
@@ -83,7 +92,7 @@ always @(posedge clk) begin
 		whole_i<=pan_offset;
 		offset<=centre_offset;
 	end
-		
+
 	if(div_done) begin
 		limit_out_fp <= step * limit;
 		ready<=1'b1;
