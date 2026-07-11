@@ -228,9 +228,10 @@ void fpga_init() {
 	BootPrintEx("Updates by Jakub Bednarski, Tobias Gubener, Sascha Boing, A.M. Robinson & others");
 	BootPrintEx(" ");
 	BootPrintEx("Ported to Turbo Chameleon 64 by Alastair M. Robinson");
+	BootPrintEx("Ported to IcePi Zero by Alastair M. Robinson and Mateusz Nalewajski");
 	BootPrintEx(" ");
 	WaitTimer(1000);
-    
+
     //eject all disk
     df[0].status = 0;
     df[1].status = 0;
