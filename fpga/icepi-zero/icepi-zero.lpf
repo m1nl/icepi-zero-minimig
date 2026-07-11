@@ -335,10 +335,8 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/minimig/CP
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/cache/*" 3X ;
 
-# MULTICYCLE FROM CELL "virtual_top/tg68k/myakiko/c2p.myc2p/rdptr*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 2X ;
-# MULTICYCLE FROM CELL "virtual_top/tg68k/myakiko/c2p.myc2p/buf*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 2X ;
-
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/mycfide/amiga_buffer*" 3X ;
 
 MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
 

@@ -43,10 +43,8 @@ set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] 3
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
 
-# set_multicycle_path -from [get_cells {virtual_top.tg68k.myakiko.c2p\.myc2p.rdptr*}] -to [get_cells -regexp {virtual_top\.tg68k\.pf68K_Kernel_inst\..*}] 2
-# set_multicycle_path -from [get_cells {virtual_top.tg68k.myakiko.c2p\.myc2p.buf*}] -to [get_cells -regexp {virtual_top\.tg68k\.pf68K_Kernel_inst\..*}] 2
-
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.tg68k.u_akiko.*}] 3
+set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.mycfide.amiga_buffer*}] 3
 
 set_false_path -to [get_ports {led[*]}]
 

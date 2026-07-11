@@ -75,11 +75,11 @@ entity cfide is
 		amiga_key_stb	: out std_logic;
 
 		amiga_addr : in std_logic_vector(7 downto 0);
+		amiga_req : in std_logic;
+		amiga_ack : out std_logic;
+		amiga_wr : in std_logic;
 		amiga_d : in std_logic_vector(15 downto 0);
 		amiga_q : out std_logic_vector(15 downto 0);
-		amiga_req : in std_logic;
-		amiga_wr : in std_logic;
-		amiga_ack : out std_logic;
 
 		rtc_q : out std_logic_vector(63 downto 0);
 		reconfig : out std_logic;
@@ -99,7 +99,6 @@ entity cfide is
 );
 
 end cfide;
-
 
 architecture rtl of cfide is
 
@@ -146,7 +145,7 @@ signal interrupt_select : std_logic;
 signal interrupt_ena : std_logic;
 signal keyboard_select : std_logic;
 signal keyboard_q : std_logic_vector(15 downto 0);
-signal amigatohost  : std_logic_vector(15 downto 0);
+signal amiga_buffer  : std_logic_vector(15 downto 0);
 signal amiga_select : std_logic;
 signal amiga_ready_d : std_logic;
 
@@ -173,7 +172,7 @@ q(15 downto 0) <=
 	std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
 	audio_q when audio_select='1' else
 	keyboard_q when keyboard_select='1' else
-	amigatohost when amiga_select='1' else
+	amiga_buffer when amiga_select='1' else
 	usbtohost_0(15 downto 0) when usb_select_0='1' else
 	usbtohost_1(15 downto 0) when usb_select_1='1' else
 	platformdata;
@@ -211,7 +210,6 @@ begin
 	end if;
 end process;
 
-
 sd_in(15 downto 8) <= (others=>'0');
 sd_in(7 downto 0) <= sd_in_shift(7 downto 0);
 
@@ -229,9 +227,7 @@ rtc_select <= spirtcpresent when addr(27)='1' and addr(7 downto 4)=X"7" else '0'
 usb_select_0 <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
 usb_select_1 <= '1' when addr(27)='1' and addr(7 downto 4)=X"5" else '0';
 
-
 -- RTC handling at 0fffff70
-
 process (clk_28,n_reset)
 begin
 	if n_reset='0' then
@@ -254,42 +250,44 @@ begin
 	end if;
 end process;
 
-
 -- Amiga interface at 0fffff80
 gen_amiga : if haveamigahost=1 generate
 begin
 
-process (clk_28,n_reset)
+process (sysclk)
 begin
-	if rising_edge(clk_28) then
+	if rising_edge(sysclk) then
+		if amiga_req='0' then
+			amiga_ack <= '0';
+		end if;
 
-		amiga_ack<='0';
+		if amiga_req='1' then
+			if amiga_wr='1' then
+				amiga_buffer <= amiga_d;
+			end if;
+		end if;
 
 		if amiga_select='1' and req='1' then
-
+			if amiga_req='1' then
+				amiga_ack <= '1';
+			end if;
 			if wr='1' then
-				amiga_q<=d(15 downto 0);
-				amiga_ack<='1';
+				amiga_buffer <= d(15 downto 0);
 			end if;
-
-			if addr(2)='1' then
-				amigatohost<=amiga_d;
-			else
-				amigatohost<=amiga_req&amiga_wr&"000000"&amiga_addr;
-			end if;
-
 		end if;
 	end if;
 end process;
+
+amiga_q <= amiga_buffer;
 end generate;
 
 gen_noamiga : if haveamigahost=0 generate
 begin
-amiga_ack <= amiga_select;
+amiga_ack <= amiga_req;
+amiga_q <= (others => '0');
 end generate;
 
 -- C64 Keyboard handling at 0fffff90
-
 process (clk_28,n_reset)
 begin
 	if rising_edge(clk_28) then
@@ -315,10 +313,8 @@ begin
 	end if;
 end process;
 
-
 -- Interrupt handling at 0fffffa0
 -- Any access to this range will clear the interrupt flag;
-
 process (clk_28,n_reset)
 begin
 	if n_reset='0' then
@@ -367,7 +363,6 @@ begin
 		end if;
 	end if;
 end process;
-
 
 -----------------------------------------------------------------
 -- Support States
@@ -554,7 +549,6 @@ begin
 		end if;
 	end if;
 end process;
-
 
 -----------------------------------------------------------------
 -- timer
