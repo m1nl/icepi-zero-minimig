@@ -140,13 +140,14 @@ begin
 			havertg => 0,
 			haveaudio => 0,
 			havec2p => 1,
+			haveamigahost => 0,
 			havespirtc => 0,
 			ram_64meg => 0,
 			vga_width => 8,
 			usethrottle => 0,
 			havecart => 0,
-			haveaga => 1,
-			haventscswitch => 0
+			havevideofilter => 0,
+			haveaga => 1
 		)
 	PORT map
 		(
