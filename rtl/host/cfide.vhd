@@ -33,8 +33,9 @@ entity cfide is
 		haveiec : integer := 0;
 		havereconfig : integer := 0;
 		havecart : integer := 0;
+		havevideofilter : integer := 0;
 		haveclockport : integer := 0;
-		haveamiga : integer := 0
+		haveamigahost : integer := 0
 	);
 	port (
 		sysclk	: in std_logic;
@@ -160,6 +161,7 @@ signal reconfigpresent : std_logic;
 signal spirtcpresent : std_logic;
 signal iecpresent : std_logic;
 signal cartpresent : std_logic;
+signal videofilterpresent : std_logic;
 signal clockportpresent : std_logic;
 
 begin
@@ -187,9 +189,10 @@ spirtcpresent <= '1' when havespirtc=1 else '0';
 iecpresent <= '1' when haveiec=1 else '0';
 reconfigpresent <= '1' when havereconfig=1 else '0';
 cartpresent <= '1' when havecart=1 else '0';
+videofilterpresent <= '1' when havevideofilter=1 else '0';
 clockportpresent <= '1' when haveclockport=1 else '0';
 
-platformdata <=  X"00" & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+platformdata <=  "0000000" & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
 
 IOdata <= sd_in;
 
@@ -253,7 +256,7 @@ end process;
 
 
 -- Amiga interface at 0fffff80
-gen_amiga : if haveamiga=1 generate
+gen_amiga : if haveamigahost=1 generate
 begin
 
 process (clk_28,n_reset)
@@ -280,12 +283,10 @@ begin
 end process;
 end generate;
 
-gen_noamiga : if haveamiga=0 generate
+gen_noamiga : if haveamigahost=0 generate
 begin
 amiga_ack <= amiga_select;
 end generate;
-
-
 
 -- C64 Keyboard handling at 0fffff90
 
