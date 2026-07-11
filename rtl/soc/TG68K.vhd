@@ -1,10 +1,10 @@
 ------------------------------------------------------------------------------
-------------------------------------------------------------------------------
 --                                                                          --
 -- Copyright (c) 2009-2011 Tobias Gubener                                   --
 -- Subdesign fAMpIGA by TobiFlex                                            --
 --                                                                          --
 -- This is the TOP-Level for TG68KdotC_Kernel to generate 68K Bus signals   --
+-- It also includes glue logic for non-standard non-minimig components      --
 --                                                                          --
 -- This source file is free software: you can redistribute it and/or modify --
 -- it under the terms of the GNU General Public License as published        --
@@ -20,25 +20,23 @@
 -- along with this program.  If not, see <http://www.gnu.org/licenses/>.    --
 --                                                                          --
 ------------------------------------------------------------------------------
-------------------------------------------------------------------------------
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
 
-
 entity TG68K is
-generic
-	(
+generic (
 		havertg : integer := 1;
 		haveaudio : integer := 1;
 		havec2p : integer := 1;
+		haveamigahost : integer := 1;
 		havecart : integer := 1;
 		dualsdram : integer := 0;
 		useprofiler : integer := 0;
 		usethrottle : integer := 1
-	);
-port(
+);
+port (
 	clk           : in      std_logic;
 	reset         : in      std_logic;
 	clkena_in     : in      std_logic:='1';
@@ -60,7 +58,6 @@ port(
 	lds2          : out     std_logic;
 	rw            : out     std_logic;
 	vma           : buffer  std_logic:='1';
-	wrd           : out     std_logic;
 	ena7RDreg     : in      std_logic:='1';
 	ena7WRreg     : in      std_logic:='1';
 	fromram       : in      std_logic_vector(15 downto 0);
@@ -83,12 +80,12 @@ port(
 	turbokick     : in      std_logic;
 	cache_inhibit : out     std_logic;
 	cacheline_clr : out     std_logic;
-	--    ovr           : in      std_logic;
+	--	ovr           : in      std_logic;
 	ramaddr       : out     std_logic_vector(31 downto 0);
 	cpustate      : out     std_logic_vector(3 downto 0);
 --	chipset_ramsel: out     std_logic;
 	nResetOut     : buffer  std_logic;
-	--    cpuDMA        : buffer  std_logic;
+	--	cpuDMA        : buffer  std_logic;
 	ramlds        : out     std_logic;
 	ramuds        : out     std_logic;
 	CACR_out      : buffer  std_logic_vector(3 downto 0);
@@ -98,251 +95,260 @@ port(
 	rtg_reg_d    : out std_logic_vector(15 downto 0);
 	rtg_reg_wr   : out std_logic;
 	-- Audio interface
-	audio_buf : in std_logic;
-	audio_ena : out std_logic;
-	audio_int : out std_logic;
+	audio_buf    : in std_logic;
+	audio_ena    : out std_logic;
+	audio_int    : out std_logic;
 	-- Host interface
-	host_req : out std_logic;
-	host_ack : in std_logic :='0';
-	host_q : in std_logic_vector(15 downto 0) := "----------------"
+	host_addr    : in std_logic_vector(7 downto 0);
+	host_req     : out std_logic;
+	host_ack     : in std_logic;
+	host_wr      : out std_logic;
+	host_q       : in std_logic_vector(15 downto 0);
+	host_d       : out std_logic_vector(15 downto 0)
 );
 end TG68K;
 
+architecture logic of TG68K is
 
-ARCHITECTURE logic OF TG68K IS
-SIGNAL addrtg68         : std_logic_vector(31 downto 0);
-SIGNAL cpuaddr          : std_logic_vector(31 downto 0);
-SIGNAL r_data           : std_logic_vector(15 downto 0);
-SIGNAL cpuIPL           : std_logic_vector(2 downto 0);
-signal CACR             : std_logic_vector(3 downto 0);
+signal addrtg68         : std_logic_vector(31 downto 0);
+signal cpuaddr          : std_logic_vector(31 downto 0);
+signal r_data           : std_logic_vector(15 downto 0);
+signal cpuIPL           : std_logic_vector(2 downto 0);
 
-SIGNAL clkena_e         : std_logic;
-SIGNAL clkena_f         : std_logic;
-SIGNAL wr               : std_logic;
-SIGNAL uds_in           : std_logic;
-SIGNAL lds_in           : std_logic;
-SIGNAL state            : std_logic_vector(1 downto 0);
+signal clkena_e         : std_logic;
+signal clkena_f         : std_logic;
+signal wr_n             : std_logic;
+signal uds_in           : std_logic;
+signal lds_in           : std_logic;
+signal state            : std_logic_vector(1 downto 0);
 signal longword         : std_logic;
-SIGNAL clkena_akiko     : std_logic;
-SIGNAL clkena           : std_logic;
-SIGNAL sel_ram          : std_logic;
-SIGNAL ram_req          : std_logic;
-SIGNAL sel_chip         : std_logic;
-SIGNAL sel_chipram      : std_logic;
-SIGNAL overclock_d      : std_logic := '0';
-SIGNAL turbochip_d      : std_logic := '0';
-SIGNAL turbokick_d      : std_logic := '0';
-SIGNAL slow_config_d    : std_logic_vector(1 downto 0);
-SIGNAL turboslow_d      : std_logic := '0';
-SIGNAL slower           : std_logic_vector(3 downto 0);
+signal clkena_akiko     : std_logic;
+signal clkena           : std_logic;
+signal sel_ram          : std_logic;
+signal ram_req          : std_logic;
+signal sel_chip         : std_logic;
+signal sel_chipram      : std_logic;
+signal overclock_d      : std_logic := '0';
+signal turbochip_d      : std_logic := '0';
+signal turbokick_d      : std_logic := '0';
+signal slow_config_d    : std_logic_vector(1 downto 0);
+signal turboslow_d      : std_logic := '0';
+signal slower           : std_logic_vector(3 downto 0);
 signal skipfetch        : std_logic := '0';
 
-SIGNAL datatg68_c       : std_logic_vector(15 downto 0);
-SIGNAL datatg68         : std_logic_vector(15 downto 0);
-SIGNAL w_datatg68       : std_logic_vector(15 downto 0);
-SIGNAL ramcs_n          : std_logic;
+signal datatg68_c       : std_logic_vector(15 downto 0);
+signal datatg68         : std_logic_vector(15 downto 0);
+signal w_datatg68       : std_logic_vector(15 downto 0);
+signal ramcs_n          : std_logic;
 
-SIGNAL z2ram_ena        : std_logic;
-SIGNAL z3ram_ena        : std_logic;
-SIGNAL z3ram2_ena        : std_logic;
-SIGNAL z3ram3_ena        : std_logic;
-SIGNAL eth_base         : std_logic_vector(7 downto 0);
-SIGNAL eth_cfgd         : std_logic;
-SIGNAL sel_z2ram        : std_logic;
-SIGNAL sel_z3ram        : std_logic;
-SIGNAL sel_z3ram2       : std_logic;
-SIGNAL sel_z3ram3       : std_logic;
-SIGNAL sel_kick         : std_logic;
-SIGNAL sel_kickram      : std_logic;
---SIGNAL sel_eth          : std_logic;
-SIGNAL sel_slow         : std_logic;
-SIGNAL sel_slowram      : std_logic;
-SIGNAL sel_cart         : std_logic;
-SIGNAL sel_32           : std_logic;
+signal z2ram_ena        : std_logic;
+signal z3ram_ena        : std_logic;
+signal z3ram2_ena       : std_logic;
+signal z3ram3_ena       : std_logic;
+signal eth_base         : std_logic_vector(7 downto 0);
+signal eth_cfgd         : std_logic;
+signal sel_z2ram        : std_logic;
+signal sel_z3ram        : std_logic;
+signal sel_z3ram2       : std_logic;
+signal sel_z3ram3       : std_logic;
+signal sel_kick         : std_logic;
+signal sel_kickram      : std_logic;
+signal sel_slow         : std_logic;
+signal sel_slowram      : std_logic;
+signal sel_cart         : std_logic;
+signal sel_32           : std_logic;
 signal sel_undecoded    : std_logic;
 signal sel_undecoded_d  : std_logic;
 signal sel_akiko        : std_logic;
 signal sel_akiko_d      : std_logic;
+signal sel_host         : std_logic;
+signal sel_host_d       : std_logic;
 signal sel_audio        : std_logic;
 signal sel_gayle_ide    : std_logic;
 
 signal cpu_mode         : std_logic_vector(1 downto 0);
-SIGNAL cpu_internal     : std_logic;
-SIGNAL cpu_fetch        : std_logic;
-SIGNAL cpu_read         : std_logic;
-SIGNAL cpu_write        : std_logic;
+signal cpu_internal     : std_logic;
+signal cpu_fetch        : std_logic;
+signal cpu_read         : std_logic;
+signal cpu_write        : std_logic;
 signal cpu_disablecache : std_logic;
 
 -- Akiko registers
-signal akiko_d : std_logic_vector(15 downto 0);
-signal akiko_q : std_logic_vector(15 downto 0);
-signal akiko_wr : std_logic;
-signal akiko_req : std_logic;
-signal akiko_ack : std_logic;
-signal host_req_r : std_logic;
+signal akiko_d          : std_logic_vector(15 downto 0);
+signal akiko_q          : std_logic_vector(15 downto 0);
+signal akiko_wr         : std_logic;
+signal akiko_req        : std_logic;
+signal akiko_ack        : std_logic;
 
-SIGNAL sel_nmi_vector   : std_logic;
+-- Host ACK delayed (because we register output)
+signal host_ack_d       : std_logic;
 
-signal block_turbo : std_logic := '0';
-signal throttle_sel : std_logic_vector(1 downto 0);
+-- Throttling
+signal block_turbo      : std_logic := '0';
+signal throttle_sel     : std_logic_vector(1 downto 0);
+
+-- HRTMon
+signal sel_nmi_vector   : std_logic;
 
 component profile_cpu
 port (
-	clk : in std_logic;
-	reset_n : in std_logic;
-	clkena : in std_logic;
-	cpustate : in std_logic_vector(1 downto 0);
-	sel_chip : in std_logic;
-	sel_kick : in std_logic;
+	clk        : in std_logic;
+	reset_n    : in std_logic;
+	clkena     : in std_logic;
+	cpustate   : in std_logic_vector(1 downto 0);
+	sel_chip   : in std_logic;
+	sel_kick   : in std_logic;
 	sel_fast24 : in std_logic;
-	sel_fast32: in std_logic
+	sel_fast32 : in std_logic
 );
 end component;
 
 component akiko
 port (
-    clk     : in  std_logic;
-    reset_n : in  std_logic;
-    addr    : in  std_logic_vector(5 downto 0);
-    wr      : in  std_logic;
-    req     : in  std_logic;
-    ack     : out std_logic;
-    d       : in  std_logic_vector(15 downto 0);
-    q       : out std_logic_vector(15 downto 0)
+	clk     : in  std_logic;
+	reset_n : in  std_logic;
+	addr    : in  std_logic_vector(5 downto 0);
+	wr      : in  std_logic;
+	req     : in  std_logic;
+	ack     : out std_logic;
+	d       : in  std_logic_vector(15 downto 0);
+	q       : out std_logic_vector(15 downto 0)
 );
 end component;
 
-BEGIN
+begin
 
-sel_eth<='0';
+sel_eth <= '0';
 
-	-- AMR just for convenience / clarity
-	cpu_fetch    <= '1' WHEN state = "00" else '0';
-	cpu_internal <= '1' WHEN state = "01" or skipfetch='1' else '0';
-	cpu_read     <= '1' WHEN state = "10" else '0';
-	cpu_write    <= '1' WHEN state = "11" else '0';
-	cpu_disablecache <= not CACR(0);
+-- AMR just for convenience / clarity
+cpu_fetch    <= '1' when state="00" else '0';
+cpu_internal <= '1' when state="01" or skipfetch='1' else '0';
+cpu_read     <= '1' when state="10" else '0';
+cpu_write    <= '1' when state="11" else '0';
+cpu_disablecache <= not CACR_out(0);
 
-	-- NMI handling for HRTMon cartridge
-
-	gen_nmi: if havecart=1 generate
-		nmiblock : block
-			SIGNAL NMI_addr         : std_logic_vector(31 downto 0);
-			SIGNAL sel_nmi_vector_addr : std_logic;
-		begin
-			-- NMI
-			PROCESS(reset, clk,VBR_out) BEGIN
-				IF reset='0' THEN
-					NMI_addr <= X"0000007c";
-					sel_nmi_vector_addr <= '0';
-				ELSIF rising_edge(clk) THEN
-					NMI_addr <= VBR_out + X"0000007c";
-					sel_nmi_vector_addr <= '0';
-					IF (cpuaddr(31 downto 2) = NMI_addr(31 downto 2)) THEN
-						sel_nmi_vector_addr <= '1';
-					END IF;
-				END IF;
-			END PROCESS;
-
-			sel_nmi_vector <= '1' WHEN sel_nmi_vector_addr='1' AND cpu_read='1' ELSE '0';
-
-		end block;
-	end generate;
-
-	no_nmi: if havecart=0 generate
-		sel_nmi_vector <= '0';
-	end generate;
-
-	--
-
-	toram <= w_datatg68;
-	wrd <= wr;
-
-	PROCESS(clk) BEGIN
-        if rising_edge(clk) THEN
-          IF (reset='0' OR nResetOut='0') THEN
-  			  sel_akiko_d<='0';
-			  ram_req<='0';
-			  sel_undecoded_d<='1';
-          else
-			sel_akiko_d<=sel_akiko;
-			ram_req<=sel_ram AND NOT block_turbo AND NOT sel_nmi_vector AND NOT cpu_internal;
-			sel_undecoded_d<=sel_32 and not sel_ram;
-  		  END IF;
-        end if;
-	END PROCESS;
-
-    datatg68 <= fromram WHEN ram_req='1' ELSE akiko_q WHEN sel_akiko_d='1' ELSE datatg68_c;
---	chipset_ramsel <= sel_z2ram or sel_chipram or sel_kickram or sel_slowram;
---	chipset_ramsel <= not sel_z3ram;
-
-	-- Register incoming data
-	process(clk) begin
-		if rising_edge(clk) then
-            IF (reset='0' OR nResetOut='0' OR sel_undecoded_d ='1') THEN
-				datatg68_c <= X"FFFF";
-			elsif sel_eth='1' then
-				datatg68_c <= frometh;
-			else
-				datatg68_c <= r_data;
+-- NMI handling for HRTMon cartridge
+gen_nmi: if havecart=1 generate
+	nmiblock : block
+		signal NMI_addr            : std_logic_vector(31 downto 0);
+		signal sel_nmi_vector_addr : std_logic;
+	begin
+		-- NMI
+		process(reset, clk,VBR_out) begin
+			if reset='0' then
+				NMI_addr <= X"0000007c";
+				sel_nmi_vector_addr <= '0';
+			elsif rising_edge(clk) then
+				NMI_addr <= VBR_out + X"0000007c";
+				sel_nmi_vector_addr <= '0';
+				if (cpuaddr(31 downto 2)=NMI_addr(31 downto 2)) then
+					sel_nmi_vector_addr <= '1';
+				end if;
 			end if;
+		end process;
+
+		sel_nmi_vector <= '1' when sel_nmi_vector_addr='1' and cpu_read='1' else '0';
+	end block;
+end generate;
+
+no_nmi: if havecart=0 generate
+	sel_nmi_vector <= '0';
+end generate;
+
+--
+
+process(clk) begin
+	if rising_edge(clk) then
+		if (reset='0' or nResetOut='0') then
+			sel_akiko_d <= '0';
+
+			sel_host_d <= '0';
+			host_ack_d <= '0';
+
+			ram_req <= '0';
+			sel_undecoded_d <= '0';
+		else
+			sel_akiko_d <= sel_akiko;
+
+			sel_host_d <= sel_host;
+			host_ack_d <= host_ack;
+
+			ram_req <= sel_ram and NOT block_turbo and NOT sel_nmi_vector and NOT cpu_internal;
+			sel_undecoded_d <= sel_32 and not sel_ram;
 		end if;
-	end process;
+	end if;
+end process;
+
+datatg68 <= fromram when ram_req='1' else akiko_q when sel_akiko_d='1' else datatg68_c;
+toram <= w_datatg68;
+
+-- Register incoming data
+process(clk) begin
+	if rising_edge(clk) then
+		if (reset='0' or nResetOut='0' or sel_undecoded_d ='1') then
+			datatg68_c <= X"FFFF";
+		elsif sel_host_d='1' then
+			datatg68_c <= host_q;
+		elsif sel_eth='1' then
+			datatg68_c <= frometh;
+		else
+			datatg68_c <= r_data;
+		end if;
+	end if;
+end process;
 
 DUALRAM_ZIII: if dualsdram=1 generate
 -- First block of ZIII RAM - 0x40000000 - 0x43ffffff
-	sel_z3ram       <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26)='0' else '0';
+	sel_z3ram       <= '1' when (cpuaddr(31 downto 30)="01") and cpuaddr(26)='0' else '0';
 -- Second block of ZIII RAM - 32 meg from 0x44000000 - 0x45ffffff
 -- Also matches third block, 16 meg from 0x46000000 - 0x46ffffff, but excludes 0x47000000 onwards since it would alias onto Bank 0 / chipram
-	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26)='1' else '0';
+	sel_z3ram2      <= '1' when (cpuaddr(31 downto 30)="01") and cpuaddr(26)='1' else '0';
 -- Third block of ZIII RAM - either 2 or 4 meg, starting at either 0x41000000 or 0x44000000
 	sel_z3ram3      <= '0';
 end generate;
 
 SINGLERAM_ZIII: if dualsdram=0 generate
 -- First block of ZIII RAM - 0x40000000 - 0x40ffffff
-	sel_z3ram       <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26 downto 24)="000" else '0';
+	sel_z3ram       <= '1' when (cpuaddr(31 downto 30)="01") and cpuaddr(26 downto 24)="000" else '0';
 -- Second block of ZIII RAM - 32 meg from 0x42000000 - 0x43ffffff
-	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(25)='1' else '0';
+	sel_z3ram2      <= '1' when (cpuaddr(31 downto 30)="01") and cpuaddr(25)='1' else '0';
 -- Third block of ZIII RAM - either 2 or 4 meg, starting at either 0x41000000 or 0x44000000
-	sel_z3ram3      <= '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(25 downto 24)="01") else '0';
+	sel_z3ram3      <= '1' when (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(25 downto 24)="01") else '0';
 end generate;
 
-	sel_gayle_ide <= '0'; -- '1' when state(1 downto 0) = "10" and cpuaddr(31 downto 14)=X"00DA"&"00" else '0';
-	sel_akiko <= '1' when (cpuaddr(31 downto 16)=X"00B8" and (havertg = 1 or haveaudio = 1 or havec2p = 1)) else '0';
-	sel_32 <= '1' when cpu(1)='1' and cpuaddr(31 downto 24)/=X"00" and cpuaddr(31 downto 24)/=X"ff" else '0'; -- Decode 32-bit space, but exclude interrupt vectors
-	sel_z2ram <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND
-                         ((cpuaddr(23 downto 21) = "001") OR
-	                      (cpuaddr(23 downto 21) = "010") OR
-	                      (cpuaddr(23 downto 21) = "011") OR
-	                      (cpuaddr(23 downto 21) = "100")) else '0';
---  sel_eth         <= '1' WHEN (cpuaddr(31 downto 24) = eth_base) AND eth_cfgd='1' ELSE '0';
-	sel_chip        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 21)="000") ELSE '0'; -- $000000 - $1FFFFF
-	sel_chipram     <= '1' WHEN sel_chip = '1' AND turbochip_d='1' ELSE '0';
-	sel_kick        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 19)="11111") OR (cpuaddr(23 downto 19)="11100")) AND cpu_write='0' ELSE '0'; -- $F8xxxx, $E0xxxx
-	sel_kickram     <= '1' WHEN sel_kick='1' AND turbokick_d='1' ELSE '0';
-    sel_slow        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 20)=X"C" AND ((cpuaddr(19)='0' AND slow_config_d/="00") OR (cpuaddr(19)='1' AND slow_config_d(1)='1'))) OR (cpuaddr(23 downto 19)=X"D"&'0' AND slow_config_d="11")) ELSE '0'; -- $C00000 - $D7FFFF
-	sel_slowram     <= '1' WHEN sel_slow='1' AND turboslow_d='1' ELSE '0';
-	sel_cart        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 20)="1010") ELSE '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
-	sel_audio       <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 18)="111011") ELSE '0'; -- $EC0000 - $EFFFFF
---	sel_undecoded   <= '1' WHEN sel_32='1' and (sel_z3ram and z3ram_ena)='0' and (sel_z3ram2 and z3ram2_ena)='0' and (sel_z3ram3 and z3ram3_ena)='0' else '0';
-       sel_ram         <= '1' WHEN (
-         (sel_z2ram='1' and z2ram_ena='1')
-      OR (sel_z3ram='1' and z3ram_ena='1')
-      OR (sel_z3ram2='1' and z3ram2_ena='1')
-      OR (sel_z3ram3='1' and z3ram3_ena='1')
-      OR sel_chipram='1'
-      OR sel_slowram='1'
-      OR sel_kickram='1'
-      OR sel_audio='1'
-    ) ELSE '0';
+sel_gayle_ide <= '0'; -- '1' when state(1 downto 0)="10" and cpuaddr(31 downto 14)=X"00DA"&"00" else '0';
+sel_akiko <= '1' when (cpuaddr(31 downto 12)=X"00B80" and (havec2p=1)) else '0'; -- $B80xxx
+sel_host <= '1' when (cpuaddr(31 downto 12)=X"00B81" and (haveamigahost=1)) else '0'; -- $B81xxx
+sel_32 <= '1' when cpu(1)='1' and cpuaddr(31 downto 24)/=X"00" and cpuaddr(31 downto 24)/=X"ff" else '0'; -- Decode 32-bit space, but exclude interrupt vectors
+sel_z2ram <= '1' when (cpuaddr(31 downto 24)=X"00") and
+		((cpuaddr(23 downto 21)="001") or
+		(cpuaddr(23 downto 21)="010") or
+		(cpuaddr(23 downto 21)="011") or
+		(cpuaddr(23 downto 21)="100")) else '0';
+--	sel_eth         <= '1' when (cpuaddr(31 downto 24)=eth_base) and eth_cfgd='1' else '0';
+sel_chip        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 21)="000") else '0'; -- $000000 - $1FFFFF
+sel_chipram     <= '1' when sel_chip='1' and turbochip_d='1' else '0';
+sel_kick        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 19)="11111") or (cpuaddr(23 downto 19)="11100")) and cpu_write='0' else '0'; -- $F8xxxx, $E0xxxx
+sel_kickram     <= '1' when sel_kick='1' and turbokick_d='1' else '0';
+sel_slow        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 20)=X"C" and ((cpuaddr(19)='0' and slow_config_d/="00") or (cpuaddr(19)='1' and slow_config_d(1)='1'))) or (cpuaddr(23 downto 19)=X"D"&'0' and slow_config_d="11")) else '0'; -- $C00000 - $D7FFFF
+sel_slowram     <= '1' when sel_slow='1' and turboslow_d='1' else '0';
+sel_cart        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 20)="1010") else '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
+sel_audio       <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 18)="111011") else '0'; -- $EC0000 - $EFFFFF
+--	sel_undecoded   <= '1' when sel_32='1' and (sel_z3ram and z3ram_ena)='0' and (sel_z3ram2 and z3ram2_ena)='0' and (sel_z3ram3 and z3ram3_ena)='0' else '0';
+sel_ram         <= '1' when (
+	(sel_z2ram='1' and z2ram_ena='1') or
+	(sel_z3ram='1' and z3ram_ena='1') or
+	(sel_z3ram2='1' and z3ram2_ena='1') or
+	(sel_z3ram3='1' and z3ram3_ena='1') or
+	sel_chipram='1' or
+	sel_slowram='1' or
+	sel_kickram='1' or
+	sel_audio='1') else '0';
 
---  ramcs <= NOT ram_req or slower(1) or block_turbo or sel_nmi_vector or skipfetch; -- (NOT cpu_internal AND ram_req AND NOT sel_nmi_vector) OR slower(0) or block_turbo;
-
-  ramcs_n <= '0' WHEN ram_req='1' AND slower(1)='0' AND skipfetch='0' else '1';
-  cpustate <= longword&ramcs_n&state(1 downto 0);
-  ramlds <= lds_in;
-  ramuds <= uds_in;
+ramcs_n <= '0' when ram_req='1' and slower(1)='0' and skipfetch='0' else '1';
+cpustate <= longword&ramcs_n&state(1 downto 0);
+ramlds <= lds_in;
+ramuds <= uds_in;
 
 -- This is the mapping to the SDRAM
 -- map $00-$1F to $00-$1F (chipram), $A0-$FF to $20-$7F. All non-fastram goes into the first
@@ -383,169 +389,138 @@ end generate;
 -- addr(21) <= addr(21) xor sel_ziii_3;
 
 DUALRAM_ADDR: if dualsdram=1 generate
-
 -- With dual SDRAM setups we have 2 64 meg RAMs, and memory configured like so:
 -- 64 meg from 0x40000000 to 0x43ffffff - bit 30 set, bit 26 clr, bit 25 d/c  =>  26 set, 25 src, 24 src
 -- 32 meg from 0x44000000 to 0x45ffffff - bit 30 set, bit 26 set, bit 25 clr  =>  26 clr, 25 set, 24 d/c
 -- 16 meg from 0x46000000 to 0x46ffffff - bit 30 set, bit 26 set, bit 25 set  =>  26 clr, 25 clr, 24 set
-
-  ramaddr(31 downto 27) <= "00000";
-  ramaddr(26) <= sel_z3ram;
-  ramaddr(25) <= cpuaddr(25) xor sel_z3ram2; -- Second block of 32 meg in 1st SDRAM.
-  ramaddr(24) <= cpuaddr(24) xor cpuaddr(25);
-  ramaddr(23)<=(cpuaddr(23) xor (cpuaddr(22) or cpuaddr(21))) and not sel_z3ram3; -- ZII address mangling (disabled for RAM overlaid with trapdoor RAM.)
-  ramaddr(22)<=cpuaddr(21) when sel_z3ram3='1' else cpuaddr(22);
-  ramaddr(21)<=cpuaddr(21) xor sel_z3ram3;
-  ramaddr(20 downto 0) <= cpuaddr(20 downto 0);
-
+	ramaddr(31 downto 27) <= "00000";
+	ramaddr(26) <= sel_z3ram;
+	ramaddr(25) <= cpuaddr(25) xor sel_z3ram2; -- Second block of 32 meg in 1st SDRAM.
+	ramaddr(24) <= cpuaddr(24) xor cpuaddr(25);
+	ramaddr(23) <= (cpuaddr(23) xor (cpuaddr(22) or cpuaddr(21))) and not sel_z3ram3; -- ZII address mangling (disabled for RAM overlaid with trapdoor RAM.)
+	ramaddr(22) <= cpuaddr(21) when sel_z3ram3='1' else cpuaddr(22);
+	ramaddr(21) <= cpuaddr(21) xor sel_z3ram3;
+	ramaddr(20 downto 0) <= cpuaddr(20 downto 0);
 end generate;
 
 SINGLERAM_ADDR: if dualsdram=0 generate
-
-  ramaddr(31 downto 26) <= "000000";
-  ramaddr(25) <= sel_z3ram2; -- Second block of 32 meg
-  ramaddr(24) <= (cpuaddr(24) and sel_z3ram2) or sel_z3ram; -- Remap the first block of Zorro III RAM to 0x1000000
-  ramaddr(23)<=(cpuaddr(23) xor (cpuaddr(22) or cpuaddr(21))) and not sel_z3ram3;
-  ramaddr(22)<=cpuaddr(21) when sel_z3ram3='1' else cpuaddr(22);
-  ramaddr(21)<=cpuaddr(21) xor sel_z3ram3;
-  ramaddr(20 downto 0) <= cpuaddr(20 downto 0);
-
+	ramaddr(31 downto 26) <= "000000";
+	ramaddr(25) <= sel_z3ram2; -- Second block of 32 meg
+	ramaddr(24) <= (cpuaddr(24) and sel_z3ram2) or sel_z3ram; -- Remap the first block of Zorro III RAM to 0x1000000
+	ramaddr(23) <= (cpuaddr(23) xor (cpuaddr(22) or cpuaddr(21))) and not sel_z3ram3;
+	ramaddr(22) <= cpuaddr(21) when sel_z3ram3='1' else cpuaddr(22);
+	ramaddr(21) <= cpuaddr(21) xor sel_z3ram3;
+	ramaddr(20 downto 0) <= cpuaddr(20 downto 0);
 end generate;
 
-
-  -- 32bit address space for 68020, limit address space to 24bit for 68000/68010/68EC020.
-  cpuaddr <= addrtg68 WHEN cpu="11" ELSE X"00" & addrtg68(23 downto 0);
-
-  cpu_mode <= cpu(1) & (cpu(1) or cpu(0));
+-- 32bit address space for 68020, limit address space to 24bit for 68000/68010/68EC020.
+cpuaddr <= addrtg68 when cpu="11" else X"00" & addrtg68(23 downto 0);
+cpu_mode <= cpu(1) & (cpu(1) or cpu(0));
 
 pf68K_Kernel_inst: entity work.TG68KdotC_Kernel
-  generic map (
-    SR_Read         => 2, -- 0=>user,   1=>privileged,    2=>switchable with CPU(0)
-    VBR_Stackframe  => 2, -- 0=>no,     1=>yes/extended,  2=>switchable with CPU(0)
-    extAddr_Mode    => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
-    MUL_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no MUL,
-    DIV_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no DIV,
-    BitField        => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
-	MUL_Hardware    => 1  -- 0=>no,     1=>yes
-  )
-  PORT MAP (
-    clk             => clk,           -- : in std_logic;
-    nReset          => reset,         -- : in std_logic:='1';      --low active
-    clkena_in       => clkena,        -- : in std_logic:='1';
-    data_in         => datatg68,      -- : in std_logic_vector(15 downto 0);
-    IPL             => cpuIPL,        -- : in std_logic_vector(2 downto 0):="111";
-    IPL_autovector  => '1',           -- : in std_logic:='0';
-    CPU             => cpu_mode,
-    regin_out       => open,          -- : out std_logic_vector(31 downto 0);
-    addr_out        => addrtg68,      -- : buffer std_logic_vector(31 downto 0);
-    data_write      => w_datatg68,    -- : out std_logic_vector(15 downto 0);
-    busstate        => state,         -- : buffer std_logic_vector(1 downto 0);
-    longword        => longword,
-    nWr             => wr,            -- : out std_logic;
-    nUDS            => uds_in,
-    nLDS            => lds_in,        -- : out std_logic;
-    nResetOut       => nResetOut,
-    skipFetch       => skipFetch,     -- : out std_logic
-    CACR_out        => CACR,
-    VBR_out         => VBR_out
-  );
-  CACR_out <= CACR;
+	generic map (
+		SR_Read         => 2, -- 0=>user,   1=>privileged,    2=>switchable with CPU(0)
+		VBR_Stackframe  => 2, -- 0=>no,     1=>yes/extended,  2=>switchable with CPU(0)
+		extAddr_Mode    => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
+		MUL_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no MUL,
+		DIV_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no DIV,
+		BitField        => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
+		MUL_Hardware    => 1  -- 0=>no,     1=>yes
+	)
+	PORT MAP (
+		clk             => clk,           -- : in std_logic;
+		nReset          => reset,         -- : in std_logic:='1';      --low active
+		clkena_in       => clkena,        -- : in std_logic:='1';
+		data_in         => datatg68,      -- : in std_logic_vector(15 downto 0);
+		IPL             => cpuIPL,        -- : in std_logic_vector(2 downto 0):="111";
+		IPL_autovector  => '1',           -- : in std_logic:='0';
+		CPU             => cpu_mode,
+		regin_out       => open,          -- : out std_logic_vector(31 downto 0);
+		addr_out        => addrtg68,      -- : buffer std_logic_vector(31 downto 0);
+		data_write      => w_datatg68,    -- : out std_logic_vector(15 downto 0);
+		busstate        => state,         -- : buffer std_logic_vector(1 downto 0);
+		longword        => longword,
+		nWr             => wr_n,          -- : out std_logic;
+		nUDS            => uds_in,
+		nLDS            => lds_in,        -- : out std_logic;
+		nResetOut       => nResetOut,
+		skipFetch       => skipFetch,     -- : out std_logic
+		CACR_out        => CACR_out,
+		VBR_out         => VBR_out
+	);
 
-PROCESS (clk) BEGIN
-  IF rising_edge(clk) THEN
-    IF (reset='0' OR nResetOut='0') THEN
-      overclock_d <= '0';
-      turbochip_d <= '0';
-      turbokick_d <= '0';
-      turboslow_d <= '0';
-      cacheline_clr <= '0';
+process (clk) begin
+	if rising_edge(clk) then
+		if (reset='0' or nResetOut='0') then
+			z2ram_ena <= '0';
+			z3ram_ena <= '0';
+			z3ram2_ena <= '0';
+			z3ram3_ena <= '0';
+			slow_config_d <= "00";
 
-	  z2ram_ena <= '0';
-      z3ram_ena <= '0';
-	  z3ram2_ena <= '0';
-      z3ram3_ena <= '0';
-      slow_config_d <= "00";
+			overclock_d <= '0';
+			turbochip_d <= '0';
+			turbokick_d <= '0';
+			turboslow_d <= '0';
 
-    ELSIF (cpu_internal='1' AND slower(0)='0') THEN
-	  z2ram_ena <= ziiram_active;
-      z3ram_ena <= ziiiram_active;
-	  z3ram2_ena <= ziiiram2_active;
-      z3ram3_ena <= ziiiram3_active;
-      slow_config_d <= slow_config;
+			cacheline_clr <= '0';
 
-      overclock_d <= overclock;
-      turbochip_d <= turbochipram;
-      turbokick_d <= turbokick;
-      turboslow_d <= turbochipram;
-      cacheline_clr <= (turbochipram XOR turbochip_d) OR (turbokick XOR turbokick_d);
-    END IF;
-  END IF;
-END PROCESS;
+		elsif (cpu_internal='1' and slower(0)='0') then
+			z2ram_ena <= ziiram_active;
+			z3ram_ena <= ziiiram_active;
+			z3ram2_ena <= ziiiram2_active;
+			z3ram3_ena <= ziiiram3_active;
+			slow_config_d <= slow_config;
 
-host_req<=host_req_r;
-akiko_d <= w_datatg68;
+			overclock_d <= overclock;
+			turbochip_d <= turbochipram;
+			turbokick_d <= turbokick;
+			turboslow_d <= turbochipram;
+
+			cacheline_clr <= (turbochipram XOR turbochip_d) or (turbokick XOR turbokick_d);
+		end if;
+	end if;
+end process;
 
 u_akiko: akiko
 port map
 (
-    clk => clk,
-    reset_n => reset,
-    addr => cpuaddr(5 downto 0),
-    wr => akiko_wr,
-    req => akiko_req,
-    ack => akiko_ack,
-    d => akiko_d,
-    q => akiko_q
+	clk => clk,
+	reset_n => reset,
+	addr => cpuaddr(5 downto 0),
+	wr => akiko_wr,
+	req => akiko_req,
+	ack => akiko_ack,
+	d => akiko_d,
+	q => akiko_q
 );
 
 akiko_req <= '1' when sel_akiko_d='1' and slower(0)='0' and (cpu_write='1' or cpu_read='1') else '0';
 akiko_wr <= '1' when cpu_write='1' else '0';
+akiko_d <= w_datatg68;
 
---process(clk,cpuaddr) begin
---	if rising_edge(clk) then
---		if akiko_ack_d='1' and clkena='1' then
---			akiko_req<='0';
---			akiko_wr<='0';
---        elsif sel_akiko='1' and slower(1)='0' and (cpu_write='1' or cpu_read='1') then
---			akiko_req<='1';
---            if cpu_write='1' then
---                akiko_wr<='1';
---            end if;
---		end if;
---	end if;
---end process;
+host_req <= '1' when sel_host_d='1' and slower(0)='0' and (cpu_write='1' or cpu_read='1') else '0';
+host_wr <= '1' when cpu_write='1' else '0';
+host_d <= w_datatg68;
 
 buslogic : block
 	signal throttle         : std_logic_vector(2 downto 0);
 	signal chipset_cycle    : std_logic;
-	SIGNAL vpad             : std_logic;
-	SIGNAL waitm            : std_logic;
-	SIGNAL S_state          : std_logic_vector(1 downto 0);
-	SIGNAL vmaena           : std_logic;
-	SIGNAL eind             : std_logic;
-	SIGNAL eindd            : std_logic;
-	TYPE   sync_states      IS (sync0, sync1, sync2, sync3, sync4, sync5, sync6, sync7, sync8, sync9);
-	SIGNAL sync_state       : sync_states;
+	signal vpad             : std_logic;
+	signal waitm            : std_logic;
+	signal S_state          : std_logic_vector(1 downto 0);
+	signal vmaena           : std_logic;
+	signal eind             : std_logic;
+	signal eindd            : std_logic;
+	type   sync_states      is (sync0, sync1, sync2, sync3, sync4, sync5, sync6, sync7, sync8, sync9);
+	signal sync_state       : sync_states;
 	signal sel_chip_d       : std_logic;
 	signal fast_rd_d        : std_logic;
-	signal clkena_pre		: std_logic;
+	signal clkena_pre       : std_logic;
 begin
-
---	process(clk) begin
---		if rising_edge(clk) then
---			clkena_pre <= '0';
---			if clkena='0' and ((slower(2)='0' and cpu_internal='1') or (slower(1)='0' and (sel_undecoded_d='1' or akiko_ack='1'))) then
---				clkena_pre <= '1';
---			end if;
---		end if;
---	end process;
-
---	clkena <= '1' WHEN clkena_pre='1' or (slower(0)='0' and
-    clkena_akiko <= '1' WHEN akiko_ack='1' AND slower(0)='0' ELSE '0';
-    clkena <=  clkena_akiko WHEN akiko_req='1' ELSE
-               '1' WHEN slower(0)='0' and
-                ((clkena_in='1' and ((ena7RDreg='1' AND clkena_e='1') OR (ena7WRreg='1' AND clkena_f='1') or fast_rd='1')) OR
-                 cpu_internal='1' or sel_undecoded_d='1' or (ramready='1' and block_turbo='0')) ELSE '0';
+	clkena <= '1' when slower(0)='0' and
+			((clkena_in='1' and ((ena7RDreg='1' and clkena_e='1') or (ena7WRreg='1' and clkena_f='1') or fast_rd='1')) or
+			cpu_internal='1' or sel_undecoded_d='1' or akiko_ack='1' or host_ack_d='1' or (ramready='1' and block_turbo='0')) else '0';
 
 	-- AMR - attempt to imitate A1200 speed more closely on chipram fetches:
 	-- Perform throttling of the CPU depending on turbo mode:  (Temporary mapping for evaluation)
@@ -563,28 +538,27 @@ begin
 	--   For compatibility, C00000 RAM should probably run at chip RAM speeds
 	--   Fast RAM should perhaps be throttled in Chip (i.e. A1200) mode, but not otherwise?
 
-	PROCESS (clk) BEGIN
-		IF rising_edge(clk) THEN
-			IF (reset='0' OR nResetOut='0' OR usethrottle=0) THEN
+	process (clk) begin
+		if rising_edge(clk) then
+			if (reset='0' or nResetOut='0' or usethrottle=0) then
 				throttle_sel <= "00";
 			elsif clkena='1' then
 				-- If throttling is enabled, block turbo for CPU data reads, and instruction fetch if cache is disabled.
 				throttle_sel(0) <= freeze or (turbochipram xor turbokick);
 				throttle_sel(1) <= freeze or (turbochipram and not turbokick);
-			END IF;
+			end if;
 --			sel_chip_d  <= sel_chip;
 			-- All contributing signals are valid 3 clocks after clkena, so valid after clkena+4
 			block_turbo <= aga and sel_chip and throttle_sel(0) and (cpu_read or (cpu_fetch and cpu_disablecache));
 --			cache_inhibit <= sel_kickram and aga and (throttle_sel(1) or throttle_sel(0));
-
-		END IF;
-	END PROCESS;
+		end if;
+	end process;
 
 	cache_inhibit <= '0';
 
 	process (clk) begin
 		if rising_edge(clk) then
-			if (reset='0' OR nResetOut='0' OR usethrottle=0 OR overclock_d='1') then
+			if (reset='0' or nResetOut='0' or usethrottle=0 or overclock_d='1') then
 				throttle <= "000";
 			elsif (clkena='1' or freeze='1') and cpu_write='0' and block_turbo='0' then
 				if throttle_sel(1)='1' or (sel_chip='1' and throttle_sel(0)='1') then
@@ -596,58 +570,56 @@ begin
 		end if;
 	end process;
 
-	PROCESS (clk) BEGIN
-		IF rising_edge(clk) THEN
-            if (reset='0' OR nResetOut='0') THEN
-					slower <= (others => '1');
-            elsif clkena='1' THEN
-				IF overclock_d='1' THEN
+	process (clk) begin
+		if rising_edge(clk) then
+			if (reset='0' or nResetOut='0') then
+				slower <= (others => '1');
+			elsif clkena='1' then
+				if overclock_d='1' then
 					slower <= "0011";
-				ELSE
+				else
 					slower <= throttle_sel(0)&"111"; -- AMR - in Turbo Chip and Kick modes allow one extra cycle for block_turbo etc to propagate
-				END IF;
-			ELSE
---				slower<= '0'&slower(slower'high downto 1);
-				slower<= (aga and throttle(0))&slower(slower'high downto 1); -- enaWRreg&slower(3 downto 1);
-			END IF;
-		END IF;
-	END PROCESS;
+				end if;
+			else
+				slower <= (aga and throttle(0))&slower(slower'high downto 1); -- enaWRreg&slower(3 downto 1);
+			end if;
+		end if;
+	end process;
 
 	-- Block_turbo is only valid on the 4th cycle after clkena, but is only high when throttling is enabled, at which point
 	-- slower(0) is guaranteed to be high for more than 4 cycles.
 	-- When throttling chip-only cycles, block_turbo and sel_nmi_vector will prevent ram_cs going low, so their being late here shouldn't matter.
-	chipset_cycle <= '1' when cpu_internal='0' and clkena_in='1' and slower(0)='0' and (sel_ram='0' OR sel_nmi_vector='1' or block_turbo='1')
-		 and sel_gayle_ide='0' AND sel_akiko='0' and sel_undecoded_d='0' else '0';
+	chipset_cycle <= '1' when cpu_internal='0' and clkena_in='1' and slower(0)='0' and (sel_ram='0' or sel_nmi_vector='1' or block_turbo='1')
+		 and sel_gayle_ide='0' and sel_akiko='0' and sel_host='0' and sel_undecoded_d='0' else '0';
 
-	PROCESS (clk) BEGIN
-	  IF rising_edge(clk) THEN
-		IF ena7WRreg='1' THEN
-		  eind <= ein;
-		  eindd <= eind;
-		  CASE sync_state IS
-			WHEN sync0  => sync_state <= sync1;
-			WHEN sync1  => sync_state <= sync2;
-			WHEN sync2  => sync_state <= sync3;
-			WHEN sync3  => sync_state <= sync4;
-					 vma <= vpa;
-			WHEN sync4  => sync_state <= sync5;
-			WHEN sync5  => sync_state <= sync6;
-			WHEN sync6  => sync_state <= sync7;
-			WHEN sync7  => sync_state <= sync8;
-			WHEN sync8  => sync_state <= sync9;
-			WHEN OTHERS => sync_state <= sync0;
-					 vma <= '1';
-		  END CASE;
-		  IF eind='1' AND eindd='0' THEN
-			sync_state <= sync7;
-		  END IF;
-		END IF;
-	  END IF;
-	END PROCESS;
+	process (clk) begin
+		if rising_edge(clk) then
+			if ena7WRreg='1' then
+				eind <= ein;
+				eindd <= eind;
+				case sync_state is
+					when sync0  => sync_state <= sync1;
+					when sync1  => sync_state <= sync2;
+					when sync2  => sync_state <= sync3;
+					when sync3  => sync_state <= sync4;
+							 vma <= vpa;
+					when sync4  => sync_state <= sync5;
+					when sync5  => sync_state <= sync6;
+					when sync6  => sync_state <= sync7;
+					when sync7  => sync_state <= sync8;
+					when sync8  => sync_state <= sync9;
+					when others => sync_state <= sync0;
+							 vma <= '1';
+				end case;
+				if eind='1' and eindd='0' then
+					sync_state <= sync7;
+				end if;
+			end if;
+		end if;
+	end process;
 
-	PROCESS (clk, reset)
-	BEGIN
-		IF reset='0' THEN
+	process (clk, reset) begin
+		if reset='0' then
 			S_state <= "00";
 			as <= '1';
 			rw <= '1';
@@ -657,17 +629,17 @@ begin
 			lds2 <= '1';
 			clkena_e <= '0';
 			clkena_f <= '0';
-			addr<=(others=>'0');
-			fast_rd<='0';
-			r_data<=(others=>'0');
-			data_write<=(others=>'0');
-			data_write2<=(others=>'0');
-		ELSIF rising_edge(clk) THEN
-			IF S_state = "01" AND clkena_e = '1' THEN
+			addr <= (others => '0');
+			fast_rd <= '0';
+			r_data <= (others => '0');
+			data_write <= (others => '0');
+			data_write2 <= (others => '0');
+		elsif rising_edge(clk) then
+			if S_state="01" and clkena_e='1' then
 				uds2 <= uds_in;
 				lds2 <= lds_in;
 				data_write2 <= w_datatg68;
-			END IF;
+			end if;
 
 			-- AMR - Fast chipset path for Gayle
 			if slower(0)='0' and clkena_in='1' and sel_gayle_ide='1' and S_state="00" then
@@ -685,76 +657,74 @@ begin
 
 			-- Regular chipset path
 
-			IF ena7WRreg='1' THEN
-				CASE S_state IS
-					WHEN "00" =>
-						IF cpu_internal='0' AND chipset_cycle='1' THEN
+			if ena7WRreg='1' then
+				case S_state is
+					when "00" =>
+						if cpu_internal='0' and chipset_cycle='1' then
 							uds <= uds_in;
 							lds <= lds_in;
 							uds2 <= '1';
 							lds2 <= '1';
 							as <= '0';
-							rw <= wr;
+							rw <= wr_n;
 							data_write <= w_datatg68;
 							addr <= cpuaddr;
-							IF aga = '1' AND cpu(1) = '1' AND longword = '1' AND cpu_write = '1' AND cpuaddr(1 downto 0) = "00" AND sel_chip = '1' THEN
+							if aga='1' and cpu(1)='1' and longword='1' and cpu_write='1' and cpuaddr(1 downto 0)="00" and sel_chip='1' then
 								-- 32 bit write
 								clkena_e <= '1';
-							END IF;
+							end if;
 							S_state <= "01";
-						END IF;
-					WHEN "01" =>
+						end if;
+					when "01" =>
 						clkena_e <= '0';
 						S_state <= "10";
-					WHEN "10" =>
-						IF waitm='0' OR (vma='0' AND sync_state=sync9) THEN
+					when "10" =>
+						if waitm='0' or (vma='0' and sync_state=sync9) then
 							S_state <= "11";
-						END IF;
-					WHEN "11" =>
-						IF clkena_f = '1' THEN
+						end if;
+					when "11" =>
+						if clkena_f='1' then
 							clkena_f <= '0';
 							r_data <= data_read2;
-						END IF;
-					WHEN OTHERS => null;
-				END CASE;
-			ELSIF ena7RDreg='1' THEN
+						end if;
+					when others => null;
+				end case;
+			elsif ena7RDreg='1' then
 				clkena_f <= '0';
-				CASE S_state IS
-					WHEN "00" =>
+				case S_state is
+					when "00" =>
 						cpuIPL <= IPL;
-					WHEN "01" =>
-					WHEN "10" =>
+					when "01" =>
+					when "10" =>
 						cpuIPL <= IPL;
 						waitm <= dtack;
-					WHEN "11" =>
+					when "11" =>
 						as <= '1';
 						rw <= '1';
 						uds <= '1';
 						lds <= '1';
 						uds2 <= '1';
 						lds2 <= '1';
-						IF clkena_e = '0' THEN
+						if clkena_e='0' then
 							r_data <= data_read;
-						END IF;
+						end if;
 
 						clkena_e <= '1';
 						-- AMR - can't do 32-bit read when reading NMI vector
-						IF aga = '1' AND sel_nmi_vector='0' and cpu(1) = '1' AND longword = '1' AND state(0) = '0' AND cpuaddr(1 downto 0) = "00" AND (sel_chip = '1' OR sel_kick = '1') THEN
+						if aga='1' and sel_nmi_vector='0' and cpu(1)='1' and longword='1' and state(0)='0' and cpuaddr(1 downto 0)="00" and (sel_chip='1' or sel_kick='1') then
 							-- 32 bit read
 							clkena_f <= '1';
-						END IF;
-						IF clkena = '1' THEN
+						end if;
+						if clkena='1' then
 							S_state <= "00";
 							clkena_e <= '0';
-						END IF;
-					WHEN OTHERS => null;
-				END CASE;
-			END IF;
-		END IF;
-	END PROCESS;
-
+						end if;
+					when others => null;
+				end case;
+			end if;
+		end if;
+	end process;
 end block;
-
 
 genprofiler : if useprofiler=1 generate
 	profiler : component profile_cpu
@@ -770,4 +740,5 @@ genprofiler : if useprofiler=1 generate
 	);
 end generate;
 
-END;
+end;
+-- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:
