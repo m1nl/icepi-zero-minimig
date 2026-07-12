@@ -90,6 +90,9 @@ generic map (
 	dualthread => false,
 	forwarding => false,
 	prefetch => false,
+    multiplier => true,
+--  inserting additional waitstate helps with timing closure
+    multiplier_waitstate => true,
 	debug => true
 )
 port map(
@@ -131,6 +134,8 @@ generic map (
 	dualthread => false,
 	forwarding => false,
 	prefetch => false,
+    multiplier => true,
+    multiplier_waitstate => true,
 	debug => false
 )
 port map(
