@@ -243,14 +243,12 @@ always @ (posedge clk) begin
     bpl_bankwr_buf <= ~bpl_bankrd_buf;
 
     // set number of banks to be read according to fmode
-    if (selbpl0) begin
-      case(fmode[1:0])
-        2'b11   : bpl_bankrd_num <= 0;
-        2'b10,
-        2'b01   : bpl_bankrd_num <= 4;
-        default : bpl_bankrd_num <= 2;
-      endcase
-    end
+    case(fmode[1:0])
+      2'b11   : bpl_bankrd_num <= 0;
+      2'b10,
+      2'b01   : bpl_bankrd_num <= 4;
+      default : bpl_bankrd_num <= 2;
+    endcase
   end
 
   if (ld_start) begin
