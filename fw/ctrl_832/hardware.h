@@ -71,7 +71,7 @@
 // On read:
 //   Bit 0 -> menu button
 //   Bit 1 -> 32meg supported
-//   Bit 8 -> Reconfig supportred 
+//   Bit 8 -> Reconfig supportred
 
 #define PLATFORM (*(volatile unsigned short *)0x0fffffc2)
 #define PLATFORM_MENUBUTTON 0
@@ -82,6 +82,7 @@
 #define PLATFORM_CLOCKPORT 5
 #define PLATFORM_C64CARTRIDGE 6
 #define PLATFORM_HRTMONCART 7
+#define PLATFORM_VIDEO_FILTER 8
 
 // On write:
 //   Bit 0 -> Scandoubler enable

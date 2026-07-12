@@ -1,0 +1,5 @@
+*.asm
+*.bin
+*.map
+version.h
+

@@ -92,8 +92,6 @@ entity cfide is
 		joya : out std_logic_vector(11 downto 0);
 		joyb : out std_logic_vector(11 downto 0);
 
-		joy_invert : out std_logic := '0';
-
 		-- 28Mhz signals
 		clk_28	: in std_logic;
 		tick_in : in std_logic	-- 44.1KHz - makes it easy to keep timer in lockstep with audio.

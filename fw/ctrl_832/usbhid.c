@@ -142,7 +142,7 @@ static void usbhid_handleport(int port) {
         else
             usbhid_handlemouse(pkt);
 
-    } else if (typ == GAMEPAD && (config.autofire & 0x4) == 0) { // do map joystick in CD32 mode
+    } else if (typ == GAMEPAD && (config.joystick & 0x4) == 0) { // do map joystick in CD32 mode
         usbhid_handlegamepad(port, status);
     } else {
         DBG("HID port %d: ignoring typ=%d\n", port, typ);

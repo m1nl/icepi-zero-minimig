@@ -886,18 +886,16 @@ void ConfigMemory(unsigned char memory)
 void ConfigCPU(unsigned char cpu)
 {
     EnableOsd();
-    //SPI(OSDCMDCFGCPU | (cpu & 0x03));					//CPU
     SPI(OSD_CMD_CPU);
-    SPI(cpu & 0x0f);
+    SPI(cpu);
     DisableOsd();
 }
 
 void ConfigChipset(unsigned char chipset)
 {
     EnableOsd();
-    //SPI(OSDCMDCFGCHP | (chipset & 0x0F));
     SPI(OSD_CMD_CHIP);
-    SPI(chipset & 0x1f);
+    SPI(chipset);
     DisableOsd();
 }
 
@@ -927,12 +925,11 @@ void ConfigIDE(unsigned char gayle, unsigned char master, unsigned char slave)
 }
 
 
-void ConfigAutofire(unsigned char autofire)
+void ConfigJoystick(unsigned char joystick)
 {
     EnableOsd();
-    //SPI(OSDCMDAUTOFIRE | (autofire & 0x03));
     SPI(OSD_CMD_JOY);
-    SPI(autofire);
+    SPI(joystick);
     DisableOsd();
 }
 

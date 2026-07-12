@@ -85,11 +85,10 @@ const char *config_cpu_msg[] = {"68000 ", "68010", "68EC020","68020"};
 const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4"};
 const char *config_chipset_msg[] = {"OCS-A500", "OCS-A1000", "ECS", "---", "---", "---", "AGA", "---"};
 const char *config_turbo_msg[] = {"\004\005\005\005\005\006", "\007\007\005\005\005\006", "\007\007\007\007\005\006", "\007\007\007\007\007\007"};
-const char *config_cd32pad_msg[] =  {"OFF", "ON"};
 
 char *config_autofire_msg[] = {"        AUTOFIRE OFF", "        AUTOFIRE FAST", "        AUTOFIRE MEDIUM", "        AUTOFIRE SLOW"};
 
-enum HelpText_Message {HELPTEXT_NONE,HELPTEXT_MAIN,HELPTEXT_HARDFILE,HELPTEXT_CHIPSET,HELPTEXT_MEMORY,HELPTEXT_VIDEO};
+enum HelpText_Message {HELPTEXT_NONE,HELPTEXT_MAIN,HELPTEXT_HARDFILE,HELPTEXT_CHIPSET,HELPTEXT_MEMORY,HELPTEXT_VIDEO,HELPTEXT_INPUT};
 const char *helptexts[]={
 	0,
 	"                                Welcome to Minimig!  Use the cursor keys to navigate the menus.  Use space bar or enter to select an item.  Press Esc or F12 to exit the menus.  Joystick emulation on the numeric keypad can be toggled with the numlock key, while pressing Ctrl-Alt-0 (numeric keypad) toggles autofire mode.",
@@ -101,6 +100,7 @@ const char *helptexts[]={
 	"                                Minimig can make use of up to 2 megabytes of Chip RAM, up to 1.5 megabytes of Slow RAM (A500 Trapdoor RAM), and up to 28 megabytes of true Fast RAM.  To use the HRTMon feature you will need an appropriate ROM file on the SD card.  To activate the monitor hold Ctrl and press the Pause key.",
 #endif
 	"                                Minimig's video features include a blur filter, to simulate the poorer picture quality on older monitors, and also scanline generation to simulate the appearance of a screen with low vertical resolution.",
+	"                                Minimig can emulate a CD32 controller pad on joystick port 1.",
 	0
 };
 
@@ -110,8 +110,6 @@ void ColdBoot();
 void (*confirmfunc)();
 
 extern unsigned char DEBUG;
-
-unsigned char config_autofire = 0;
 
 // file selection menu variables
 char *fs_pFileExt = NULL;
@@ -193,6 +191,7 @@ void HandleUI(void)
 	static long helptext_timer;
 	static const char *helptext;
 	static char helpstate=0;
+	static char osd_item;
 
     // get user control codes
     c = OsdGetCtrl();
@@ -252,11 +251,10 @@ void HandleUI(void)
         {
             if (menustate == MENU_NONE2 || menustate == MENU_INFO)
             {
-                config_autofire++;
-                config_autofire &= 3;
-                ConfigAutofire(config_autofire);
+                config.joystick = (config.joystick & ~0x03) | ((config.joystick + 1) & 0x03);
+                ConfigJoystick(config.joystick);
                 if (menustate == MENU_NONE2 || menustate == MENU_INFO)
-                    InfoMessage(config_autofire_msg[config_autofire]);
+                    InfoMessage(config_autofire_msg[config.joystick & 0x03]);
             }
         }
         break;
@@ -574,19 +572,24 @@ void HandleUI(void)
         /* second part of the main menu                                   */
         /******************************************************************/
     case MENU_MAIN2_1 :
+        osd_item = 0;
+        menumask = 0x6f;
         OsdColor(OSDCOLOR_TOPLEVEL);
 		helptext=helptexts[HELPTEXT_MAIN];
-		menumask=0x3f;
  		OsdSetTitle("Settings",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
-        OsdWrite(0, "    load configuration", menusub == 0,0);
-        OsdWrite(1, "    save configuration", menusub == 1,0);
-        OsdWrite(2, "", 0,0);
-        OsdWrite(3, "    chipset settings \x16", menusub == 2,0);
-        OsdWrite(4, "     memory settings \x16", menusub == 3,0);
-        OsdWrite(5, "      video settings \x16", menusub == 4,0);
-        OsdWrite(6, "", 0,0);
-        OsdWrite(7, STD_EXIT, menusub == 5,0);
-
+        OsdWrite(osd_item++, "    load configuration", menusub == 0,0);
+        OsdWrite(osd_item++, "    save configuration", menusub == 1,0);
+        OsdWrite(osd_item++, "", 0,0);
+        OsdWrite(osd_item++, "    chipset settings \x16", menusub == 2,0);
+        OsdWrite(osd_item++, "     memory settings \x16", menusub == 3,0);
+        if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+            menumask |= 0x10;
+            OsdWrite(osd_item++, "      video settings \x16", menusub == 4,0);
+        }
+        OsdWrite(osd_item++, "      input settings \x16", menusub == 5,0);
+        for (; osd_item < 7; osd_item++)
+          OsdWrite(osd_item, "", 0,0);
+        OsdWrite(osd_item, STD_EXIT, menusub == 6,0);
 		parentstate = menustate;
         menustate = MENU_MAIN2_2;
         break;
@@ -622,6 +625,11 @@ void HandleUI(void)
                 menusub = 0;
             }
             else if (menusub == 5)
+            {
+                menustate = MENU_SETTINGS_INPUT1;
+                menusub = 0;
+            }
+            else if (menusub == 6)
                 menustate = MENU_NONE1;
         }
         else if (left)
@@ -1196,39 +1204,22 @@ void HandleUI(void)
 		parentstate = menustate;
 		menumask=0x3f;
  		OsdSetTitle("Chipset",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
-
-#if 0
-        OsdWrite(0, "", 0,0);
-        strcpy(s, "         CPU : ");
-//        strcat(s, config.chipset & CONFIG_TURBO ? "turbo" : "normal");
-        strcat(s, config_cpu_msg[config.cpu & 0x03]);
-        OsdWrite(1, s, menusub == 0,0);
-        strcpy(s, "       Video : ");
-        strcat(s, config.chipset & CONFIG_NTSC ? "NTSC" : "PAL");
-        OsdWrite(2, s, menusub == 1,0);
-        strcpy(s, "     Chipset : ");
-        strcat(s, config_chipset_msg[config.chipset >> 2 & 3]);
-        OsdWrite(3, s, menusub == 2,0);
-        OsdWrite(4, "", 0,0);
-        OsdWrite(5, "", 0,0);
-        OsdWrite(6, "", 0,0);
-#endif
 		OsdWrite(0, "", 0,0);
 		strcpy(s, "         CPU : ");
-		strcat(s, config_cpu_msg[config.cpu & 0x03]);
+		strcat(s, config_cpu_msg[config.cpu & 0x3]);
 		OsdWrite(1, s, menusub == 0,0);
 		strcpy(s, "       Turbo : ");
-		strcat(s, config_turbo_msg[(config.cpu >> 2) & 0x03]);
+		strcat(s, config_turbo_msg[(config.cpu >> 2) & 0x3]);
 		OsdWrite(2, s, menusub == 1,0);
 		strcpy(s, "       Video : ");
 		strcat(s, config.chipset & CONFIG_NTSC ? "NTSC" : "PAL");
-		OsdWrite(3, s, menusub == 2,1);
+		OsdWrite(3, s, menusub == 2,0);
 		strcpy(s, "     Chipset : ");
 		strcat(s, config_chipset_msg[(config.chipset >> 2) & 7]);
 		OsdWrite(4, s, menusub == 3,0);
-		strcpy(s, "     CD32Pad : ");
-		strcat(s, config_cd32pad_msg[(config.autofire >> 2) & 1]);
-		OsdWrite(5, s, menusub == 4,1);
+		strcpy(s, "   Overclock : ");
+		strcat(s, config_on_off_msg[(config.cpu >> 4) & 0x1]);
+		OsdWrite(5, s, menusub == 4,0);
 		OsdWrite(6, "", 0,0);
 
         OsdWrite(7, STD_BACK, menusub == 5,0);
@@ -1254,14 +1245,11 @@ void HandleUI(void)
         {
             if (menusub == 0)
             {
-				int cpu=(config.cpu+1)&3;
-                menustate = MENU_SETTINGS_CHIPSET1;
-				
-//                if(cpu==2)
-//					++cpu;
-				config.cpu&=~3;
-				config.cpu|=cpu;
-                ConfigCPU(config.cpu);
+				int _config_cpu = config.cpu & 0x3;
+				menustate = MENU_SETTINGS_CHIPSET1;
+				_config_cpu += 1;
+				config.cpu = (config.cpu & ~0x3) | (_config_cpu & 0x3);
+				ConfigCPU(config.cpu);
 
             }
 			else if (menusub == 1)
@@ -1269,14 +1257,14 @@ void HandleUI(void)
 				int _config_turbo = (config.cpu >> 2) & 0x3;
 				menustate = MENU_SETTINGS_CHIPSET1;
 				_config_turbo += 1;
-				config.cpu = (config.cpu & 0x3) | ((_config_turbo & 0x3) << 2);
+				config.cpu = (config.cpu & ~0xc) | ((_config_turbo & 0x3) << 2);
 				ConfigCPU(config.cpu);
 			}
             else if (menusub == 2)
             {
-                config.chipset ^= CONFIG_NTSC;
-                menustate = MENU_SETTINGS_CHIPSET1;
-                ConfigChipset(config.chipset);
+			config.chipset ^= CONFIG_NTSC;
+			menustate = MENU_SETTINGS_CHIPSET1;
+			ConfigChipset(config.chipset);
             }
             else if (menusub == 3)
             {
@@ -1300,10 +1288,10 @@ void HandleUI(void)
             }
             else if (menusub == 4)
             {
-				/* CD32 pad */
-				// config.autofire  = (config.autofire + 4) & 0x7;
-				// menustate = MENU_SETTINGS_CHIPSET1;
-				// ConfigAutofire(config.autofire);
+				/* overclock */
+				config.cpu ^= 0x10;
+				menustate = MENU_SETTINGS_CHIPSET1;
+				ConfigCPU(config.cpu);
             }
             else if (menusub == 5)
             {
@@ -1324,7 +1312,7 @@ void HandleUI(void)
         }
         else if (left)
         {
-            menustate = MENU_SETTINGS_VIDEO1;
+            menustate = MENU_SETTINGS_INPUT1;
             menusub = 0;
         }
         break;
@@ -1335,7 +1323,7 @@ void HandleUI(void)
     case MENU_SETTINGS_MEMORY1 :
         OsdColor(OSDCOLOR_SUBMENU);
 		helptext=helptexts[HELPTEXT_MEMORY];
-		menumask=0x3f;
+		menumask=0x2f;
 		parentstate=menustate;
 
  		OsdSetTitle("Memory",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
@@ -1363,6 +1351,7 @@ void HandleUI(void)
 			strcpy(s, "      HRTmon: ");
 			strcat(s, (config.memory&0x40) ? "enabled " : "disabled");
 			OsdWrite(5, s, menusub == 4,0);
+			menumask|=0x10;
 		}
 		else
 			OsdWrite(5, "", 0,0);
@@ -1422,7 +1411,10 @@ void HandleUI(void)
         }
         else if (right)
         {
-            menustate = MENU_SETTINGS_VIDEO1;
+            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER))
+                menustate = MENU_SETTINGS_VIDEO1;
+            else
+                menustate = MENU_SETTINGS_INPUT1;
             menusub = 0;
         }
         else if (left)
@@ -1826,7 +1818,6 @@ void HandleUI(void)
 		menumask=0x1f;
 		parentstate=menustate;
 		helptext=helptexts[HELPTEXT_VIDEO];
- 
 		OsdSetTitle("Video",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
         OsdWrite(0, "", 0,0);
         strcpy(s, "   Lores Filter : ");
@@ -1901,12 +1892,89 @@ void HandleUI(void)
         }
         else if (right)
         {
-            menustate = MENU_SETTINGS_CHIPSET1;
+            menustate = MENU_SETTINGS_INPUT1;
             menusub = 0;
         }
         else if (left)
         {
             menustate = MENU_SETTINGS_MEMORY1;
+            menusub = 0;
+        }
+        break;
+
+        /******************************************************************/
+        /* input settings menu                                            */
+        /******************************************************************/
+    case MENU_SETTINGS_INPUT1 :
+        OsdColor(OSDCOLOR_SUBMENU);
+        helptext=helptexts[HELPTEXT_INPUT];
+        parentstate=menustate;
+        menumask=0x07;
+        OsdSetTitle("Input",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
+        OsdWrite(0, "", 0,0);
+        strcpy(s, "     CD32 Pad : ");
+        strcat(s, config_on_off_msg[(config.joystick >> 2) & 1]);
+        OsdWrite(1, s, menusub == 0,0);
+        strcpy(s, "   Joy Invert : ");
+        strcat(s, config_on_off_msg[(config.joystick >> 4) & 1]);
+        OsdWrite(2, s, menusub == 1,0);
+        OsdWrite(3, "", 0,0);
+        OsdWrite(4, "", 0,0);
+        OsdWrite(5, "", 0,0);
+        OsdWrite(6, "", 0,0);
+        OsdWrite(7, STD_BACK, menusub == 2,0);
+        menustate = MENU_SETTINGS_INPUT2;
+        break;
+
+    case MENU_SETTINGS_INPUT2 :
+        if (select)
+        {
+            if (menusub == 0)
+            {
+				/* CD32 Pad */
+				config.joystick ^= (1 << 2);
+                menustate = MENU_SETTINGS_INPUT1;
+				ConfigJoystick(config.joystick);
+            }
+            if (menusub == 1)
+            {
+				/* Joy Invert */
+				config.joystick ^= (1 << 4);
+                menustate = MENU_SETTINGS_INPUT1;
+				ConfigJoystick(config.joystick);
+            }
+            else if (menusub == 2)
+            {
+                menustate = MENU_MAIN2_1;
+                if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+                    menusub = 5;
+                } else {
+                    menusub = 4;
+                }
+            }
+        }
+
+        if (menu)
+        {
+            menustate = MENU_MAIN2_1;
+            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+                menusub = 5;
+            } else {
+                menusub = 4;
+            }
+        }
+        else if (right)
+        {
+            menustate = MENU_SETTINGS_CHIPSET1;
+            menusub = 0;
+        }
+        else if (left)
+        {
+            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+                menustate = MENU_SETTINGS_VIDEO1;
+            } else {
+                menustate = MENU_SETTINGS_MEMORY1;
+            }
             menusub = 0;
         }
         break;

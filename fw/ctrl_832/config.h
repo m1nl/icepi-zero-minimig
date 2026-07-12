@@ -51,7 +51,7 @@ typedef struct
     unsigned char cpu;
 	unsigned char fastram;	// Contains fast mem (bit 0 & 1) and turbo chipram (bit 7) settings.
 	unsigned char kick13patch;
-	unsigned char autofire;
+	unsigned char joystick;
     kickstartTYPE extrom;		// Added in V2 config
 	unsigned char drivesounds;	// Added in V3 config
 	unsigned char pad1;
@@ -66,7 +66,7 @@ typedef struct
 extern fileTYPE file;	// Temporary file available for use by other modules, to avoid repeated memory usage.
 						// Shouldn't be considered persistent.
 
-extern configTYPE config; 
+extern configTYPE config;
 extern char DebugMode;
 
 int UploadKickstart(unsigned long dir,char *name);
