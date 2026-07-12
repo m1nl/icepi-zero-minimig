@@ -296,10 +296,10 @@ BLOCK PATH TO PORT "led[*]";
 
 BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_0/typ[*]";
 BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_1/typ[*]";
+BLOCK PATH FROM CELL "virtual_top/minimig/ide_config*";
 BLOCK PATH FROM CELL "virtual_top/minimig/chipset_config*";
-BLOCK PATH FROM CELL "virtual_top/minimig/cpu_config_reg*";
-BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/beamcon0_reg*";
-BLOCK PATH FROM CELL "virtual_top/tg68_rst_sync";
+BLOCK PATH FROM CELL "virtual_top/minimig/cpu_config*";
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/beamcon0*";
 
 BLOCK RESETPATHS ;
 BLOCK ASYNCPATHS ;
@@ -308,7 +308,7 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/cache/*" 3X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/sdram/cache/*" 3X ;
 
@@ -319,16 +319,16 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "vir
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/cache/*" 3X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write[*]" TO CELL "virtual_top/sdram/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write[*]" TO CELL "virtual_top/sdram/cache/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/cache/*" 3X ;
 
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/data_write*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/ALU/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/sdram/*" 4X ;
-MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regblock.regfile_ebr/*" TO CELL "virtual_top/sdram/cache/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/data_write*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/ALU/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/sdram/cache/*" 3X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "*" 3X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/minimig/CPU1/*" 3X ;
@@ -338,17 +338,28 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/cach
 # MULTICYCLE FROM CELL "virtual_top/tg68k/myakiko/c2p.myc2p/rdptr*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 2X ;
 # MULTICYCLE FROM CELL "virtual_top/tg68k/myakiko/c2p.myc2p/buf*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 2X ;
 
-MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2 X ;
-MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2 X ;
-MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2 X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 3X ;
+
+MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+
 MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "clk_sys" 2X ;
 
-# INPUT_SETUP PORT "usb_dp[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# INPUT_SETUP PORT "usb_dp[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# INPUT_SETUP PORT "usb_dn[1]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# INPUT_SETUP PORT "usb_dn[0]" INPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-
-# CLOCK_TO_OUT PORT "usb_dp[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# CLOCK_TO_OUT PORT "usb_dp[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# CLOCK_TO_OUT PORT "usb_dn[1]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
-# CLOCK_TO_OUT PORT "usb_dn[0]" OUTPUT_DELAY 0.150000 ns CLKNET "auxclks[0]" ;
+CLOCK_TO_OUT PORT "sdram_csn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_a*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_dq*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_wen*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_rasn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_casn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_cke*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_ba*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_dqm*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
