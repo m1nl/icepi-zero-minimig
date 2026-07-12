@@ -769,7 +769,7 @@ assign _ram_oe=1'b1;
 assign _ram_we=1'b1;
 `else
 
-minimig #(.ntscswitch(haventscswitch),.useaga(haveaga),.usertg(havertg),.wide_hblank(1'b1)) minimig
+minimig #(.ntscswitch(haventscswitch),.useaga(haveaga),.usertg(havertg),.wide_hblank(0)) minimig
 (
 	// JTAG
 	.sys_tdo(sys_tdo),
