@@ -89,8 +89,8 @@ entity cfide is
 
 		usb_connected : out std_logic_vector(1 downto 0);
 
-		joya : out std_logic_vector(10 downto 0);
-		joyb : out std_logic_vector(10 downto 0);
+		joya : out std_logic_vector(11 downto 0);
+		joyb : out std_logic_vector(11 downto 0);
 
 		joy_invert : out std_logic := '0';
 
@@ -595,6 +595,9 @@ usbblock : block
 	signal usb_game_0 : std_logic_vector(13 downto 0);
 	signal usb_game_1 : std_logic_vector(13 downto 0);
 
+	signal usb_game_0_combined : std_logic;
+	signal usb_game_1_combined : std_logic;
+
 	signal usbreset       : std_logic;
 	signal usbreset_sync1 : std_logic;
 	signal usbreset_sync2 : std_logic;
@@ -610,12 +613,6 @@ usbblock : block
 
 	signal hid_report_0 : std_logic_vector(63 downto 0);
 	signal hid_report_1 : std_logic_vector(63 downto 0);
-
-	signal hid_joy_0 : std_logic_vector(10 downto 0);
-	signal hid_joy_1 : std_logic_vector(10 downto 0);
-
-	signal hid_joy_0_sel_d : std_logic;
-	signal hid_joy_1_sel_d : std_logic;
 
 	component usb_hid_host
 		generic (
@@ -919,7 +916,8 @@ begin
 				else
 					case addr(3 downto 2) is
 						when "00" =>
-							usbtohost_0(31 downto 3) <= (others => '0');
+							usbtohost_0(31 downto 16) <= "00" & usb_game_0;
+							usbtohost_0(15 downto 3) <= (others => '0');
 							usbtohost_0(2 downto 0) <= hid_report_ready_0 & usb_typ_0;
 						when "01" =>
 							usbtohost_0 <= hid_report_0(31 downto 0);
@@ -950,7 +948,8 @@ begin
 				else
 					case addr(3 downto 2) is
 						when "00" =>
-							usbtohost_1(31 downto 3) <= (others => '0');
+							usbtohost_1(31 downto 16) <= "00" & usb_game_1;
+							usbtohost_1(15 downto 3) <= (others => '0');
 							usbtohost_1(2 downto 0) <= hid_report_ready_1 & usb_typ_1;
 						when "01" =>
 							usbtohost_1 <= hid_report_1(31 downto 0);
@@ -964,64 +963,38 @@ begin
 		end if;
 	end process;
 
-	process (sysclk) begin
-		if rising_edge(sysclk) then
-			if usb_typ_0 = "11" then
-				if hid_report_ready_0 = '1' then
-					hid_joy_0 <= not (
-											 usb_game_0(9) &
-											 usb_game_0(13) &
-											 usb_game_0(11) &
-											 usb_game_0(7) &
-											 usb_game_0(6) &
-											 usb_game_0(5) &
-											 usb_game_0(4) &
-											 usb_game_0(2) &
-											 usb_game_0(3) &
-											 usb_game_0(0) &
-											 usb_game_0(1)
-										 );
+	joya <= not (
+		(usb_game_0(8) or usb_game_0_combined) &
+		 usb_game_0(9)  &
+		 usb_game_0(13) &
+		 usb_game_0(11) &
+		 usb_game_0(6)  &
+		 usb_game_0(7)  &
+		 usb_game_0(5)  &
+		 usb_game_0(4)  &
+		(usb_game_0(2) or usb_game_0(10)) &
+		(usb_game_0(3) or usb_game_0(12)) &
+		 usb_game_0(0)  &
+		 usb_game_0(1)
+	) when usb_typ_0 = "11" else (others => '1');
 
-					hid_joy_0_sel_d <= usb_game_0(8);
+	joyb <= not (
+		(usb_game_1(8) or usb_game_1_combined) &
+		 usb_game_1(9)  &
+		 usb_game_1(13) &
+		 usb_game_1(11) &
+		 usb_game_1(6)  &
+		 usb_game_1(7)  &
+		 usb_game_1(5)  &
+		 usb_game_1(4)  &
+		(usb_game_1(2) or usb_game_1(10)) &
+		(usb_game_1(3) or usb_game_1(12)) &
+		 usb_game_1(0)  &
+		 usb_game_1(1)
+	) when usb_typ_1 = "11" else (others => '1');
 
-					if hid_joy_0_sel_d = '0' and usb_game_0(8) = '1' then
-						joy_invert <= not joy_invert;
-					end if;
-				end if;
-			else
-				hid_joy_0 <= (others => '1');
-			end if;
-
-			if usb_typ_1 = "11" then
-				if hid_report_ready_1 = '1' then
-					hid_joy_1 <= not (
-											 usb_game_1(9) &
-											 usb_game_1(13) &
-											 usb_game_1(11) &
-											 usb_game_1(7) &
-											 usb_game_1(6) &
-											 usb_game_1(5) &
-											 usb_game_1(4) &
-											 usb_game_1(2) &
-											 usb_game_1(3) &
-											 usb_game_1(0) &
-											 usb_game_1(1)
-										 );
-
-					hid_joy_1_sel_d <= usb_game_1(8);
-
-					if hid_joy_1_sel_d = '0' and usb_game_1(8) = '1' then
-						joy_invert <= not joy_invert;
-					end if;
-				end if;
-			else
-				hid_joy_1 <= (others => '1');
-			end if;
-		end if;
-	end process;
-
-	joya <= hid_joy_0 when joy_invert = '0' else hid_joy_1;
-	joyb <= hid_joy_1 when joy_invert = '0' else hid_joy_0;
+	usb_game_0_combined <= '1' when usb_game_0(7 downto 4) = "1111" else '0';
+	usb_game_1_combined <= '1' when usb_game_1(7 downto 4) = "1111" else '0';
 
 	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
 	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
