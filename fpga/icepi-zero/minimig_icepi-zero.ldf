@@ -24,10 +24,10 @@
         <Source name="../../rtl/rtg/rtg_video.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
-        <Source name="../../rtl/akiko/cornerturn.vhd" type="VHDL" type_short="VHDL">
+        <Source name="../../rtl/akiko/cornerturn.vhd" type="VHDL" type_short="VHDL" excluded="TRUE">
             <Options/>
         </Source>
-        <Source name="../../rtl/akiko/akiko.vhd" type="VHDL" type_short="VHDL">
+        <Source name="../../rtl/akiko/akiko.vhd" type="VHDL" type_short="VHDL" excluded="TRUE">
             <Options/>
         </Source>
         <Source name="../../rtl/audio/AudioMix.vhd" type="VHDL" type_short="VHDL">
@@ -433,6 +433,9 @@
             <Options/>
         </Source>
         <Source name="../../rtl/lattice/bitplane_ram.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/soc/akiko.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
         <Source name="eightthirtytwo_multicycles.sdc" type="Synplify Design Constraints File" type_short="SDC">

@@ -66,6 +66,7 @@ port(
 	fromram       : in      std_logic_vector(15 downto 0);
 	toram         : out     std_logic_vector(15 downto 0);
 	ramready      : in      std_logic:='0';
+	overclock     : in      std_logic:='0';
 	cpu           : in      std_logic_vector(1 downto 0);
 	ziiram_active : in      std_logic;
 	ziiiram_active : in     std_logic;
@@ -122,23 +123,24 @@ SIGNAL uds_in           : std_logic;
 SIGNAL lds_in           : std_logic;
 SIGNAL state            : std_logic_vector(1 downto 0);
 signal longword         : std_logic;
+SIGNAL clkena_akiko     : std_logic;
 SIGNAL clkena           : std_logic;
 SIGNAL sel_ram          : std_logic;
+SIGNAL ram_req          : std_logic;
 SIGNAL sel_chip         : std_logic;
 SIGNAL sel_chipram      : std_logic;
+SIGNAL overclock_d      : std_logic := '0';
 SIGNAL turbochip_d      : std_logic := '0';
 SIGNAL turbokick_d      : std_logic := '0';
+SIGNAL slow_config_d    : std_logic_vector(1 downto 0);
 SIGNAL turboslow_d      : std_logic := '0';
 SIGNAL slower           : std_logic_vector(3 downto 0);
 signal skipfetch        : std_logic := '0';
 
-signal datatg68_selram  : std_logic;
 SIGNAL datatg68_c       : std_logic_vector(15 downto 0);
 SIGNAL datatg68         : std_logic_vector(15 downto 0);
 SIGNAL w_datatg68       : std_logic_vector(15 downto 0);
-SIGNAL ramcs            : std_logic;
-
-signal ena_32bit        : std_logic;
+SIGNAL ramcs_n          : std_logic;
 
 SIGNAL z2ram_ena        : std_logic;
 SIGNAL z3ram_ena        : std_logic;
@@ -197,6 +199,19 @@ port (
 );
 end component;
 
+component akiko
+port (
+    clk     : in  std_logic;
+    reset_n : in  std_logic;
+    addr    : in  std_logic_vector(5 downto 0);
+    wr      : in  std_logic;
+    req     : in  std_logic;
+    ack     : out std_logic;
+    d       : in  std_logic_vector(15 downto 0);
+    q       : out std_logic_vector(15 downto 0)
+);
+end component;
+
 BEGIN
 
 sel_eth<='0';
@@ -244,32 +259,28 @@ sel_eth<='0';
 	wrd <= wr;
 
 	PROCESS(clk) BEGIN
-		IF rising_edge(clk) THEN
-			z2ram_ena <= ziiram_active;
-			z3ram_ena <= ziiiram_active;
-			z3ram2_ena <= ziiiram2_active;
-			z3ram3_ena <= ziiiram3_active;
-
-			ena_32bit <= cpu(1) and (ziiiram_active or ziiiram2_active or ziiiram3_active); -- Use 32-bit addressing when Zorro III RAM is present, and CPU is 68020
-
+        if rising_edge(clk) THEN
+          IF (reset='0' OR nResetOut='0') THEN
+  			  sel_akiko_d<='0';
+			  ram_req<='0';
+			  sel_undecoded_d<='1';
+          else
 			sel_akiko_d<=sel_akiko;
+			ram_req<=sel_ram AND NOT block_turbo AND NOT sel_nmi_vector AND NOT cpu_internal;
 			sel_undecoded_d<=sel_32 and not sel_ram;
-		END IF;
+  		  END IF;
+        end if;
 	END PROCESS;
 
-	datatg68 <= fromram WHEN datatg68_selram='1' else datatg68_c;
+    datatg68 <= fromram WHEN ram_req='1' ELSE akiko_q WHEN sel_akiko_d='1' ELSE datatg68_c;
 --	chipset_ramsel <= sel_z2ram or sel_chipram or sel_kickram or sel_slowram;
 --	chipset_ramsel <= not sel_z3ram;
 
 	-- Register incoming data
 	process(clk) begin
 		if rising_edge(clk) then
-			-- Block_turbo and sel_nmi_vector are both ready 4 clocks after clkena, so too late for ram_cs
-			datatg68_selram <= sel_ram and (not cpu_internal) and (not block_turbo) and (not sel_nmi_vector); -- AMR - remove sel_nmi_vector's decoding from the mux path
-			if sel_undecoded_d = '1' then
+            IF (reset='0' OR nResetOut='0' OR sel_undecoded_d ='1') THEN
 				datatg68_c <= X"FFFF";
-			elsif sel_akiko_d = '1' then
-				datatg68_c <= akiko_q;
 			elsif sel_eth='1' then
 				datatg68_c <= frometh;
 			else
@@ -285,38 +296,37 @@ DUALRAM_ZIII: if dualsdram=1 generate
 -- Also matches third block, 16 meg from 0x46000000 - 0x46ffffff, but excludes 0x47000000 onwards since it would alias onto Bank 0 / chipram
 	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26)='1' else '0';
 -- Third block of ZIII RAM - either 2 or 4 meg, starting at either 0x41000000 or 0x44000000
-	sel_z3ram3      <= '0'; -- '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(24)='1') else '0';
+	sel_z3ram3      <= '0';
 end generate;
 
 SINGLERAM_ZIII: if dualsdram=0 generate
 -- First block of ZIII RAM - 0x40000000 - 0x40ffffff
-	sel_z3ram       <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26 downto 24)="000" else '0'; -- AND z3ram_ena='1' ELSE '0';
+	sel_z3ram       <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(26 downto 24)="000" else '0';
 -- Second block of ZIII RAM - 32 meg from 0x42000000 - 0x43ffffff
-	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(25)='1' else '0'; -- AND z3ram2_ena='1' ELSE '0';
+	sel_z3ram2      <= '1' WHEN (cpuaddr(31 downto 30)="01") and cpuaddr(25)='1' else '0';
 -- Third block of ZIII RAM - either 2 or 4 meg, starting at either 0x41000000 or 0x44000000
-	sel_z3ram3      <= '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(25 downto 24)="01") else '0'; -- and z3ram3_ena='1' ELSE '0';
+	sel_z3ram3      <= '1' WHEN (cpuaddr(31 downto 30)="01") and (cpuaddr(26)='1' or cpuaddr(25 downto 24)="01") else '0';
 end generate;
 
 	sel_gayle_ide <= '0'; -- '1' when state(1 downto 0) = "10" and cpuaddr(31 downto 14)=X"00DA"&"00" else '0';
-
 	sel_akiko <= '1' when (cpuaddr(31 downto 16)=X"00B8" and (havertg = 1 or haveaudio = 1 or havec2p = 1)) else '0';
 	sel_32 <= '1' when cpu(1)='1' and cpuaddr(31 downto 24)/=X"00" and cpuaddr(31 downto 24)/=X"ff" else '0'; -- Decode 32-bit space, but exclude interrupt vectors
-	sel_z2ram       <= '1' WHEN (cpuaddr(31 downto 24) = X"00")
-	                         AND ((cpuaddr(23 downto 21) = "001")
-	                           OR (cpuaddr(23 downto 21) = "010")
-	                           OR (cpuaddr(23 downto 21) = "011")
-	                           OR (cpuaddr(23 downto 21) = "100")) else '0'; --  AND z2ram_ena='1' ELSE '0';
-	--sel_eth         <= '1' WHEN (cpuaddr(31 downto 24) = eth_base) AND eth_cfgd='1' ELSE '0';
-	sel_chip        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 21)="000") ELSE '0'; --$000000 - $1FFFFF
+	sel_z2ram <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND
+                         ((cpuaddr(23 downto 21) = "001") OR
+	                      (cpuaddr(23 downto 21) = "010") OR
+	                      (cpuaddr(23 downto 21) = "011") OR
+	                      (cpuaddr(23 downto 21) = "100")) else '0';
+--  sel_eth         <= '1' WHEN (cpuaddr(31 downto 24) = eth_base) AND eth_cfgd='1' ELSE '0';
+	sel_chip        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 21)="000") ELSE '0'; -- $000000 - $1FFFFF
 	sel_chipram     <= '1' WHEN sel_chip = '1' AND turbochip_d='1' ELSE '0';
-	sel_kick        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 19)="11111") OR (cpuaddr(23 downto 19)="11100")) AND state/="11" ELSE '0'; -- $F8xxxx, $E0xxxx, read only
-	sel_kickram     <= '1' WHEN sel_kick='1' AND (aga='1' OR (aga='0' AND turbokick_d='1')) ELSE '0'; -- menu option for OCS/ECS, always enable for AGA
-	sel_slow        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 20)=X"C" AND ((cpuaddr(19)='0' AND slow_config/="00") OR (cpuaddr(19)='1' AND slow_config(1)='1'))) OR (cpuaddr(23 downto 19)=X"D"&'0' AND slow_config="11")) ELSE '0'; -- $C00000 - $D7FFFF
+	sel_kick        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 19)="11111") OR (cpuaddr(23 downto 19)="11100")) AND cpu_write='0' ELSE '0'; -- $F8xxxx, $E0xxxx
+	sel_kickram     <= '1' WHEN sel_kick='1' AND turbokick_d='1' ELSE '0';
+    sel_slow        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND ((cpuaddr(23 downto 20)=X"C" AND ((cpuaddr(19)='0' AND slow_config_d/="00") OR (cpuaddr(19)='1' AND slow_config_d(1)='1'))) OR (cpuaddr(23 downto 19)=X"D"&'0' AND slow_config_d="11")) ELSE '0'; -- $C00000 - $D7FFFF
 	sel_slowram     <= '1' WHEN sel_slow='1' AND turboslow_d='1' ELSE '0';
 	sel_cart        <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 20)="1010") ELSE '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
 	sel_audio       <= '1' WHEN (cpuaddr(31 downto 24) = X"00") AND (cpuaddr(23 downto 18)="111011") ELSE '0'; -- $EC0000 - $EFFFFF
 --	sel_undecoded   <= '1' WHEN sel_32='1' and (sel_z3ram and z3ram_ena)='0' and (sel_z3ram2 and z3ram2_ena)='0' and (sel_z3ram3 and z3ram3_ena)='0' else '0';
-	sel_ram         <= '1' WHEN (
+       sel_ram         <= '1' WHEN (
          (sel_z2ram='1' and z2ram_ena='1')
       OR (sel_z3ram='1' and z3ram_ena='1')
       OR (sel_z3ram2='1' and z3ram2_ena='1')
@@ -327,9 +337,10 @@ end generate;
       OR sel_audio='1'
     ) ELSE '0';
 
-  ramcs <= NOT datatg68_selram or slower(1) or block_turbo or sel_nmi_vector or skipfetch; -- (NOT cpu_internal AND sel_ram_d AND NOT sel_nmi_vector) OR slower(0) or block_turbo;
+--  ramcs <= NOT ram_req or slower(1) or block_turbo or sel_nmi_vector or skipfetch; -- (NOT cpu_internal AND ram_req AND NOT sel_nmi_vector) OR slower(0) or block_turbo;
 
-  cpustate <= longword&ramcs&state(1 downto 0);
+  ramcs_n <= '0' WHEN ram_req='1' AND slower(1)='0' AND skipfetch='0' else '1';
+  cpustate <= longword&ramcs_n&state(1 downto 0);
   ramlds <= lds_in;
   ramuds <= uds_in;
 
@@ -429,7 +440,7 @@ pf68K_Kernel_inst: entity work.TG68KdotC_Kernel
     addr_out        => addrtg68,      -- : buffer std_logic_vector(31 downto 0);
     data_write      => w_datatg68,    -- : out std_logic_vector(15 downto 0);
     busstate        => state,         -- : buffer std_logic_vector(1 downto 0);
-	 longword        => longword,
+    longword        => longword,
     nWr             => wr,            -- : out std_logic;
     nUDS            => uds_in,
     nLDS            => lds_in,        -- : out std_logic;
@@ -443,65 +454,66 @@ pf68K_Kernel_inst: entity work.TG68KdotC_Kernel
 PROCESS (clk) BEGIN
   IF rising_edge(clk) THEN
     IF (reset='0' OR nResetOut='0') THEN
+      overclock_d <= '0';
       turbochip_d <= '0';
       turbokick_d <= '0';
       turboslow_d <= '0';
       cacheline_clr <= '0';
-    ELSIF cpu_internal='1' THEN -- No mem access, so safe to switch chipram access mode
-      turbochip_d <= turbochipram OR (turbokick AND aga);
+
+	  z2ram_ena <= '0';
+      z3ram_ena <= '0';
+	  z3ram2_ena <= '0';
+      z3ram3_ena <= '0';
+      slow_config_d <= "00";
+
+    ELSIF (cpu_internal='1' AND slower(0)='0') THEN
+	  z2ram_ena <= ziiram_active;
+      z3ram_ena <= ziiiram_active;
+	  z3ram2_ena <= ziiiram2_active;
+      z3ram3_ena <= ziiiram3_active;
+      slow_config_d <= slow_config;
+
+      overclock_d <= overclock;
+      turbochip_d <= turbochipram;
       turbokick_d <= turbokick;
-      turboslow_d <= turbochipram OR (turbokick AND aga);
-      cacheline_clr <= ((turbochipram OR (turbokick AND aga)) XOR turbochip_d) OR (turbokick XOR turbokick_d);
+      turboslow_d <= turbochipram;
+      cacheline_clr <= (turbochipram XOR turbochip_d) OR (turbokick XOR turbokick_d);
     END IF;
   END IF;
 END PROCESS;
 
 host_req<=host_req_r;
-myakiko : entity work.akiko
-generic map
-(
-	havertg => havertg,
-	haveaudio => haveaudio,
-	havec2p => havec2p
-)
+akiko_d <= w_datatg68;
+
+u_akiko: akiko
 port map
 (
-	clk => clk,
-	reset_n => reset,
-	addr => cpuaddr(10 downto 0),
-	d => akiko_d,
-	q => akiko_q,
-	wr => akiko_wr,
-	req => akiko_req,
-	ack => akiko_ack,
-	host_req => host_req_r,
-	host_ack => host_ack,
-	host_q => host_q,
-	rtg_reg_addr => rtg_reg_addr,
-	rtg_reg_d => rtg_reg_d,
-	rtg_reg_wr => rtg_reg_wr,
-	audio_buf => audio_buf,
-	audio_ena => audio_ena,
-	audio_int => audio_int
+    clk => clk,
+    reset_n => reset,
+    addr => cpuaddr(5 downto 0),
+    wr => akiko_wr,
+    req => akiko_req,
+    ack => akiko_ack,
+    d => akiko_d,
+    q => akiko_q
 );
 
+akiko_req <= '1' when sel_akiko_d='1' and slower(0)='0' and (cpu_write='1' or cpu_read='1') else '0';
+akiko_wr <= '1' when cpu_write='1' else '0';
 
-akiko_d <= w_datatg68;
-process(clk,cpuaddr) begin
-	if rising_edge(clk) then
-		if sel_akiko='0' then
-			akiko_req<='0';
-			akiko_wr<='0';
-		end if;
-		if sel_akiko='1' and state(1)='1' and slower(2)='0' then
-			akiko_req<=not clkena;
-			if state(0)='1' then -- write cycle
-				akiko_wr<='1';
-			end if;
-		end if;
-	end if;
-end process;
-
+--process(clk,cpuaddr) begin
+--	if rising_edge(clk) then
+--		if akiko_ack_d='1' and clkena='1' then
+--			akiko_req<='0';
+--			akiko_wr<='0';
+--        elsif sel_akiko='1' and slower(1)='0' and (cpu_write='1' or cpu_read='1') then
+--			akiko_req<='1';
+--            if cpu_write='1' then
+--                akiko_wr<='1';
+--            end if;
+--		end if;
+--	end if;
+--end process;
 
 buslogic : block
 	signal throttle         : std_logic_vector(2 downto 0);
@@ -529,10 +541,11 @@ begin
 --	end process;
 
 --	clkena <= '1' WHEN clkena_pre='1' or (slower(0)='0' and
-	clkena <= '1' WHEN slower(0)='0' and
-					   ((clkena_in='1' and ((ena7RDreg='1' AND clkena_e='1') OR (ena7WRreg='1' AND clkena_f='1') or fast_rd='1')) OR
-					   cpu_internal='1' or sel_undecoded_d='1' OR akiko_ack='1' or (ramready='1' and block_turbo='0'))
-				  ELSE '0';
+    clkena_akiko <= '1' WHEN akiko_ack='1' AND slower(0)='0' ELSE '0';
+    clkena <=  clkena_akiko WHEN akiko_req='1' ELSE
+               '1' WHEN slower(0)='0' and
+                ((clkena_in='1' and ((ena7RDreg='1' AND clkena_e='1') OR (ena7WRreg='1' AND clkena_f='1') or fast_rd='1')) OR
+                 cpu_internal='1' or sel_undecoded_d='1' or (ramready='1' and block_turbo='0')) ELSE '0';
 
 	-- AMR - attempt to imitate A1200 speed more closely on chipram fetches:
 	-- Perform throttling of the CPU depending on turbo mode:  (Temporary mapping for evaluation)
@@ -571,7 +584,7 @@ begin
 
 	process (clk) begin
 		if rising_edge(clk) then
-			if (reset='0' OR nResetOut='0' OR usethrottle=0) then
+			if (reset='0' OR nResetOut='0' OR usethrottle=0 OR overclock_d='1') then
 				throttle <= "000";
 			elsif (clkena='1' or freeze='1') and cpu_write='0' and block_turbo='0' then
 				if throttle_sel(1)='1' or (sel_chip='1' and throttle_sel(0)='1') then
@@ -585,8 +598,14 @@ begin
 
 	PROCESS (clk) BEGIN
 		IF rising_edge(clk) THEN
-			IF clkena='1' THEN
-				slower <= throttle_sel(0)&"111"; -- AMR - in Turbo Chip and Kick modes allow one extra cycle for block_turbo etc to propagate
+            if (reset='0' OR nResetOut='0') THEN
+					slower <= (others => '1');
+            elsif clkena='1' THEN
+				IF overclock_d='1' THEN
+					slower <= "0011";
+				ELSE
+					slower <= throttle_sel(0)&"111"; -- AMR - in Turbo Chip and Kick modes allow one extra cycle for block_turbo etc to propagate
+				END IF;
 			ELSE
 --				slower<= '0'&slower(slower'high downto 1);
 				slower<= (aga and throttle(0))&slower(slower'high downto 1); -- enaWRreg&slower(3 downto 1);
