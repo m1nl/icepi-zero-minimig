@@ -1,243 +1,215 @@
 // Host cache
-// Simplistic direct mapped Cache - 256 x 32bit words, so small enough to fit a single M9K
-// - though Quartus chooses to use 2 - not sure why yet.
-// 8 word bursts, 16-bit SDRAM interface, so cachelines of 4 32-bit words
-// We use a dual-port RAM split between data and tag. 
-
+// Direct-mapped, 128 cachelines x 4 words = 512 x 32-bit data (fits one DP16KD)
+// 16-bit SDRAM interface, 8-beat burst per cacheline fill
+// Cache index: a[10:4] (7 bits, 128 lines), word-in-line: a[3:2], tag: a[25:4] (22 bits)
+// --------------------------------------------------------------------------------------
+// This implementation uses output register with tag RAM memory - address has to
+// be stable BEFORE req is asserted and has to stay stable until ack is received
+// --------------------------------------------------------------------------------------
+`timescale 1ns / 1ps
+`default_nettype none
 module hostcache
 (
-	input wire sysclk,
-	input wire reset_n,
-	input wire [25:2] a,
-	output wire [31:0] q,
-	input wire req,
-	input wire wr,
-	output reg ack,
-	input wire [15:0] sdram_d,
-	output reg sdram_req,
-	input wire sdram_ack
+  input  wire        sysclk,
+  input  wire        reset_n,
+  input  wire [25:2] a,
+  output wire [31:0] q,
+  input  wire        req,
+  input  wire        wr,
+  output reg         ack,
+  input  wire [15:0] sdram_d,
+  output reg         sdram_req,
+  input  wire        sdram_ack
 );
 
+// Data RAM: 512 x 32-bit, fits one DP16KD
+reg [31:0] data_mem [0:511] /* synthesis syn_ramstyle="block_ram" */;
+reg [31:0] data_q;
+reg [31:0] data_w;
+reg        data_wren;
 
-// host Cache signals
+// Tag RAM: 128 x 32-bit
+// bit 31: valid, bits 21:0: tag = a[25:4]
+wire [31:0] tag_w;
 
-// 8 bits should result in using just 1 M9K - but doesn't,
-// so we might as well make full use of 2 M9Ks with 9 bits.
-parameter zcachebits=9;
+reg [31:0] tag_mem [0:127] /* synthesis syn_ramstyle="block_ram" */;
+reg [31:0] tag_q_i;
+reg [31:0] tag_q;
+reg        tag_wren;
+reg        tag_mark;
 
-wire [zcachebits-1:0] zdata_a;
-wire [31:0] zdata_q;
-reg[31:0] zdata_w;
-reg zdata_wren;
+reg [1:0] write_offset;
+reg       zinitcache;
+reg [6:0] zinitctr;
 
-wire [zcachebits-1:0] ztag_a;
-wire [31:0] ztag_q;
-reg [31:0] ztag_w;
-reg ztag_wren;
+localparam zINIT   = 4'd0,  zWAIT   = 4'd1,  zREAD   = 4'd2,  zPAUSE  = 4'd3;
+localparam zWRITE  = 4'd4,  zFLUSH2 = 4'd5,  zFILL1  = 4'd6,  zFILL2  = 4'd7;
+localparam zFILL3  = 4'd8,  zFILL4  = 4'd9,  zFILL5  = 4'd10, zFILL6  = 4'd11;
+localparam zFILL7  = 4'd12, zFILL8  = 4'd13;
 
-// Host data always comes from the cache - we don't attempt to bypass during cache filling.
-assign q = zdata_q;
+reg [3:0] zstate;
+reg       complete;
 
-// States for state machine
-localparam zINIT=0, zWAIT=1, zREAD=2, zPAUSE=3;
-localparam zWRITE=4, zWRITE2=5, zWAITFILL=6;
-localparam zFLUSH1=7, zFLUSH2=8, zFILL1=9, zFILL2=10;
-localparam zFILL3=11, zFILL4=12, zFILL5=13, zFILL6=14;
-localparam zFILL7=15, zFILL8=16, zACK=17;
-reg [17:0] zstate;
-reg zinitcache;
+// Combinatorial address generation
+wire [8:0] data_addr = {a[10:4], data_wren ? write_offset : a[3:2]};
+wire [6:0] tag_addr  = zinitcache ? zinitctr : a[10:4];
 
+// Single-port writethrough synchronous data RAM
+always @(posedge sysclk) begin
+  if (data_wren) begin
+    data_mem[data_addr] <= data_w;
+    data_q <= data_w;
 
-// In the data blockram the lower two bits of the address determine
-// which word of the burst we're reading.  When reading from the cache, this comes
-// from the CPU address; when writing to the cache it's determined by the state
-// machine.
+  end else begin
+    data_q <= data_mem[data_addr];
+  end
+end
 
-reg zreadword_burst; // Set to 1 when the lsb of the cache address should
-                     // track the SDRAM controller.
-reg [1:0] zreadword;
+// Single-port synchronous tag RAM with output buffer
+always @(posedge sysclk) begin
+  if (tag_wren) tag_mem[tag_addr] <= tag_w;
+  tag_q_i <= tag_mem[tag_addr];
+end
+always @(posedge sysclk) begin
+  tag_q <= tag_q_i;
+end
 
-wire [zcachebits-1:0] zcacheline;
-assign zcacheline = {1'b0,a[zcachebits:4],(zreadword_burst ? zreadword : a[3:2])};
+wire tag_valid = tag_q[31];
+wire tag_match = tag_q[21:0] == a[25:4];
+wire tag_hit   = tag_valid && tag_match;
 
-//   a bits 3:2 specify which words of a burst we're interested in.
-//   Bits 10:4 specify the seven bit address of the cachelines;
-assign zdata_a = zcacheline;
+assign q     = data_q;
+assign tag_w = {tag_mark, 9'b0, a[25:4]};
 
+always @(posedge sysclk) begin
+  zinitcache <= 1'b0;
+  data_wren  <= 1'b0;
+  tag_mark   <= 1'b0;
+  tag_wren   <= 1'b0;
+  ack        <= 1'b0;
 
-// Dual port RAM.
-dpram_inf_generic #(.depth(zcachebits),.width(32)) hostcache(
-	.clock(sysclk),
-	.address_a(zdata_a),
-	.address_b(ztag_a),
-	.data_a(zdata_w),
-	.data_b(ztag_w),
-	.q_a(zdata_q),
-	.q_b(ztag_q),
-	.wren_a(zdata_wren),
-	.wren_b(ztag_wren)
-);
+  if (sdram_req)       complete = 1'b0;
+  else if (!sdram_ack) complete = 1'b1;
 
-wire zdata_valid;
-assign zdata_valid = ztag_q[31];
+  case (zstate)
 
-reg [zcachebits-2:0] zinitctr;
-assign ztag_a = zinitcache ? {1'b1,zinitctr} :
-			{3'b100,a[zcachebits:4]};
+    zINIT : begin
+      zinitcache <= 1'b1;
+      zinitctr   <= 7'h01;
+      tag_wren   <= 1'b1;
+      zstate     <= zFLUSH2;
+    end
 
-wire ztag_hit;
-assign ztag_hit = ztag_q[21:0]==a[25:4];
+    zFLUSH2 : begin
+      zinitcache <= 1'b1;
+      zinitctr   <= zinitctr + 1'd1;
+      tag_wren   <= 1'b1;
 
-reg complete;
+      if (zinitctr == 7'h00)
+        zstate <= zWAIT;
+    end
 
-always @(posedge sysclk)
-begin
-	// Defaults
-	zinitcache<=1'b0;	
-	zdata_wren<=1'b0;
-	ztag_wren<=1'b0;
+    zWAIT : begin
+      write_offset <= a[3:2];
+      if (req) begin
+        if (wr) begin
+          if (complete) begin
+            sdram_req <= 1'b1;
+            zstate    <= zWRITE;
+          end
+        end else begin
+          zstate <= zREAD;
+        end
+      end
+    end
 
-	ack <= #1 1'b0;
+    zWRITE : begin
+      if (tag_match) begin
+        tag_wren <= 1'b1;
+      end
+      if (sdram_ack) begin
+        sdram_req <= 1'b0;
+        ack       <= 1'b1;
+        zstate    <= zPAUSE;
+      end
+    end
 
-	if(sdram_req)
-		complete=1'b0;
-	else if (!sdram_ack)
-		complete=1'b1;
+    zREAD : begin
+      if (tag_hit) begin
+        ack    <= 1'b1;
+        zstate <= zPAUSE;
+      end else begin
+        if (complete) begin
+          sdram_req <= 1'b1;
+          zstate    <= zFILL1;
+        end
+      end
+    end
 
-	case(zstate)
+    zPAUSE : begin
+      if (!req)
+        zstate <= zWAIT;
+    end
 
-		// We use an init state here to loop through the data, clearing
-		// the valid flag - for which we'll use bit 17 of the data entry.
+    zFILL1 : begin
+      data_w[31:16] <= sdram_d;
+      if (sdram_ack) begin
+        sdram_req <= 1'b0;
+        zstate    <= zFILL2;
+      end
+    end
 
-		zINIT : begin
-			zinitcache<=1'b1;	// need to mark the entire cache as invalid before starting.
-			zinitctr<='h00000001;
-			ztag_w = 32'h00000000;
-			ztag_wren<=1'b1;
-			zstate<=zFLUSH2;
-		end
+    zFILL2 : begin
+      tag_mark     <= 1'b1;
+      tag_wren     <= 1'b1;
+      data_w[15:0] <= sdram_d;
+      data_wren    <= 1'b1;
+      zstate       <= zFILL3;
+    end
 
-		zFLUSH2 : begin
-			zinitcache<=1'b1;
-			zinitctr<=zinitctr+1'd1;
-			ztag_wren<=1'b1;
-			if(zinitctr==0)
-			begin
-				zstate<=zWAIT;
-			end
-		end
+    zFILL3 : begin
+      write_offset  <= write_offset + 1'd1;
+      data_w[31:16] <= sdram_d;
+      zstate        <= zFILL4;
+    end
 
-		zWAIT : begin
-			zreadword_burst <= 1'b0;
-			ztag_w = {4'b1111,6'b000000,a[25:4]};
-			if(req) begin
-				if(wr) begin// Write cycle - invalidate cacheline (FIXME - only when hit)
-					if(complete) begin
-						sdram_req<=1'b1;
-						ztag_w = {4'b0000,6'b000000,a[25:4]};
-						if(ztag_hit)
-							ztag_wren<=1'b1;
-						zstate<=zWRITE;
-					end
-				end else	begin	// Read cycle
-					zstate<=zREAD;
-				end
-			end
-		end
-		
-		zWRITE : begin
-			if(sdram_ack) begin
-				sdram_req<=1'b0;
-				ack<=1'b1;
-				zstate<=zPAUSE;
-			end
-		end
+    zFILL4 : begin
+      data_w[15:0] <= sdram_d;
+      data_wren    <= 1'b1;
+      zstate       <= zFILL5;
+    end
 
-		zREAD : begin
-			// Check tags for a match...
-			if(ztag_hit && zdata_valid) begin
-				ack<=1'b1;
-				zstate<=zPAUSE;
-			end else begin // No matches?
-				zreadword_burst <= 1'b1;
-				zreadword<=a[3:2];
-				if(complete) begin
-					sdram_req<=1'b1;
-					zstate<=zFILL1;
-				end
-			end
-		end
+    zFILL5 : begin
+      write_offset  <= write_offset + 1'd1;
+      data_w[31:16] <= sdram_d;
+      zstate        <= zFILL6;
+    end
 
-		zACK : begin
-			ack<=1'b1;
-			zstate<=zPAUSE;
-		end
-		
-		zPAUSE :	begin
-			if(!req) begin
-				zstate<=zWAIT;
-			end
-		end
+    zFILL6 : begin
+      data_w[15:0] <= sdram_d;
+      data_wren    <= 1'b1;
+      zstate       <= zFILL7;
+    end
 
-		zFILL1 : begin
-			zdata_w[31:16]<=sdram_d;
-			if(sdram_ack) begin
-				sdram_req<=1'b0;
-				zstate<=zFILL2;
-			end
-		end
+    zFILL7 : begin
+      write_offset  <= write_offset + 1'd1;
+      data_w[31:16] <= sdram_d;
+      zstate        <= zFILL8;
+    end
 
-		zFILL2 : begin
-			ztag_wren<=1'b1;	// Update tag as the first word becomes complete.
-			zdata_w[15:0]<=sdram_d;
-			zdata_wren<=1'b1;
-			zstate<=zFILL3;
-		end
-		
-		zFILL3 : begin
-			zreadword<=zreadword+1'd1;
-			zdata_w[31:16]<=sdram_d;
-			zstate<=zFILL4;
-		end
+    zFILL8 : begin
+      data_w[15:0] <= sdram_d;
+      data_wren    <= 1'b1;
+      zstate       <= zWAIT;
+    end
 
-		zFILL4 : begin
-			zdata_w[15:0]<=sdram_d;
-			zdata_wren<=1'b1;
-			zstate<=zFILL5;
-		end
+    default:
+      zstate <= zWAIT;
+  endcase
 
-		zFILL5 : begin
-			zreadword<=zreadword+1'd1;
-			zdata_w[31:16]<=sdram_d;
-			zstate<=zFILL6;
-		end
-
-		zFILL6 : begin
-			zdata_w[15:0]<=sdram_d;
-			zdata_wren<=1'b1;
-			zstate<=zFILL7;
-		end
-
-		zFILL7 : begin
-			zreadword<=zreadword+1'd1;
-			zdata_w[31:16]<=sdram_d;
-			zstate<=zFILL8;
-		end
-
-		zFILL8 : begin
-			zdata_w[15:0]<=sdram_d;
-			zdata_wren<=1'b1;
-			zstate<=zWAIT;
-		end
-		
-		default:
-			zstate<=zWAIT;
-	endcase
-
-	if(!reset_n) begin
-		zstate<=zINIT;
-		zreadword_burst<=1'b0;
-	end
+  if (!reset_n)
+    zstate <= zINIT;
 end
 
 endmodule
+// vim:ts=2 sw=2 tw=120 et
