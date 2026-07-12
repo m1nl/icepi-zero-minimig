@@ -5,7 +5,7 @@
 
 ### tools ###
 
-BASE	= 
+BASE	=
 832DIR = ../../EightThirtyTwo
 CC      = $(832DIR)/vbcc/bin/vbcc832
 GCC		= gcc
@@ -77,13 +77,13 @@ bootcustominit.h: bootcustominit.s
 
 $(PROJECT).bin: Makefile $(BUILD_DIR) $(ALL_SOURCES)
 	$(LD) $(LDFLAGS) -M $(PROJECT).map -o $@ $(LIBDIR)/crt0.a $(LIBDIR)/lib832.a $(ALL_SOURCES)
-	@echo 
+	@echo
 	@echo "Firmware build complete - copy $@ to SD card."
 # clean
 clean:
 	@echo clean
 	@-rm $(BUILD_DIR)/*.o
-	@-rm *.asm	
+	@-rm *.asm
 	@-rm $(PROJECT).bin
 	@-rm $(PROJECT).map
 
