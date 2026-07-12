@@ -30,7 +30,7 @@
 `default_nettype none
 
 module minimig_virtual_top	#(
-	parameter hostonly=0,
+	parameter hostonly = 0,
 	parameter debug = 0,
 	parameter spimux = 0,
 	parameter ram_64meg = 0,
@@ -200,6 +200,7 @@ wire [ 16-1:0] tg68_cout;
 wire [ 16-1:0] tg68_cin;
 wire           tg68_cpuena;
 wire [  4-1:0] cpu_config;
+wire           overclock;
 wire [4:0]     board_configured;
 wire           turbochipram;
 wire           turbokick;
@@ -252,12 +253,12 @@ wire [  2-1:0] sdram_ba;
 // mist
 wire           user_io_sdo;
 wire           minimig_sdo;
-wire [   6:0] joysticka;
-wire [   6:0] joystickb;
+wire [  11:0] joysticka;
+wire [  11:0] joystickb;
 wire [   6:0] joyc;
 wire [   6:0] joyd;
-wire [   6:0] extjoya;
-wire [   6:0] extjoyb;
+wire [  11:0] extjoya;
+wire [  11:0] extjoyb;
 wire          extjoy_invert;
 
 // UART
@@ -545,6 +546,7 @@ TG68K #(.usethrottle(usethrottle),
   .toram        (tg68_cin         ),
   .ramready     (tg68_cpuena      ),
   .cpu          (cpu_config[1:0]  ),
+  .overclock    (overclock        ),
   .turbochipram (turbochipram     ),
   .turbokick    (turbokick        ),
   .slow_config  (slow_config      ),
@@ -876,6 +878,7 @@ minimig #(.ntscswitch(haventscswitch),.useaga(haveaga),.usertg(havertg),.wide_hb
     .cen_44100    (AUDIO_TICK       ),
 	//user i/o
 	.cpu_config   (cpu_config       ), // CPU config
+	.overclock    (overclock        ), // overclock
    .board_configured(board_configured),
 	.turbochipram (turbochipram     ), // turbo chipRAM
 	.turbokick    (turbokick        ), // turbo kickstart
@@ -990,8 +993,8 @@ cfide #(
 		.tick_in(AUDIO_TICK)
 	);
 
-assign joysticka = JOYA & extjoya;
-assign joystickb = JOYB & extjoyb;
+assign joysticka = {5'b11111, JOYA} & extjoya;
+assign joystickb = {5'b11111, JOYB} & extjoyb;
 
 assign LED_AUX = extjoy_invert;
 

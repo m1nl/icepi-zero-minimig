@@ -25,6 +25,7 @@
 `define MINIMIG_SERIAL_AUDIO
 `define MINIMIG_PS2_KEYBOARD
 `define MINIMIG_PS2_MOUSE
+`define MINIMIG_ANAJOY
 `endif
 
 // mist
@@ -35,5 +36,6 @@
 `define MINIMIG_VIDEO_FILTER
 `define MINIMIG_PARALLEL_AUDIO  // Use own sigma-delta for audio
 // `define MINIMIG_SERIAL_AUDIO
+`define MINIMIG_ANAJOY
 `endif
 

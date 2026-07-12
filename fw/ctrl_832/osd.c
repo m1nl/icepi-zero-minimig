@@ -932,7 +932,7 @@ void ConfigAutofire(unsigned char autofire)
     EnableOsd();
     //SPI(OSDCMDAUTOFIRE | (autofire & 0x03));
     SPI(OSD_CMD_JOY);
-    SPI(autofire & 0x03);
+    SPI(autofire);
     DisableOsd();
 }
 

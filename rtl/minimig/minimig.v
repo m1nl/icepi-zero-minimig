@@ -258,6 +258,7 @@ module minimig #(parameter ntscswitch=1'b1, parameter useaga=1'b1, parameter use
     output        cen_44100,
 	//user i/o
   output  [3:0] cpu_config,
+  output  overclock,
   output  [5:0] board_configured,
   output  turbochipram,
   output  turbokick,
@@ -703,9 +704,12 @@ wire	[4:0] userio_chipset_config;	//chipset features selection
 wire	[2:0] userio_ide_config0;		//HDD & HDC config: bit #0 enables Gayle, bit #1 enables Master drive, bit #2 enables Slave drive
 wire	[2:0] userio_ide_config1;		//HDD & HDC config: bit #0 enables Gayle, bit #1 enables Master drive, bit #2 enables Slave drive
 wire    [3:0] userio_cpu_config;
+wire          userio_overclock;
 reg     [3:0] cpu_config_reg;
+reg           overclock_reg;
 
 assign cpu_config = cpu_config_reg;
+assign overclock = overclock_reg;
 
 always @(posedge clk) begin
 	memory_config <= userio_memory_config;
@@ -714,6 +718,7 @@ always @(posedge clk) begin
 	ide_config0 <= userio_ide_config0;
 	ide_config1 <= userio_ide_config1;
 	cpu_config_reg <= userio_cpu_config;
+	overclock_reg <= userio_overclock;
 end
 
 //instantiate user IO
@@ -772,6 +777,7 @@ userio USERIO1
 	.ide_config0(userio_ide_config0),
 	.ide_config1(userio_ide_config1),
 	.cpu_config(userio_cpu_config),
+	.overclock(userio_overclock),
 	.audio_filter_mode(audio_filter_mode),
 	.pwr_led_dim_n(pwr_led_dim_n),
 	.usrrst(usrrst),

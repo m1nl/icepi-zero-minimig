@@ -79,6 +79,7 @@ module userio (
   output wire [  3-1:0] ide_config0,
   output wire [  3-1:0] ide_config1,
   output wire [  4-1:0] cpu_config,
+  output wire           overclock,
   output wire [  2-1:0] audio_filter_mode,
   output wire           pwr_led_dim_n,
   output                usrrst,             // user reset from osd module
@@ -119,6 +120,7 @@ parameter KEY_PGDOWN  = 8'h6d;
 // local signals
 reg  [15:0] _sjoy1;       // synchronized joystick 1 signals
 reg  [15:0] _djoy1;       // synchronized joystick 1 signals
+reg  [15:0] _xjoy1;       // synchronized joystick 1 signals
 reg  [15:0] _xjoy2;       // synchronized joystick 2 signals
 reg  [15:0] _tjoy2;       // synchronized joystick 2 signals
 reg  [15:0] _djoy2;       // synchronized joystick 2 signals
@@ -152,6 +154,7 @@ wire  [1:0] autofire_config;
 reg   [1:0] autofire_cnt;
 wire  cd32pad;
 wire  anajoy;
+wire  invertjoy;
 reg   autofire;
 reg   sel_autofire;     // select autofire and permanent fire
 wire  joy2_pin5;
@@ -318,12 +321,14 @@ always @ (*) keyboard_disabled = key_disable;
 // input synchronization of external signals
 always @ (posedge clk) begin
   if (clk7_en) begin
-    _sjoy1 <= #1 ~key_disable ? _joy1 : 16'hffff;
+    _sjoy1 <= #1 ~key_disable ? (invertjoy ? _joy2 : _joy1) : 16'hffff;
     _djoy1 <= #1 ~key_disable ? _sjoy1 : 16'hffff;
-    _tjoy2 <= #1 joy2enable ? _joy2 : 16'hffff;
-    _djoy2 <= #1 joy2enable ? _tjoy2 : 16'hffff;
-    if (sof)
-      _xjoy2 <= #1 _joy2;
+    _tjoy2 <= #1   joy2enable ? (invertjoy ? _joy1 : _joy2) : 16'hffff;
+    _djoy2 <= #1   joy2enable ? _tjoy2 : 16'hffff;
+    if (sof) begin
+      _xjoy1 <= #1 (invertjoy ? _joy2 : _joy1);
+      _xjoy2 <= #1 (invertjoy ? _joy1 : _joy2);
+    end
   end
 end
 
@@ -359,17 +364,17 @@ always @ (*) begin
   if (~joy2enable)
 //    if (~_xjoy2[5] || (~_xjoy2[3] && ~_xjoy2[2]))	// Obsolete, dates back to original Minimig.
 //      t_osd_ctrl = KEY_MENU;
-    if (~_xjoy2[6])
+    if (~_xjoy1[11] || ~_xjoy2[11])
       t_osd_ctrl = KEY_MENU;
-    else if (~_xjoy2[4])
+    else if (~_xjoy1[4] || ~_xjoy2[4])
       t_osd_ctrl = KEY_ENTER;
-    else if (~_xjoy2[3])
+    else if (~_xjoy1[3] || ~_xjoy2[3])
       t_osd_ctrl = KEY_UP;
-    else if (~_xjoy2[2])
+    else if (~_xjoy1[2] || ~_xjoy2[2])
       t_osd_ctrl = KEY_DOWN;
-    else if (~_xjoy2[1])
+    else if (~_xjoy1[1] || ~_xjoy2[1])
       t_osd_ctrl = KEY_LEFT;
-    else if (~_xjoy2[0])
+    else if (~_xjoy1[0] || ~_xjoy2[0])
       t_osd_ctrl = KEY_RIGHT;
 //    else if (~_xjoy2[1] && ~_xjoy2[3])
 //      t_osd_ctrl = KEY_PGUP;
@@ -381,7 +386,7 @@ always @ (*) begin
 //    if (~_xjoy2[3] && ~_xjoy2[2])
 //      t_osd_ctrl = KEY_MENU;
 //    else
-    if (~_xjoy2[6])
+    if (~_xjoy1[11] || ~_xjoy2[11])
       t_osd_ctrl = KEY_MENU;
     else
       t_osd_ctrl = osd_ctrl;
@@ -585,6 +590,9 @@ assign _mthird1 = ~mouse1_btn[2];
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
 
+`ifndef MINIMIG_ANAJOY
+assign anajoy = 1'b0;
+`endif
 
 //instantiate osd controller
 userio_osd osd1
@@ -618,9 +626,15 @@ userio_osd osd1
   .ide_config0      (ide_config0),
   .ide_config1      (ide_config1),
   .cpu_config       (cpu_config),
+  .overclock        (overclock),
   .autofire_config  (autofire_config),
   .cd32pad          (cd32pad),
+`ifdef MINIMIG_ANAJOY
   .anajoy           (anajoy),
+`else
+  .anajoy           (),
+`endif
+  .invertjoy        (invertjoy),
   .audio_filter_mode(audio_filter_mode),
   .pwr_led_dim_n    (pwr_led_dim_n),
   .usrrst           (usrrst),

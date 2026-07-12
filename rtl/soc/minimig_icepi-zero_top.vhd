@@ -139,7 +139,7 @@ begin
 			havereconfig => 0,
 			havertg => 0,
 			haveaudio => 0,
-			havec2p => 0,
+			havec2p => 1,
 			havespirtc => 0,
 			ram_64meg => 0,
 			vga_width => 8,
