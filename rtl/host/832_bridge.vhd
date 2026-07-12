@@ -51,7 +51,7 @@ signal debug_req : std_logic;
 signal debug_ack : std_logic;
 signal debug_wr : std_logic;
 
-signal rom_d : std_logic_vector(31 downto 0);
+signal rom_q : std_logic_vector(31 downto 0);
 signal rom_wr : std_logic;
 signal rom_select : std_logic;
 signal hw_select : std_logic;
@@ -66,10 +66,12 @@ port
 	sysclk : in std_logic;
 	reset_n : in std_logic;
 	a : in std_logic_vector(25 downto 2);
+	d : in std_logic_vector(31 downto 0);
 	q : out std_logic_vector(31 downto 0);
 	req : in std_logic;
 	wr : in std_logic;
 	ack : out std_logic;
+	bytesel : in std_logic_vector(3 downto 0);
 	sdram_d : in std_logic_vector(15 downto 0);
 	sdram_req : out std_logic;
 	sdram_ack : in std_logic
@@ -90,9 +92,9 @@ generic map (
 	dualthread => false,
 	forwarding => false,
 	prefetch => false,
-    multiplier => true,
+	multiplier => true,
 --  inserting additional waitstate helps with timing closure
-    multiplier_waitstate => true,
+	multiplier_waitstate => true,
 	debug => true
 )
 port map(
@@ -134,8 +136,8 @@ generic map (
 	dualthread => false,
 	forwarding => false,
 	prefetch => false,
-    multiplier => true,
-    multiplier_waitstate => true,
+	multiplier => true,
+	multiplier_waitstate => true,
 	debug => false
 )
 port map(
@@ -228,7 +230,7 @@ bootrom: entity work.OSDBoot_832_ROM
 		d	=> cpu_q,
 		we	=> rom_wr,
 		bytesel => cpu_sel,
-		q		=> rom_d
+		q		=> rom_q
 	);
 
 rom_select <= '1' when cpu_addr(24 downto 13)=X"000"&"000" ELSE '0';
@@ -277,7 +279,7 @@ begin
 				end if;
 
 			when rom =>
-				cpu_d<=rom_d;
+				cpu_d<=rom_q;
 				wr<='0';
 				rom_wr<='0';
 				cpu_ack<='1';
@@ -314,9 +316,11 @@ port map
 	reset_n => nReset,
 	a => cpu_addr(25 downto 2),
 	q => cache_q,
+	d => cpu_q,
 	req => cache_req,
 	wr => cpu_wr,
 	ack => cache_ack,
+	bytesel => cpu_sel,
 	sdram_d => ram_d,
 	sdram_req => ram_req,
 	sdram_ack => ram_ack
