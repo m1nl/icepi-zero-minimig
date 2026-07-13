@@ -71,8 +71,6 @@ unsigned long cluster_mask;             // binary mask of cluster number
 unsigned short dir_entries;             // number of entry's in directory table
 unsigned long fat_size;                 // size of fat
 
-unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
-
 struct PartitionEntry partitions[4];	// lbastart and sectors will be byteswapped as necessary
 int partitioncount;
 
@@ -116,6 +114,7 @@ void bprintfl(const char *fmt,unsigned long l)
 unsigned int FindDrive(void)
 {
     buffered_fat_index = -1;
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	int i;
 
@@ -345,6 +344,7 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
     unsigned long  iDirectoryCluster;    // start cluster of subdirectory or FAT32 root directory
     unsigned long  iEntry;               // entry index in directory cluster or FAT16 root directory
     unsigned long  nEntries;             // number of entries per cluster or FAT16 root directory size
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     if (iCurrentDirectory) // subdirectory
     {
@@ -436,6 +436,7 @@ int ValidateDirectory(unsigned long directory)
     unsigned long  iDirectorySector;     // current sector of directory entries table
     unsigned long  iDirectoryCluster;    // start cluster of subdirectory or FAT32 root directory
     unsigned long  iEntry;               // entry index in directory cluster or FAT16 root directory
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	if(!directory || (directory==root_directory_cluster))
 	{
@@ -477,6 +478,7 @@ unsigned long FindDirectoryByCluster(unsigned long parent, unsigned long cluster
     unsigned long  iDirectoryCluster;    // start cluster of subdirectory or FAT32 root directory
     unsigned long  iEntry;               // entry index in directory cluster or FAT16 root directory
     unsigned long  nEntries;             // number of entries per cluster or FAT16 root directory size
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     if (parent) // subdirectory
     {
@@ -544,6 +546,7 @@ unsigned long FindDirectory(unsigned long parent, const char *name)
     unsigned long  iDirectoryCluster;    // start cluster of subdirectory or FAT32 root directory
     unsigned long  iEntry;               // entry index in directory cluster or FAT16 root directory
     unsigned long  nEntries;             // number of entries per cluster or FAT16 root directory size
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     if (parent) // subdirectory
     {
@@ -690,6 +693,8 @@ int ScanDirectory(unsigned long mode, char *extension, unsigned char options)
              char i;
     unsigned char x;
     unsigned char nNewEntries = 0;      // indicates if a new entry has been found (used in scroll mode)
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
+
     char rc = 0; //return code
     char find_file = 0;
     char find_dir = 0;
@@ -1544,6 +1549,7 @@ unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
     unsigned long iDirectoryCluster;    // start cluster of subdirectory or FAT32 root directory
     unsigned long iEntry;               // entry index in directory cluster or FAT16 root directory
     unsigned long nEntries;             // number of entries per cluster or FAT16 root directory size
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     if (iDirectory) // subdirectory
     {
@@ -1691,6 +1697,7 @@ unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
 unsigned int UpdateEntry(fileTYPE *file)
 {
     DIRENTRY *pEntry;
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     if (!MMC_Read(file->entry.sector, sector_buffer))
     {

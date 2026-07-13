@@ -69,8 +69,6 @@ const char version[] = MM_VERSTRING;
 
 extern adfTYPE df[4];
 
-char s[40];
-
 extern int _bss_start__;
 int CheckSum(char *adr,int size)
 {
@@ -133,7 +131,7 @@ int Init() {
 			config.kickstart.name[0]=0;
 			SetConfigurationFilename(0); // Use default config
 		    LoadConfiguration(0);	// Use slot-based config filename
-			ApplyConfiguration(0,0);  // Setup screenmodes, etc before loading KickStart.
+			ApplyConfiguration(0,0,1);  // Setup screenmodes, etc before loading KickStart.
 			result=1;
 		}
 	}
@@ -144,6 +142,7 @@ void ColdBoot() {
 	int result=0;
 	int key;
 	int override;
+	char s[40];
 
 	fpga_init();	// Display splashscreen
 
@@ -184,14 +183,14 @@ void ColdBoot() {
 	if(override)
 	{
 		BootPrintEx("Overriding screenmode.");
-		ApplyConfiguration(0,0);
+		ApplyConfiguration(0,0,1);
 	}
 
 	drivesounds_init("DRIVESNDBIN");
-	ClearError(ERROR_FILESYSTEM); /* Don't report a missing drivesnd.bin */			
+	ClearError(ERROR_FILESYSTEM); /* Don't report a missing drivesnd.bin */
 
 	BootPrintEx("Loading kickstart ROM...");
-	result=ApplyConfiguration(1,1);
+	result=ApplyConfiguration(1,1,0);
 
 	OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 
@@ -222,15 +221,15 @@ int main(void) {
 
 	if(!Init())
 		FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
-	
+
 	if(clockport && cartridge)
 		FatalError(ERROR_GENERAL,"C64: use non-clockport core",0,0);
 
 	if(ErrorFatal) {
-		ShowError();		
+		ShowError();
 		HandleUI();
 		while(1)
-			;	
+			;
 	}
 
     DISKLED_ON;

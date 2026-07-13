@@ -72,7 +72,7 @@ static void RDBChecksum(unsigned long *p)
 
 // If the hardfile doesn't have a RigidDiskBlock,
 // we synthesize one.
-static void FakeRDB(int unit,int block)
+static void FakeRDB(unsigned char* sector_buffer,int unit,int block)
 {
 	int i;
 	DEBUG1("Clearing sector buffer");
@@ -88,7 +88,7 @@ static void FakeRDB(int unit,int block)
 				struct RigidDiskBlock *rdb=(struct RigidDiskBlock *)sector_buffer;
 				DEBUG1("Creating RDB...");
 				rdb->rdb_ID = 'R'<<24 | 'D' << 16 | 'S' << 8 | 'K';
-				
+
 				rdb->rdb_Summedlongs=0x40;
 				rdb->rdb_HostID=0x07;
 				rdb->rdb_BlockBytes=0x200;
@@ -129,7 +129,7 @@ static void FakeRDB(int unit,int block)
 				struct PartitionBlock *pb=(struct PartitionBlock *)sector_buffer;
 				DEBUG1("Creating RDB...");
 				pb->pb_ID = 'P'<<24 | 'A' << 16 | 'R' << 8 | 'T';
-			
+
 				pb->pb_Summedlongs=0x40;
 				pb->pb_HostID=0x07;
 				pb->pb_Next=0xffffffff;
@@ -377,6 +377,7 @@ void ATA_ReadSectors(unsigned char* tfr, int sector, int cylinder, int head, int
 	int i;
 	int block_count;
 	int blk;
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	lba=chs2lba(cylinder, head, sector, unit);
 	DEBUG3(multiple ? "ReadM %ld, %d" : "Read  %ld, %d",lba,sector_count);
@@ -432,7 +433,7 @@ void ATA_ReadSectors(unsigned char* tfr, int sector, int cylinder, int head, int
 							rdb->rdb_Flags=0x12;
 						}
 						else
-							FakeRDB(unit,lba);
+							FakeRDB(sector_buffer,unit,lba);
 						EnableFpga();
 						SPI(CMD_IDE_DATA_WR); // write data command
 						SPI(0x00); SPI(0x00); SPI(0x00); SPI(0x00); SPI(0x00);
@@ -520,6 +521,7 @@ void ATA_WriteSectors(unsigned char* tfr, int sector, int cylinder, int head, in
 	int block_count;
 	int i;
 	int blk;
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	lba=chs2lba(cylinder, head, sector, unit);
 	DEBUG3(multiple ? "WriteM %ld, %d" : "Write  %ld, %d",lba,sector_count);
@@ -728,7 +730,7 @@ void GetHardfileGeometry(hdfTYPE *pHDF)
 			}
 			pHDF->heads = head;
 			pHDF->cylinders = cyl+1;	// Add a cylinder for the fake RDB.
-		
+
 			if ((head*cyl*32)==total)	// Does the geometry match the size of the underlying hard file?
 				return;
 			// If not, fall back to regular hardfile geometry aproximations...
@@ -863,7 +865,7 @@ unsigned char OpenHardfile(unsigned int unit)
 						if(hf->enabled & HDF_SYNTHRDB)
 							hdf[unit].offset=-(hdf[unit].heads*hdf[unit].sectors);
 						else
-							hdf[unit].offset=0;		
+							hdf[unit].offset=0;
 
 						hf->present = 1;
 						return 1;
@@ -906,6 +908,7 @@ fileTYPE rdbfile;	// We scan for RDB without mounting the file as a unit, so nee
 
 unsigned char GetHDFFileType(char *filename)
 {
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 	if(FileOpen(&rdbfile,filename))
 	{
 		int i;

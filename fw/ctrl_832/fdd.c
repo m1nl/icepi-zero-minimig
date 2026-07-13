@@ -51,13 +51,11 @@ adfTYPE df[4];            // drive 0 information structure
 #define LAST_SECTOR (SECTOR_COUNT - 1)
 #define GAP_SIZE (TRACK_SIZE - SECTOR_COUNT * SECTOR_SIZE)
 
-static unsigned char checksum[4];
-
 // sends the data in the sector buffer to the FPGA, translated into an Amiga floppy format sector
 // note that we do not insert clock bits because they will be stripped by the Amiga software anyway
 void SendSector(unsigned char *pData, unsigned char sector, unsigned char track, unsigned char dsksynch, unsigned char dsksyncl)
 {
-//    unsigned char checksum[4];
+    unsigned char checksum[4];
     unsigned int i;
     unsigned int x;
     unsigned char *p;
@@ -177,6 +175,7 @@ void ReadTrack(adfTYPE *drive)
     unsigned int dsksync;
     unsigned int dsklen;
     unsigned int dummyread;
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
     //unsigned short n;
 
 	dummyread=1;
@@ -186,7 +185,7 @@ void ReadTrack(adfTYPE *drive)
     if (drive->status & DSK_INSERTED)
     {
     	file.size = drive->filesize; /* FIXME - each floppy image should have its own file structure */
-    
+
     	if(drive->track >= drive->tracks)
 		{
 			int unit=((int)drive - (int)&df[0])/sizeof(adfTYPE);
@@ -376,7 +375,8 @@ unsigned char GetHeader(unsigned int *pTrack, unsigned int *pSector)
 {
     unsigned int c, c1, c2, c3, c4;
     unsigned int i;
-	int error=0;
+    int error=0;
+    unsigned char checksum[4];
 
     while (1)
     {
@@ -504,13 +504,13 @@ unsigned char GetHeader(unsigned int *pTrack, unsigned int *pSector)
     return 0;
 }
 
-unsigned char GetData(void)
+unsigned char GetData(unsigned char* sector_buffer)
 {
     unsigned int c, c1, c2, c3, c4;
     unsigned int i;
     unsigned char *p;
     unsigned int n;
-//    unsigned char checksum[4];
+    unsigned char checksum[4];
 
     while (1)
     {
@@ -614,6 +614,7 @@ void WriteTrack(adfTYPE *drive)
     unsigned int sector;
     unsigned int Track;
     unsigned int Sector;
+    unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
     // setting file pointer to begining of current track
     file.cluster = drive->cache[drive->track];
@@ -651,7 +652,7 @@ void WriteTrack(adfTYPE *drive)
                     }
                 }
 
-                if (GetData())
+                if (GetData(sector_buffer))
                 {
                     if (drive->status & DSK_INSERTED)
                     {

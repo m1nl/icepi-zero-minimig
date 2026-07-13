@@ -139,6 +139,7 @@ void BootUploadLogo()
 	int x,y;
 	int i=0;
 	unsigned char *adr;
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	if (RAOpen(&file, LOGO_FILE)) {
 		RARead(&file, sector_buffer, 512);
@@ -245,7 +246,7 @@ void BootInit()
 
 	EnableOsd();
 	SPI(OSD_CMD_RST);
-	SPI(0); // Allow the CPU to run 
+	SPI(0); // Allow the CPU to run
 	DisableOsd();
 }
 
@@ -262,10 +263,10 @@ void BootPrintEx(char * str)
 
   printf(str);
   printf("\n");
-  
+
   len = strlen(str);
   len = (len>80) ? 80 : len;
-  
+
 	for(j=0; j<8; j++) {
 		ptr=bootscreen_adr;
 		for(i=0; i<len; i+=2) {

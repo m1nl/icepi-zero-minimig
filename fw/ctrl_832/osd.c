@@ -1000,6 +1000,7 @@ unsigned char GetASCIIKey(unsigned char keycode)
 void ScrollText(char n,const char *str, int len,int max_len,unsigned char invert)
 {
 // this function is called periodically when a string longer than the window is displayed.
+    char s[40];
 
     #define BLANKSPACE 10 // number of spaces between the end and start of repeated name
 

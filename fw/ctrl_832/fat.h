@@ -5,8 +5,6 @@
 
 #define MAXDIRENTRIES 8
 
-extern unsigned char secbuf[512];
-
 typedef struct
 {
     unsigned long sector;
@@ -80,9 +78,6 @@ typedef union {
 #define FILETIME(h,m,s) (((h<<11)&0xF800)|((m<<5)&0x7E0)|((s/2)&0x1F))
 #define FILEDATE(y,m,d) ((((y-1980)<<9)&0xFE00)|((m<<5)&0x1E0)|(d&0x1F))
 
-// global sector buffer, data for read/write actions is stored here.
-// BEWARE, this buffer is also used and thus trashed by all other functions
-extern unsigned char sector_buffer[1024]; // sector buffer - room for 2 sectors, to ease reading data not sector-aligned...
 extern unsigned char cluster_size;
 extern unsigned long cluster_mask;
 extern unsigned char fat32;

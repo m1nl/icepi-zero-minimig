@@ -81,11 +81,13 @@
 #define KEY_KPMINUS      0x4A
 #define KEY_KP0          0x0F
 
-#define CONFIG_TURBO     1
-#define CONFIG_NTSC      2
-#define CONFIG_A1000     4
-#define CONFIG_ECS       8
-#define CONFIG_AGA      16
+#define CONFIG_TURBO      1
+#define CONFIG_NTSC       2
+#define CONFIG_A1000      4
+#define CONFIG_ECS        8
+#define CONFIG_AGA       16
+
+#define CONFIG_OVERCLOCK 16
 
 #define CONFIG_FLOPPY1X  0
 #define CONFIG_FLOPPY2X  1

@@ -192,6 +192,7 @@ void HandleUI(void)
 	static const char *helptext;
 	static char helpstate=0;
 	static char osd_item;
+	char s[40];
 
     // get user control codes
     c = OsdGetCtrl();
@@ -866,7 +867,7 @@ void HandleUI(void)
 		        OsdWrite(7, "      Loading config...", 0,0);
 				SetConfigurationFilename(menusub);
 				LoadConfiguration(NULL);
-				ApplyConfiguration(1,1);
+				ApplyConfiguration(1,1,0);
 				OsdHide();
 				OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 	   	        menustate = MENU_NONE1;
@@ -894,7 +895,7 @@ void HandleUI(void)
 		if(CheckConfiguration(&file))
 		{
 			LoadConfiguration(&file);
-			ApplyConfiguration(1,1);
+			ApplyConfiguration(1,1,0);
 			OsdHide();
 			OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 	        menustate = MENU_NONE1;
@@ -1219,7 +1220,7 @@ void HandleUI(void)
 		OsdWrite(4, s, menusub == 3,0);
 		strcpy(s, "   Overclock : ");
 		strcat(s, config_on_off_msg[(config.cpu >> 4) & 0x1]);
-		OsdWrite(5, s, menusub == 4,0);
+		OsdWrite(5, s, menusub == 4,((config.cpu >> 2) & 0x3) != 0x3);
 		OsdWrite(6, "", 0,0);
 
         OsdWrite(7, STD_BACK, menusub == 5,0);
@@ -1260,14 +1261,14 @@ void HandleUI(void)
 				config.cpu = (config.cpu & ~0xc) | ((_config_turbo & 0x3) << 2);
 				ConfigCPU(config.cpu);
 			}
-            else if (menusub == 2)
-            {
-			config.chipset ^= CONFIG_NTSC;
-			menustate = MENU_SETTINGS_CHIPSET1;
-			ConfigChipset(config.chipset);
-            }
-            else if (menusub == 3)
-            {
+			else if (menusub == 2)
+			{
+				config.chipset ^= CONFIG_NTSC;
+				menustate = MENU_SETTINGS_CHIPSET1;
+				ConfigChipset(config.chipset);
+			}
+			else if (menusub == 3)
+			{
 				switch(config.chipset&0x1c) {
 					case 0:
 						config.chipset = (config.chipset&3) | CONFIG_A1000;
@@ -1282,23 +1283,24 @@ void HandleUI(void)
 						config.chipset = (config.chipset&3) | 0;
 						break;
 				}
-
-                menustate = MENU_SETTINGS_CHIPSET1;
-                ConfigChipset(config.chipset);
-            }
-            else if (menusub == 4)
-            {
-				/* overclock */
-				config.cpu ^= 0x10;
 				menustate = MENU_SETTINGS_CHIPSET1;
-				ConfigCPU(config.cpu);
-            }
-            else if (menusub == 5)
-            {
-                menustate = MENU_MAIN2_1;
-                menusub = 2;
-            }
-        }
+				ConfigChipset(config.chipset);
+			}
+			else if (menusub == 4)
+			{
+				// overclock only works when turbo is enabled
+				if (((config.cpu >> 2) & 0x3) == 0x03) {
+					config.cpu ^= CONFIG_OVERCLOCK;
+					menustate = MENU_SETTINGS_CHIPSET1;
+					ConfigCPU(config.cpu);
+				}
+			}
+			else if (menusub == 5)
+			{
+				menustate = MENU_MAIN2_1;
+				menusub = 2;
+			}
+		}
 
         if (menu)
         {
@@ -2020,7 +2022,7 @@ void HandleUI(void)
 
 				OsdDoReset(0,SPI_RST_CPU | SPI_CPU_HLT);
 
-				ApplyConfiguration(1,0);
+				ApplyConfiguration(1,0,0);
 //				UploadKickstart(config.kickstart.name);
                 OsdHide();
 				OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
@@ -2215,6 +2217,7 @@ void PrintDirectory(void)
     char *info;
     char *p;
     unsigned char j;
+    char s[40];
 
     s[32] = 0; // set temporary string length to OSD line length
 
@@ -2422,6 +2425,7 @@ static int addcheck(int in)
 
 void SanityCheck()
 {
+	char s[40];
 	snprintf(s,32,"%x",shiftcheck(0xabcdef01));
 	DebugMessage(s);
 	snprintf(s,32,"%x",shiftcheck(0x23456789));

@@ -87,6 +87,7 @@ void SendFileV2(RAFile* file, unsigned char* key, int keysize, int address, int 
 {
 	int i,j;
 	unsigned int keyidx=0;
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	checksum_pre=0;
 

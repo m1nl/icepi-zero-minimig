@@ -28,8 +28,6 @@ int CheckSum();
 
 unsigned char romkey[3072];
 
-RAFile romfile;
-
 static char filename[12];
 
 void ClearKickstartMirrorE0(void)
@@ -53,6 +51,8 @@ void ClearVectorTable(void)
 //// UploadKickstart() ////
 int UploadKickstart(unsigned long dir,char *name)
 {
+	RAFile romfile;
+
 	int keysize=0;
 	char filename[12];
 
@@ -135,6 +135,7 @@ char UploadExtROM(unsigned long dir,char *name)
 {
 #ifdef EXTENDED_ROM
 	char filename[12];
+	RAFile romfile;
 
 	strncpy(filename, name, 8); // copy base name
 	strcpy(&filename[8], "ROM"); // add extension
@@ -168,6 +169,7 @@ char UploadExtROM(unsigned long dir,char *name)
 char UploadActionReplay()
 {
 	// FIXME - migrate to direct access
+	RAFile romfile;
 
 	if (RAOpen(&romfile, "HRTMON  ROM")) {
 		unsigned char *adr;
@@ -244,6 +246,7 @@ static const char config_id[] = "MNMGCFGA"; /* New signature for AGA core */
 
 unsigned char CheckConfiguration(fileTYPE *cfgfile)
 {
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 	if(cfgfile)
 	{
 		configTYPE *tmpconf=(configTYPE *)&sector_buffer;
@@ -274,7 +277,8 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
 {
 	int updatekickstart=0;
 	int result=0;
-    unsigned int key;
+	unsigned int key;
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	if(!cfgfile)
 	{
@@ -295,7 +299,7 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
             FileRead(cfgfile, sector_buffer);
 
 			// A few more sanity checks...
-			if(tmpconf->floppy.drives<=4) 
+			if(tmpconf->floppy.drives<=4)
 			{
 				// If either the old config and new config have a different kickstart file,
 				// or this is the first boot, we need to upload a kickstart image.
@@ -380,12 +384,13 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
 }
 
 
-int ApplyConfiguration(char reloadkickstart, char applydrives)
+int ApplyConfiguration(char reloadkickstart, char applydrives, char ignoreoverclock)
 {
 	int rstval=0;
 	int result=0;
 	int romsize=0;
 	int unit;
+	char s[40];
 //	printf("c1: %x\n",CheckSum());
 
 	// Whether or not we uploaded a kickstart image we now need to set various parameters from the config.
@@ -428,7 +433,12 @@ int ApplyConfiguration(char reloadkickstart, char applydrives)
 			config.secondaryhardfile[1].present && config.secondaryhardfile[1].enabled);
 	}
 
-    ConfigCPU(config.cpu);
+    int cpu = config.cpu;
+
+    if (ignoreoverclock)
+        cpu = cpu & ~CONFIG_OVERCLOCK;
+
+    ConfigCPU(cpu);
     ConfigMemory(config.memory);
     ConfigChipset(config.chipset);
     ConfigFloppy(config.floppy.drives, config.floppy.speed);
@@ -470,6 +480,7 @@ int ApplyConfiguration(char reloadkickstart, char applydrives)
 
 unsigned char SaveConfiguration(fileTYPE *cfgfile)
 {
+	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 	if(!cfgfile)
 	{
 		cfgfile=&file;
