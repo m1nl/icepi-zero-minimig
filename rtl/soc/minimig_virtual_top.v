@@ -204,6 +204,7 @@ wire           overclock;
 wire [4:0]     board_configured;
 wire           turbochipram;
 wire           turbokick;
+wire [1:0]     chip_config;
 wire [1:0]     slow_config;
 wire           aga;
 wire           cache_inhibit;
@@ -268,6 +269,8 @@ wire debug_txd;
 
 // Realtime clock
 wire [63:0] rtc;
+
+localparam addr_max_bits = (ram_64meg == 0 ? 25 : 26);
 
 ////////////////////////////////////////
 // toplevel assignments               //
@@ -520,7 +523,8 @@ TG68K #(
 	.haveaudio(haveaudio),
 	.havec2p(havec2p),
 	.haveamigahost(haveamigahost),
-	.havecart(havecart)
+	.havecart(havecart),
+	.sdram64meg(ram_64meg)
 ) tg68k (
 	.clk          (CLK_114          ),
 	.reset        (tg68_rst_sync    ),
@@ -552,6 +556,7 @@ TG68K #(
 	.overclock    (overclock        ),
 	.turbochipram (turbochipram     ),
 	.turbokick    (turbokick        ),
+	.chip_config  (chip_config      ),
 	.slow_config  (slow_config      ),
 	.aga          (aga              ),
 	.cache_inhibit(cache_inhibit    ),
@@ -608,7 +613,9 @@ wire           hostack;
 wire           hostce;
 
 //sdram sdram (
-sdram_ctrl sdram (
+sdram_ctrl #(
+	.addr_max_bits(addr_max_bits)
+) sdram (
 	.cache_rst    (tg68_rst_sync    ),
 	.cache_inhibit(cache_inhibit    ),
 	.cacheline_clr(cacheline_clr    ),
@@ -626,7 +633,7 @@ sdram_ctrl sdram (
 
 	.hostWR       (hostWR           ),
 	.hostAddr     (hostaddr         ),
-	.hostwe       (host_we           ),
+	.hostwe       (host_we          ),
 	.hostce       (host_ramreq      ),
 	.hostbytesel  (hostbytesel      ),
 	.hostRD       (host_ramdata     ),
@@ -888,6 +895,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	 .board_configured(board_configured),
 	.turbochipram (turbochipram     ), // turbo chipRAM
 	.turbokick    (turbokick        ), // turbo kickstart
+	.chip_config  (chip_config      ),
 	.slow_config  (slow_config      ),
 	.aga          (aga              ),
 	.init_b       (                 ), // vertical sync for MCU (sync OSD update)
@@ -946,7 +954,6 @@ cfide #(
 		.sysclk(CLK_114),
 		.usbclk(CLK_USB_IN),
 		.n_reset(reset_out),
-
 		.addr(hostaddr),
 		.d(hostWR),
 		.req(host_hwreq),

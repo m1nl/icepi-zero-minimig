@@ -32,6 +32,7 @@ generic (
 		havec2p : integer := 1;
 		haveamigahost : integer := 1;
 		havecart : integer := 1;
+		sdram64meg : integer := 1;
 		dualsdram : integer := 0;
 		useprofiler : integer := 0;
 		usethrottle : integer := 1
@@ -74,6 +75,7 @@ port (
 	sel_eth       : buffer  std_logic;
 	frometh       : in      std_logic_vector(15 downto 0);
 	ethready      : in      std_logic;
+	chip_config   : in      std_logic_vector(1 downto 0);
 	slow_config   : in      std_logic_vector(1 downto 0);
 	aga           : in      std_logic;
 	turbochipram  : in      std_logic;
@@ -131,9 +133,10 @@ signal sel_chipram      : std_logic;
 signal overclock_d      : std_logic := '0';
 signal turbochip_d      : std_logic := '0';
 signal turbokick_d      : std_logic := '0';
-signal slow_config_d    : std_logic_vector(1 downto 0);
 signal turboslow_d      : std_logic := '0';
-signal slower           : std_logic_vector(3 downto 0);
+signal chip_config_d    : std_logic_vector(1 downto 0);
+signal slow_config_d    : std_logic_vector(1 downto 0);
+signal slower           : std_logic_vector(3 downto 0) := (others => '1');
 signal skipfetch        : std_logic := '0';
 
 signal datatg68_c       : std_logic_vector(15 downto 0);
@@ -259,23 +262,13 @@ end generate;
 
 process(clk) begin
 	if rising_edge(clk) then
-		if (reset='0' or nResetOut='0') then
-			sel_akiko_d <= '0';
+		sel_akiko_d <= sel_akiko;
 
-			sel_host_d <= '0';
-			host_ack_d <= '0';
+		sel_host_d <= sel_host;
+		host_ack_d <= host_ack;
 
-			ram_req <= '0';
-			sel_undecoded_d <= '0';
-		else
-			sel_akiko_d <= sel_akiko;
-
-			sel_host_d <= sel_host;
-			host_ack_d <= host_ack;
-
-			ram_req <= sel_ram and NOT block_turbo and NOT sel_nmi_vector and NOT cpu_internal;
-			sel_undecoded_d <= sel_32 and not sel_ram;
-		end if;
+		ram_req <= sel_ram and NOT block_turbo and NOT sel_nmi_vector and NOT cpu_internal;
+		sel_undecoded_d <= sel_32 and not sel_ram;
 	end if;
 end process;
 
@@ -321,12 +314,12 @@ sel_akiko <= '1' when (cpuaddr(31 downto 12)=X"00B80" and (havec2p=1)) else '0';
 sel_host <= '1' when (cpuaddr(31 downto 12)=X"00B81" and (haveamigahost=1)) else '0'; -- $B81xxx
 sel_32 <= '1' when cpu(1)='1' and cpuaddr(31 downto 24)/=X"00" and cpuaddr(31 downto 24)/=X"ff" else '0'; -- Decode 32-bit space, but exclude interrupt vectors
 sel_z2ram <= '1' when (cpuaddr(31 downto 24)=X"00") and
-		((cpuaddr(23 downto 21)="001") or
-		(cpuaddr(23 downto 21)="010") or
-		(cpuaddr(23 downto 21)="011") or
-		(cpuaddr(23 downto 21)="100")) else '0';
+	((cpuaddr(23 downto 21)="001") or
+	(cpuaddr(23 downto 21)="010") or
+	(cpuaddr(23 downto 21)="011") or
+	(cpuaddr(23 downto 21)="100")) else '0';
 --	sel_eth         <= '1' when (cpuaddr(31 downto 24)=eth_base) and eth_cfgd='1' else '0';
-sel_chip        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 21)="000") else '0'; -- $000000 - $1FFFFF
+sel_chip        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 21)="000") and (chip_config_d/="00" or cpuaddr(20 downto 19)="00") and (chip_config_d/="01" or cpuaddr(20)='0') and (chip_config_d/="10" or cpuaddr(20 downto 19)/="11") else '0'; -- $000000-$1F0000
 sel_chipram     <= '1' when sel_chip='1' and turbochip_d='1' else '0';
 sel_kick        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 19)="11111") or (cpuaddr(23 downto 19)="11100")) and cpu_write='0' else '0'; -- $F8xxxx, $E0xxxx
 sel_kickram     <= '1' when sel_kick='1' and turbokick_d='1' else '0';
@@ -405,7 +398,7 @@ end generate;
 
 SINGLERAM_ADDR: if dualsdram=0 generate
 	ramaddr(31 downto 26) <= "000000";
-	ramaddr(25) <= sel_z3ram2; -- Second block of 32 meg
+	ramaddr(25) <= '0' when sdram64meg=0 else sel_z3ram2; -- Second block of 32 meg if present
 	ramaddr(24) <= (cpuaddr(24) and sel_z3ram2) or sel_z3ram; -- Remap the first block of Zorro III RAM to 0x1000000
 	ramaddr(23) <= (cpuaddr(23) xor (cpuaddr(22) or cpuaddr(21))) and not sel_z3ram3;
 	ramaddr(22) <= cpuaddr(21) when sel_z3ram3='1' else cpuaddr(22);
@@ -457,28 +450,31 @@ process (clk) begin
 			z3ram2_ena <= '0';
 			z3ram3_ena <= '0';
 			slow_config_d <= "00";
+			chip_config_d <= "00";
 
 			overclock_d <= '0';
 			turbochip_d <= '0';
 			turbokick_d <= '0';
 			turboslow_d <= '0';
 
-			cacheline_clr <= '0';
-
-		elsif (cpu_internal='1' and slower(0)='0') then
+		elsif (cpu_internal='1' and clkena='1') then
 			z2ram_ena <= ziiram_active;
 			z3ram_ena <= ziiiram_active;
 			z3ram2_ena <= ziiiram2_active;
 			z3ram3_ena <= ziiiram3_active;
 			slow_config_d <= slow_config;
+			chip_config_d <= chip_config;
 
-			overclock_d <= overclock;
+			-- ensure turbo is enabled before overclock
+			-- otherwise chipset cannot get enough cycles for RAM access
+			-- and it will crash sooner or later
+			overclock_d <= overclock and turbokick and turbochipram;
 			turbochip_d <= turbochipram;
 			turbokick_d <= turbokick;
 			turboslow_d <= turbochipram;
-
-			cacheline_clr <= (turbochipram XOR turbochip_d) or (turbokick XOR turbokick_d);
 		end if;
+
+		cacheline_clr <= (turbochipram xor turbochip_d) or (turbokick xor turbokick_d);
 	end if;
 end process;
 
@@ -572,7 +568,7 @@ begin
 
 	process (clk) begin
 		if rising_edge(clk) then
-			if (reset='0' or nResetOut='0') then
+			if (reset='0') then
 				slower <= (others => '1');
 			elsif clkena='1' then
 				if overclock_d='1' then

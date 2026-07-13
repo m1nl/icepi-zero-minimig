@@ -261,6 +261,7 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output	[5:0] board_configured,
 	output	turbochipram,
 	output	turbokick,
+	output	[1:0] chip_config,
 	output	[1:0] slow_config,
 	output	aga,
 	output	rtg,
@@ -510,8 +511,8 @@ assign pwr_led = pwr_led_dim_n ? !_led : ((_led & !hblank_out) ? 1'b0 : 1'b1); /
 
 //assign memcfg = memory_config[5:0];
 
-// turbo chipram only when no overlay is active, cpu_config[2] (fast chip) is enabled and Agnus allows CPU on the bus and chipRAM=2MB
-assign turbochipram = !ovl && cpu_config[2] && (&memory_config[1:0]);
+// turbo chipram only when no overlay is active, cpu_config[2] (fast chip) is enabled and Agnus allows CPU on the bus
+assign turbochipram = !ovl && cpu_config[2];
 
 // turbo kickstart only when no overlay is active and cpu_config[3] (fast kick) enabled
 assign turbokick = !ovl && cpu_config[3];
@@ -519,6 +520,7 @@ assign turbokick = !ovl && cpu_config[3];
 assign aga = useaga ? chipset_config[4] : 1'b0;
 assign rtg = usertg;
 
+assign chip_config = memory_config[1:0];
 assign slow_config = memory_config[3:2];
 assign ntscmode = chipset_config[1];
 
