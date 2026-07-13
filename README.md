@@ -1,17 +1,5 @@
 # Minimig AGA
-Ported to IceSugarPro and FleaOhm
-
-## Important:
-minimig_version.vh is a generated file, which must be created before building the project.
-In Quartus it's generated as a pre-flow Tcl script.
-For other platforms you need to run it manually. In Diamond this can be done by typing:
-> source ../../tcl/build_id.tcl
-in the Tcl Console.
-
-You can also run it using any other Tcl host, from the shell, for example:
-> cd rtl/minimig
-> tclsh ../../tcl/build_id.tcl
-
+Ported to IcePi Zero
 
 ### Foreword
 
@@ -21,7 +9,6 @@ You can also run it using any other Tcl host, from the shell, for example:
 
 This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.org/wiki/Amiga_Advanced_Graphics_Architecture) capabilites, which allows it to emulate the latest Amiga models ([Amiga 1200](http://en.wikipedia.org/wiki/Amiga_1200), [Amiga 4000](http://en.wikipedia.org/wiki/Amiga_4000) and (partially) [Amiga CD32](http://en.wikipedia.org/wiki/Amiga_CD32)). Ofcourse it also supports previous OCS/ECS Amigas like [Amiga 500](http://en.wikipedia.org/wiki/Amiga_500), [Amiga 600](http://en.wikipedia.org/wiki/Amiga_600) etc.
 
-
 ## Core features supported
 
 * chipset variants : OCS, ECS, AGA
@@ -30,22 +17,18 @@ This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.or
 * fastRAM : 0.0MB - 24MB
 * CPU core : 68000, 68010, 68020
 * kickstart : 1.2 - 3.2 (256kB, 512kB & 1MB kickstart ROMs currently supported)
-* HRTmon with custom registers mirror
 * floppy disks : 1-4 floppies (supports ADF floppy image format), with normal & turbo speeds
 * hard disks : 1-2 hard disk images (supports whole disk images, partition images, using whole SD card and using SD card partition)
 * video standard : PAL / NTSC
-* supports normal & scandoubled video output (15kHz / 30kHz) - can be used with a monitor or a TV with a SCART cable
-* peripherals : real Amiga / C64 joysticks connected to C64 joystick ports, CDTV infra-red controllers, PS/2 keyboards,
-PS/2 mice, Turbo Chameleon Docking Station for extra joysticks or real Amiga mouse, and MIDI in / out
-* supports basic [retargetable graphics](https://en.wikipedia.org/wiki/Retargetable_graphics) with a P96 driver
+* supports HDMI video output with sound
+* peripherals : 2 x USB HID ports with FPGA USB controllers
 * has an implementation of the [Akiko](https://en.wikipedia.org/wiki/Amiga_custom_chips#Akiko) chunky to planar converter
-* has an extra audio channel which can be used from the Amiga to play CD-quality WAV files, or used on some platforms to emulate floppy drive sounds.
-
 
 ## Usage
 
 ### Hardware
-To use this minimig core, you will at the minimum need an SD/SDHC card, formatted with the FAT32 filesystem, a PS/2 keyboard and a compatible monitor / TV. Joysticks & mouse can be emulated on the keyboard. You will probably want to attach a set of speakers or headphones, a real Amiga or USB mouse and a real Amiga joystick.
+
+To use this minimig core, you will at the minimum need an SD/SDHC card, formatted with the FAT32 filesystem, USB HID keyboard and a HDMI monitor / TV. You will probably want to attach a set of speakers or headphones, a real Amiga or USB mouse and a real Amiga joystick.
 
 ### Software
 
@@ -69,7 +52,6 @@ Keyboard special keys:
 * F11         - start monitor (HRTmon) if HRTmon is enabled in OSD menu (otherwise F11 is the Amiga HELP key)
 * ScrollLock  - toggle keyoard only / mouse / joystick 1 / joystick 2 emulation on the keyboard (direction keys + LCTRL)
 
-
 ## Links & more info
 
 Rok Krajnc's page [somuch.guru](http://somuch.guru/).
@@ -80,9 +62,10 @@ The Turbo Chameleon 64 - [Individual Computers](http://wiki.icomp.de/wiki/Chamel
 
 MiST board support & other cores on the [MiST Project Page](https://github.com/mist-devel/mist-board/wiki)
 
-
 ## Credits
+
 This project contains code written by:
+
 * Jakub Bednarski
 * Sascha Boing
 * Tobias Gubener
@@ -91,8 +74,9 @@ This project contains code written by:
 * Alastair M. Robinson
 * Gyorgy Szombathelyi
 * Dennis van Weeren
+* Mateusz Nalewajski
 
-All code is copyright © 2005 - 2021 and the property of its respective authors.
+All code is copyright © 2005 - 2026 and the property of its respective authors.
 
 
 ## License
@@ -110,18 +94,25 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-## Building minimig-mist from sources
+## Building minimig-mist from sources for IcePi Zero
 
 * checkout the source 
-* download / install [Altera Quartus II](https://dl.altera.com/?edition=web) (latest supported version for Cyclone III FPGA device used on the MiST board is 13.1; I'm still using version 10.1SP1)
-* build the core using Quartus GUI (project file in fpga/mist)
-* place the minimig-mist.rbf files on the root of your SD card (optionally, rename minimig-mist.rbf to core.rbf to make it the default core)
+* download / install [Lattice Diamond](https://www.latticesemi.com/en/Products/DesignSoftwareAndIP/FPGAandLDS/LatticeDiamond)
+* compile firmware and prepare boot ROM
+```
+$ git submodule update --init
+$ cd fw
+$ make
+```
+* build the core using Lattice Diamond GUI (project file in fpga/icepi-zero/)
+* flash bitstream to flash memory using openFPGALoader
+```
+$ openFPGALoader -b icepi-zero --write-flash fpga/icepi-zero/Minimig_IcePi-Zero/minimig_icepi-zero_Minimig_IcePi-Zero.bit
+```
 * don't forget to place kickstart ROM of your choosing on the root of the SD card (these are still copyrighted, so either copy the ROM from your real Amiga, or buy AmigaForever)
 * place some ADF (floppy disk images) of your favourite games / demos / programs on your SD card
 * optionally place minimig.bal, minimig.art & minimig.cop files on the root of your SD card for a nice bootup animation
 * enjoy minimig! :)
-
 
 ## Sources
 
@@ -136,4 +127,3 @@ ARM firmware updates and minimig-tc64 port changes by Christian Vogelsang ([mini
 MiST board & firmware by Till Harbaum ([MiST](https://github.com/mist-devel)).
 
 TG68K.C core by Tobias Gubener ([TG68K.C](https://github.com/TobiFlex/TG68K.C)).
-
