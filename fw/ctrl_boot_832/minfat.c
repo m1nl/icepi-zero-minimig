@@ -154,7 +154,7 @@ unsigned char FindDrive(void)
 		fat32=1;
 	else if (compare(sector_buffer+0x36, "FAT16   ",8)!=0) // check for FAT32
 	{
-        printf("Unsupported partition type!\r");
+        printf("Unsupported partition type!\n");
 	BootPrint("Only FAT16 and FAT32 are supported\n");
 		return(0);
 	}
@@ -280,7 +280,7 @@ unsigned char FileOpen(fileTYPE *file, const char *name)
                         file->cluster = SwapBB(pEntry->StartCluster) + (fat32 ? (SwapBB(pEntry->HighCluster) & 0x0FFF) << 16 : 0);
                         file->sector = 0;
 
-                        printf("file \"%s\" found\r", name);
+                        printf("file \"%s\" found\n", name);
 
                         return(1);
                     }

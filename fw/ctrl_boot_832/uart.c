@@ -2,9 +2,8 @@
 
 int putchar(int c)
 {
-//	while(!(HW_UART(REG_UART)&(1<<REG_UART_TXREADY)))
-//		;
+	if (c == '\n')
+		HW_UART(REG_UART)='\r';
 	HW_UART(REG_UART)=c;
 	return(c);
 }
-

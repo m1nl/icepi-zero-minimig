@@ -1,4 +1,4 @@
-BASE	= 
+BASE	=
 832DIR = ../../EightThirtyTwo
 CC      = $(832DIR)/vbcc/bin/vbcc832
 GCC		= gcc
@@ -27,7 +27,7 @@ PROJECT=OSDBoot_832
 CFLAGS  = -+ -c99 -Dprg_start=0x2000 -DOSDNAME=\"832OSDU0BIN\" -O=1311 -size -unsigned-char -DNULL=0 -I. -I$(INCLUDE_DIR)/ -I$(COMMON_DIR)/ -I../OSD/
 ASFLAGS = -eb
 LDFLAGS  = -eb -s_STACKSIZE=0x240
-ROMGENFLAGS = 
+ROMGENFLAGS =
 
 ### variables ###
 
@@ -37,9 +37,9 @@ HEADERS=spr_defs.h or32_defs.h hardware.h string.h swap.h errors.h mmc.h fat.h
 # common sources
 COMMON_SOURCES=$(BUILD_DIR)/boot.o $(BUILD_DIR)/spi.o $(BUILD_DIR)/swap.o \
 	$(BUILD_DIR)/minfat.o $(BUILD_DIR)/uart.o $(BUILD_DIR)/checksum.o $(BUILD_DIR)/hexdump.o
- 
+
 # all sources
-ALL_SOURCES = $(LIB_DIR)/crt0.a $(ASM_SOURCES) $(COMMON_SOURCES) $(LIB_DIR)/lib832.a 
+ALL_SOURCES = $(LIB_DIR)/crt0.a $(ASM_SOURCES) $(COMMON_SOURCES) $(LIB_DIR)/lib832.a
 
 ### build rules ###
 
@@ -75,7 +75,7 @@ bootdiag.h: bootdiag.s
 $(BUILD_DIR)/%.o: %.asm $(BUILD_DIR)
 	$(AS) $(ASFLAGS) -o $@ $<
 
-$(BUILD_DIR)/%.o: $(STARTUP_DIR)/%.S $(BUILD_DIR) 
+$(BUILD_DIR)/%.o: $(STARTUP_DIR)/%.S $(BUILD_DIR)
 	$(AS) $(ASFLAGS) -o $@ $<
 
 $(BUILD_DIR):
