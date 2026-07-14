@@ -7,14 +7,6 @@
 #include "usbhid_keycodes.h"
 #include <stdio.h>
 
-#ifdef USBHID_DEBUG
-#define DBG(...) printf(__VA_ARGS__)
-#else
-#define DBG(...)                                                                                                      \
-    do {                                                                                                              \
-    } while (0)
-#endif
-
 #define BSWAP32(v)                                                                                                    \
     ((((v) & 0xff000000u) >> 24) | (((v) & 0x00ff0000u) >> 8) | (((v) & 0x0000ff00u) << 8) |                          \
      (((v) & 0x000000ffu) << 24))

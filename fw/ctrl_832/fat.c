@@ -74,8 +74,11 @@ unsigned long fat_size;                 // size of fat
 struct PartitionEntry partitions[4];	// lbastart and sectors will be byteswapped as necessary
 int partitioncount;
 
+#ifdef FATBUFFER_ADDRESS
+#define fat_buffer (*(volatile FATBUFFER *)FATBUFFER_ADDRESS)
+#else
 FATBUFFER fat_buffer;                   // buffer for caching fat entries
-unsigned long buffered_fat_index;       // index of buffered FAT sector
+#endif
 
 char DirEntryLFN[MAXDIRENTRIES][261];
 DIRENTRY DirEntry[MAXDIRENTRIES];
@@ -113,7 +116,7 @@ void bprintfl(const char *fmt,unsigned long l)
 // FindDrive() checks if a card is present and contains FAT formatted primary partition
 unsigned int FindDrive(void)
 {
-    buffered_fat_index = -1;
+    fat_buffer.index = -1;
     unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	int i;
@@ -1342,21 +1345,20 @@ unsigned long GetFATLink(unsigned long cluster)
     }
 
     // read the desired FAT sector if not already in the buffer
-    if (fat_index != buffered_fat_index)
+    if (fat_index != fat_buffer.index)
     {
         if (!MMC_Read(fat_start+fat_index, (unsigned char*)&fat_buffer))
             return(0);
 
         // remember the index of buffered FAT sector
-        buffered_fat_index = fat_index;
+        fat_buffer.index = fat_index;
     }
 
 
-//    return(fat32 ? fat_buffer.fat32[buffer_index] & 0x0FFFFFFF : fat_buffer.fat16[buffer_index]); // get FAT link
-    return(fat32 ? SwapBBBB(fat_buffer.fat32[buffer_index]) & 0x0FFFFFFF : SwapBB(fat_buffer.fat16[buffer_index])); // get FAT link for 68000
+//    return(fat32 ? fat_buffer.fat.fat32[buffer_index] & 0x0FFFFFFF : fat_buffer.fat.fat16[buffer_index]); // get FAT link
+    return(fat32 ? SwapBBBB(fat_buffer.fat.fat32[buffer_index]) & 0x0FFFFFFF : SwapBB(fat_buffer.fat.fat16[buffer_index])); // get FAT link for 68000
 }
 
-#pragma section_code_init
 RAMFUNC unsigned int FileNextSector(fileTYPE *file)
 {
     unsigned long sb;
@@ -1386,21 +1388,20 @@ RAMFUNC unsigned int FileNextSector(fileTYPE *file)
         }
 
         // read sector of FAT if not already in the buffer
-        if (sb != buffered_fat_index)
+        if (sb != fat_buffer.index)
         {
             if (!MMC_Read(fat_start + sb, (unsigned char*)&fat_buffer))
                 return(0);
 
             // remember current buffer index
-            buffered_fat_index = sb;
+            fat_buffer.index = sb;
         }
 
-        file->cluster = fat32 ? SwapBBBB(fat_buffer.fat32[i]) & 0x0FFFFFFF : SwapBB(fat_buffer.fat16[i]); // get FAT link for 68000 
+        file->cluster = fat32 ? SwapBBBB(fat_buffer.fat.fat32[i]) & 0x0FFFFFFF : SwapBB(fat_buffer.fat.fat16[i]); // get FAT link for 68000 
     }
 
     return(1);
 }
-#pragma section_no_code_init
 
 unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin)
 {
@@ -1446,23 +1447,23 @@ unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin
             i = file->cluster & 0xFF; // calculate link offsset within sector
         }
 
-        if (sb != buffered_fat_index)
+        if (sb != fat_buffer.index)
         {
             if (!MMC_Read(fat_start + sb, (unsigned char*)&fat_buffer)) // read sector of FAT if not already in the buffer
                 return(0);
 
-            buffered_fat_index = sb; // remember current buffer index
+            fat_buffer.index = sb; // remember current buffer index
         }
 
         if (fat32)
         {
-            file->cluster = SwapBBBB(fat_buffer.fat32[i]) & 0x0FFFFFFF; // get FAT32 link
+            file->cluster = SwapBBBB(fat_buffer.fat.fat32[i]) & 0x0FFFFFFF; // get FAT32 link
             if (file->cluster == 0x0FFFFFFF) // FAT32 EOC
                 return 0;
         }
         else
         {
-            file->cluster = SwapBB(fat_buffer.fat16[i]); // get FAT16 link
+            file->cluster = SwapBB(fat_buffer.fat.fat16[i]); // get FAT16 link
             if (file->cluster == 0xFFFF) // FAT16 EOC
                 return 0;
         }
@@ -1475,7 +1476,6 @@ unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin
     return(1);
 }
 
-#pragma section_code_init
 RAMFUNC unsigned int FileRead(fileTYPE *file, unsigned char *pBuffer) 
 {
     unsigned long sb;
@@ -1489,7 +1489,6 @@ RAMFUNC unsigned int FileRead(fileTYPE *file, unsigned char *pBuffer)
     else
         return(1);
 }
-#pragma section_no_code_init
 
 unsigned int FileReadEx(fileTYPE *file, unsigned char *pBuffer, unsigned long nSize)
 {
@@ -1589,7 +1588,7 @@ unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
                 while (fat_index < fat_size)
                 {
                     // read sector of FAT if not already in the buffer
-                    if (fat_index != buffered_fat_index)
+                    if (fat_index != fat_buffer.index)
                     {
                         if (!MMC_Read(fat_start + fat_index, (unsigned char*)&fat_buffer))
                         {
@@ -1597,14 +1596,14 @@ unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
                             return(0);
                         }
                         // remember current buffer index
-                        buffered_fat_index = fat_index;
+                        fat_buffer.index = fat_index;
                     }
 
                     unsigned long buffer_size = fat32 ? 128 : 256;
                     while (buffer_index < buffer_size)
                     { // search through all entries in current sector
 
-                        if ((fat32 ? fat_buffer.fat32[buffer_index] : fat_buffer.fat16[buffer_index]) == 0)
+                        if ((fat32 ? fat_buffer.fat.fat32[buffer_index] : fat_buffer.fat.fat16[buffer_index]) == 0)
                         {   // empty cluster found
                             unsigned long cluster = (fat_index << (fat32 ? 7 : 8)) + buffer_index;  // calculate cluster number
 
@@ -1612,10 +1611,10 @@ unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
 
                             // mark cluster as used
                             if (fat32)
-//                                fat_buffer.fat32[buffer_index] = 0x0FFFFFFF; // FAT32 EOC change
-                                fat_buffer.fat32[buffer_index] = 0xFFFFFF0F; // FAT32 EOC change for 68000!
+//                                fat_buffer.fat.fat32[buffer_index] = 0x0FFFFFFF; // FAT32 EOC change
+                                fat_buffer.fat.fat32[buffer_index] = 0xFFFFFF0F; // FAT32 EOC change for 68000!
                             else
-                                fat_buffer.fat16[buffer_index] = 0xFFFF; // FAT16 EOC
+                                fat_buffer.fat.fat16[buffer_index] = 0xFFFF; // FAT16 EOC
 
                             // store FAT sector
                             if (!MMC_Write(fat_start + fat_index, (unsigned char*)&fat_buffer))

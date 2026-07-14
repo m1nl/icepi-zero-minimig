@@ -85,4 +85,3 @@ struct PartitionBlock {
 };
 
 #endif /* HDD_INTERNAL_H */
-

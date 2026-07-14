@@ -1,5 +1,5 @@
-#ifndef _FAT16_H_INCLUDED
-#define _FAT16_H_INCLUDED
+#ifndef FAT_H
+#define FAT_H
 
 #include "hardware.h"
 
@@ -70,9 +70,12 @@ typedef struct
     unsigned long       FileSize;           /* size of file in bytes */
 } DIRENTRY;
 
-typedef union {
-    unsigned short fat16[256];
-    unsigned long  fat32[128];
+typedef struct {
+    union {
+        unsigned short fat16[256];
+        unsigned long  fat32[128];
+    } fat;
+    unsigned long index;
 } FATBUFFER;
 
 #define FILETIME(h,m,s) (((h<<11)&0xF800)|((m<<5)&0x7E0)|((s/2)&0x1F))
@@ -127,4 +130,3 @@ int ScanDirectory(unsigned long mode, char *extension, unsigned char options);
 void ChangeDirectory(unsigned long iStartCluster);
 
 #endif
-

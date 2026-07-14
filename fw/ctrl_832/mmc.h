@@ -79,4 +79,3 @@ unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, un
 unsigned long MMC_GetCapacity(); // Returns the capacity in 512 byte blocks
 
 #endif
-

@@ -109,8 +109,6 @@ void SanityCheck();
 void ColdBoot();
 void (*confirmfunc)();
 
-extern unsigned char DEBUG;
-
 // file selection menu variables
 char *fs_pFileExt = NULL;
 unsigned char fs_Options;
@@ -260,6 +258,7 @@ void HandleUI(void)
         }
         break;
     case KEY_MENU :
+#ifdef DEBUG
         if (ctrl && lalt)
 		{
 			OsdSetTitle("Debug",0);
@@ -269,6 +268,7 @@ void HandleUI(void)
 	        menustate = MENU_NONE1;
 		}
 		else
+#endif
 	        menu = true;
         break;
     case KEY_ESC :
@@ -356,19 +356,23 @@ void HandleUI(void)
     case MENU_NONE1 :
 		helptext=helptexts[HELPTEXT_NONE];
 		menumask=0;
+#ifdef DEBUG
 		if(DebugMode)
 		{
 			helptext=helptexts[HELPTEXT_NONE];
 			OsdShow(0);
 		}
 		else
+#endif
 	        OsdHide();
         menustate = MENU_NONE2;
         break;
 
     case MENU_NONE2 :
+#ifdef DEBUG
 		if(DebugMode)
 			_showdebugmessages();
+#endif
         if (menu)
         {
             menustate = MENU_MAIN1;
@@ -2316,7 +2320,7 @@ void InsertFloppy(adfTYPE *drive)
     if (tracks > MAX_TRACKS)
     {
         SetError(ERROR_FDD,"ADF has too many tracks!",tracks,0);
-		printf("UNSUPPORTED ADF SIZE!!! Too many tracks: %lu\r", tracks);
+		printf("UNSUPPORTED ADF SIZE!!! Too many tracks: %lu\n", tracks);
         tracks = MAX_TRACKS;
     }
     drive->tracks = (unsigned char)tracks;
@@ -2358,14 +2362,14 @@ void InsertFloppy(adfTYPE *drive)
 
     // some debug info
     if (file.long_name[0])
-        printf("Inserting floppy: \"%s\"\r", file.long_name);
+        printf("Inserting floppy: \"%s\"\n", file.long_name);
     else
-        printf("Inserting floppy: \"%.11s\"\r", file.name);
+        printf("Inserting floppy: \"%.11s\"\n", file.name);
 
-    printf("file attributes: 0x%02X\r", file.attributes);
-    printf("file size: %lu (%lu KB)\r", file.size, file.size >> 10);
-    printf("drive tracks: %u\r", drive->tracks);
-    printf("drive status: 0x%02X\r", drive->status);
+    printf("file attributes: 0x%02X\n", file.attributes);
+    printf("file size: %lu (%lu KB)\n", file.size, file.size >> 10);
+    printf("drive tracks: %u\n", drive->tracks);
+    printf("drive status: 0x%02X\n", drive->status);
 	drivesounds_queueevent(DRIVESOUND_INSERT);
 }
 

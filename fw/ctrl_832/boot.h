@@ -2,10 +2,8 @@
 // bootscreen functions
 // 2014, rok.krajnc@gmail.com
 
-
 #ifndef __BOOT_H__
 #define __BOOT_H__
-
 
 //// defines ////
 #define SCREEN_WIDTH    640
@@ -40,4 +38,3 @@ void BootPrintEx(char * str);
 void BootHome();
 
 #endif // __BOOT_H__
-

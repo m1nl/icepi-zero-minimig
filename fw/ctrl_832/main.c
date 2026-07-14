@@ -212,8 +212,6 @@ int main(void) {
 	int clockport=PLATFORM & (1<<PLATFORM_CLOCKPORT);
 	int cartridge=PLATFORM & (1<<PLATFORM_C64CARTRIDGE);
 	setstack();
-	debugmsg[0]=0;
-	debugmsg2[0]=0;
 
 	puts("In main\n");
 

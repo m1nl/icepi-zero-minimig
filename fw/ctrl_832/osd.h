@@ -149,4 +149,3 @@ void OsdDoReset(int enter,int leave);
 extern int osd_visible;
 
 #endif
-

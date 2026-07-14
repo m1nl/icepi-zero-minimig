@@ -22,4 +22,3 @@ void spi_osd_cmd32le(unsigned char cmd, unsigned long parm);
 #endif
 
 #endif
-

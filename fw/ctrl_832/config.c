@@ -19,12 +19,14 @@
 
 configTYPE config;
 fileTYPE file;
-extern char s[40];
 char configfilename[12];
+
+#ifdef DEBUG
 char DebugMode;
+char DebugMsg[128];
+#endif
 
 int CheckSum();
-
 
 unsigned char romkey[3072];
 
@@ -211,7 +213,7 @@ char UploadActionReplay()
 		return(1);
 	} else {
 	  ClearError(ERROR_FILESYSTEM);
-	  puts("\rhrtmon.rom not found!\r");
+	  puts("\nhrtmon.rom not found!\n");
 	  return(0);
 	}
   return(0);
@@ -293,7 +295,7 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
     {
 		configTYPE *tmpconf=(configTYPE *)&sector_buffer;
 		BootPrint("Opened configuration file\n");
-        printf("Configuration file size: %lu\r", cfgfile->size);
+        printf("Configuration file size: %lu\n", cfgfile->size);
         if (cfgfile->size <= sizeof(config))
         {
             FileRead(cfgfile, sector_buffer);
@@ -507,29 +509,29 @@ unsigned char SaveConfiguration(fileTYPE *cfgfile)
     else
     {
 		ClearError(ERROR_FILESYSTEM);
-        printf("Configuration file not found!\r");
-        printf("Trying to create a new one...\r");
+        printf("Configuration file not found!\n");
+        printf("Trying to create a new one...\n");
         strncpy(file.name, configfilename, 11);
         file.attributes = 0;
         file.size = sizeof(config);
         printf("Config size is %x (%x) - address is %x\n",sizeof(config),file.size,&config);
         if (FileCreate(0, &file))
         {
-            printf("File created.\r");
-            printf("Trying to write new data...\r");
+            printf("File created.\n");
+            printf("Trying to write new data...\n");
             memset((void*)sector_buffer, 0, sizeof(sector_buffer));
             memcpy((void*)sector_buffer, (void*)&config, sizeof(config));
 
             if (FileWrite(&file, sector_buffer))
             {
-                printf("File written successfully.\r");
+                printf("File written successfully.\n");
                 return(1);
             }
             else
-                printf("File write failed!\r");
+                printf("File write failed!\n");
         }
         else
-            printf("File creation failed!\r");
+            printf("File creation failed!\n");
     }
     return(0);
 }

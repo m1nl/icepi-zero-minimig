@@ -1,3 +1,6 @@
+#ifndef HDD_H
+#define HDD_H
+
 #define CMD_IDECMD 0x04
 #define CMD_IDEDAT 0x08
 
@@ -65,8 +68,6 @@ unsigned char OpenHardfile(unsigned int unit);
 
 unsigned char GetHDFFileType(char *filename);
 
-extern char debugmsg[40];
-extern char debugmsg2[40];
-
 extern hdfTYPE hdf[HDF_COUNT];
 
+#endif

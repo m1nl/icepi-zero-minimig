@@ -92,7 +92,7 @@ void SendFileV2(RAFile* file, unsigned char* key, int keysize, int address, int 
 	checksum_pre=0;
 
 
-	printf("File size: %dkB\r", size>>1);
+	printf("File size: %dkB\n", size>>1);
 	printf("[");
 	if (keysize) {
 		// read header
@@ -120,7 +120,7 @@ void SendFileV2(RAFile* file, unsigned char* key, int keysize, int address, int 
 		}
 
 	}
-	printf("]\r");
+	printf("]\n");
 
 	if (kickfoundstr) {
 		printf(kickfoundstr);

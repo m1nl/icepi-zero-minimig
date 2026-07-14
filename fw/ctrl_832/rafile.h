@@ -33,4 +33,5 @@ int RARead(RAFile *file,unsigned char *pBuffer, unsigned long bytes);
 int RAReadLine(RAFile *file,unsigned char *pBuffer, unsigned long bytes);
 int RASeek(RAFile *file,unsigned long offset,unsigned long origin);
 int RAOpen(RAFile *file,const char *filename);
+
 #endif

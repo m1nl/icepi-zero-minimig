@@ -1,3 +1,6 @@
+#ifndef HARDWARE_H
+#define HARDWARE_H
+
 //#define MCLK 48000000
 //#define FWS 1 // Flash wait states
 //
@@ -124,4 +127,4 @@ void Reconfigure();
 void EnableIECSerial();
 void DisableIECSerial();
 
-
+#endif

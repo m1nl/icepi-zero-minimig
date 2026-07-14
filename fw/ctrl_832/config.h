@@ -1,3 +1,7 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#include "uart.h"
 #include "fat.h"
 
 #define CONFIG_VERSION 3
@@ -67,7 +71,15 @@ extern fileTYPE file;	// Temporary file available for use by other modules, to a
 						// Shouldn't be considered persistent.
 
 extern configTYPE config;
+
+#ifdef DEBUG
 extern char DebugMode;
+extern char DebugMsg[128];
+
+#define DBG(...) do { if(DebugMode) { sprintf(DebugMsg, __VA_ARGS__); DebugMessage(DebugMsg); puts(DebugMsg); }} while (0)
+#else
+#define DBG(...) do { } while (0)
+#endif
 
 int UploadKickstart(unsigned long dir,char *name);
 char UploadActionReplay();
@@ -78,3 +90,4 @@ unsigned char ConfigurationExists(char *filename);
 unsigned char CheckConfiguration(fileTYPE *cfgfile);
 int ApplyConfiguration(char reloadkickstart,char applydrives,char ignoreoverclock);
 
+#endif

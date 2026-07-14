@@ -11,6 +11,8 @@
 
 #define MAX_TRACKS (83*2)
 
+#define ADF_COUNT 4
+
 typedef struct
 {
     unsigned char status; /*status of floppy*/
@@ -25,7 +27,7 @@ typedef struct
     char          name[22]; /*floppy name*/
 } adfTYPE;
 
-extern adfTYPE df[4];            // drive 0 information structure
+extern adfTYPE df[ADF_COUNT];            // drive 0 information structure
 
 void SectorGapToFpga(void);
 void SectorHeaderToFpga(unsigned char n, unsigned char dsksynch, unsigned char dsksyncl);
@@ -33,7 +35,7 @@ void SectorHeaderToFpga(unsigned char n, unsigned char dsksynch, unsigned char d
 void ReadTrack(adfTYPE *drive);
 unsigned char FindSync(adfTYPE *drive);
 unsigned char GetHeader(unsigned int *pTrack, unsigned int *pSector);
-unsigned char GetData(void);
+unsigned char GetData(unsigned char* sector_buffer);
 void WriteTrack(adfTYPE *drive);
 void UpdateDriveStatus(void);
 void HandleFDD(unsigned char c1, unsigned char c2, unsigned char c3, unsigned char c4);

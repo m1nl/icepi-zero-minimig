@@ -38,10 +38,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <stdio.h>
 
-unsigned char DEBUG=0;
-
 unsigned char drives; // number of active drives reported by FPGA (may change only during reset)
-adfTYPE df[4];            // drive 0 information structure
+adfTYPE df[ADF_COUNT];            // drive 0 information structure
 
 #define TRACK_SIZE 12668
 #define HEADER_SIZE 0x40
@@ -189,15 +187,14 @@ void ReadTrack(adfTYPE *drive)
     	if(drive->track >= drive->tracks)
 		{
 			int unit=((int)drive - (int)&df[0])/sizeof(adfTYPE);
-		    printf("Illegal track read: %d\r", drive->track);
+		    printf("Illegal track read: %d\n", drive->track);
 
 		    SetError(ERROR_FDD,"Read beyond disk end", drive->track,drive->tracks);
 //		    drive->track = drive->tracks - 1;
 		}
 		else
 		{
-			if (DEBUG)
-				printf("*%u:", drive->track);
+			DBG("*%u:", drive->track);
 
 			if (drive->track != drive->track_prev)
 			{ // track step or track 0, start at beginning of track
@@ -232,8 +229,7 @@ void ReadTrack(adfTYPE *drive)
     if (track >= drive->tracks)
     	dummyread=1;
 
-    if (DEBUG)
-        printf("(%u)[%04X]:", status >> 6, dsksync);
+    DBG("(%u)[%04X]:", status >> 6, dsksync);
 
     while (1)
     {
@@ -265,8 +261,7 @@ void ReadTrack(adfTYPE *drive)
         // Prince of Persia: $4891
         // Commando: $A245
 
-        if (DEBUG)
-            printf("%X:%04X", sector, dsklen);
+        DBG("%X:%04X", sector, dsklen);
 
         // some loaders stop dma if sector header isn't what they expect
         // because we don't check dma transfer count after sending a word
@@ -319,11 +314,9 @@ void ReadTrack(adfTYPE *drive)
 		    drive->sector_offset = sector;
 		    drive->cluster_offset = file.cluster;
 		}
-        if (DEBUG)
-            printf("->");
+        DBG("->");
     }
-    if (DEBUG)
-        printf(":OK\r");
+    DBG(":OK\n");
 }
 
 unsigned char FindSync(adfTYPE *drive)
@@ -358,8 +351,7 @@ unsigned char FindSync(adfTYPE *drive)
             if (c3 == 0x44 && c4 == 0x89)
             {
                 DisableFpga();
-                if (DEBUG)
-                    printf("#SYNC:");
+                DBG("#SYNC:");
 
                 return 1;
             }
@@ -397,7 +389,7 @@ unsigned char GetHeader(unsigned int *pTrack, unsigned int *pSector)
             if (c1 != 0x44 || c2 != 0x89)
             {
 				FatalError(ERROR_FDD,"Second sync word missing...",21,0);
-                printf("\rSecond sync word missing...\r");
+                printf("\nSecond sync word missing...\n");
                 break;
             }
 
@@ -447,12 +439,11 @@ unsigned char GetHeader(unsigned int *pTrack, unsigned int *pSector)
             if (error)
             {
 				FatalError(ERROR_FDD,"Bad header",error,0);
-                printf("\rWrong header: %u.%u.%u.%u\r", c1, c2, c3, c4);
+                printf("\nWrong header: %u.%u.%u.%u\n", c1, c2, c3, c4);
                 break;
             }
 
-            if (DEBUG)
-                printf("T%uS%u\r", c2, c3);
+            DBG("T%uS%u\n", c2, c3);
 
             *pTrack = c2;
             *pSector = c3;
@@ -628,8 +619,7 @@ void WriteTrack(adfTYPE *drive)
 	//    drive->track_prev = drive->track + 1; // just to force next read from the start of current track
     drive->track_prev = -1;
 
-    if (DEBUG)
-        printf("*%u:\r", drive->track);
+    DBG("*%u:\n", drive->track);
 
     while (FindSync(drive))
     {

@@ -21,7 +21,7 @@ void audio_stop()
 
 void audio_clear()
 {
-	unsigned char *p=AUDIO_BUFFER;
+	unsigned char *p=(unsigned char *)AUDIO_BUFFER;
 	int i;
 	AUDIO=AUDIOF_CLEAR;
 	for(i=0;i<AUDIO_BUFFER_SIZE*2;++i)

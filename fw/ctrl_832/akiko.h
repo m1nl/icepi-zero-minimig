@@ -1,7 +1,6 @@
 #ifndef AKIKO_H
 #define AKIKO_H
 
-
 #define AKIKOBASE 0x0fffff80
 #define HW_AKIKO(x) *(volatile unsigned short *)(AKIKOBASE+x)
 

@@ -41,28 +41,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // hardfile structure
 hdfTYPE hdf[HDF_COUNT];
 
-char debugmsg[40];
-char debugmsg2[40];
-
 #define DIRECTMODE
 
-#undef SERIALDEBUG
-
-#define DEBUG1(x) {if(DebugMode) DebugMessage(x);}
-#define DEBUG2(x,y) {if(DebugMode) { sprintf(debugmsg2,x,y); DebugMessage(debugmsg2); }}
-#define DEBUG3(x,y,z) {if(DebugMode) { sprintf(debugmsg2,x,y,z); DebugMessage(debugmsg2); }}
-
 static int lastcyl;
-
 static char filename[12];
-
 
 static void RDBChecksum(unsigned long *p)
 {
 	unsigned long count=p[1];
 	unsigned long c2;
 	long result=0;
-	DEBUG1("Generating checksum");
+	DBG("Generating checksum");
 	p[2]=0;
 	for(c2=0;c2<count;++c2)
 		result+=p[c2];
@@ -75,7 +64,7 @@ static void RDBChecksum(unsigned long *p)
 static void FakeRDB(unsigned char* sector_buffer,int unit,int block)
 {
 	int i;
-	DEBUG1("Clearing sector buffer");
+	DBG("Clearing sector buffer");
 	// Start by clearing the sector buffer
 	for(i=0;i<512;++i)
 		sector_buffer[i]=0;
@@ -86,7 +75,7 @@ static void FakeRDB(unsigned char* sector_buffer,int unit,int block)
 		case 0: // RDB
 			{
 				struct RigidDiskBlock *rdb=(struct RigidDiskBlock *)sector_buffer;
-				DEBUG1("Creating RDB...");
+				DBG("Creating RDB...");
 				rdb->rdb_ID = 'R'<<24 | 'D' << 16 | 'S' << 8 | 'K';
 
 				rdb->rdb_Summedlongs=0x40;
@@ -127,7 +116,7 @@ static void FakeRDB(unsigned char* sector_buffer,int unit,int block)
 		case 1: // Partition
 			{
 				struct PartitionBlock *pb=(struct PartitionBlock *)sector_buffer;
-				DEBUG1("Creating RDB...");
+				DBG("Creating RDB...");
 				pb->pb_ID = 'P'<<24 | 'A' << 16 | 'R' << 8 | 'T';
 
 				pb->pb_Summedlongs=0x40;
@@ -181,7 +170,7 @@ void IdentifyDevice(unsigned short *pBuffer, int unit)
 	{
 		case HDF_FILE | HDF_SYNTHRDB:
 		case HDF_FILE:
-			DEBUG1("Identify - Type: HDF_FILE");
+			DBG("Identify - Type: HDF_FILE");
 			pBuffer[0] = 1 << 6; // hard disk
 			pBuffer[1] = hdf[unit].cylinders; // cyl count
 			pBuffer[3] = hdf[unit].heads; // head count
@@ -218,7 +207,7 @@ void IdentifyDevice(unsigned short *pBuffer, int unit)
 		case HDF_CARDPART1:
 		case HDF_CARDPART2:
 		case HDF_CARDPART3:
-			DEBUG1("Identify - Type: HDF_CARD");
+			DBG("Identify - Type: HDF_CARD");
 			pBuffer[0] = 1 << 6; // hard disk
 			pBuffer[1] = hdf[unit].cylinders; // cyl count
 			pBuffer[3] = hdf[unit].heads; // head count
@@ -310,7 +299,7 @@ static unsigned char  tfr[8];
 static inline void ATA_Recalibrate(unsigned char* tfr, int unit)
 {
   // Recalibrate 0x10-0x1F (class 3 command: no data)
-	DEBUG1("Recalibrate");
+	DBG("Recalibrate");
 	WriteTaskFile(0, 0, 1, 0, 0, tfr[6] & 0xF0);
 	WriteStatus(IDE_STATUS_END | IDE_STATUS_IRQ);
 }
@@ -320,7 +309,7 @@ static inline void ATA_Recalibrate(unsigned char* tfr, int unit)
 static inline void ATA_Diagnostic(unsigned char* tfr)
 {
 	// Execute Drive Diagnostic (0x90)
-	DEBUG1("IDE: Drive Diagnostic");
+	DBG("IDE: Drive Diagnostic");
 	WriteTaskFile(1, 0, 0, 0, 0, 0);
 	WriteStatus(IDE_STATUS_END | IDE_STATUS_IRQ);
 }
@@ -331,7 +320,7 @@ void ATA_IdentifyDevice(unsigned char* tfr, int unit, unsigned short* id)
 {
   int i;
   // Identify Device (0xec)
-  DEBUG2("IDE%d: Identify Device", unit);
+  DBG("IDE%d: Identify Device", unit);
   IdentifyDevice(id, unit);
   WriteTaskFile(0, tfr[2], tfr[3], tfr[4], tfr[5], tfr[6]);
   WriteStatus(IDE_STATUS_RDY); // pio in (class 1) command type
@@ -355,7 +344,7 @@ void ATA_IdentifyDevice(unsigned char* tfr, int unit, unsigned short* id)
 void ATA_Initialize(unsigned char* tfr, int unit)
 {
 	// Initialize Device Parameters (0x91)
-	printf("Initialize Device Parameters\r");
+	printf("Initialize Device Parameters\n");
 	WriteTaskFile(0, tfr[2], tfr[3], tfr[4], tfr[5], tfr[6]);
 	WriteStatus(IDE_STATUS_END | IDE_STATUS_IRQ);
 }
@@ -365,7 +354,7 @@ void ATA_Initialize(unsigned char* tfr, int unit)
 void ATA_SetMultipleMode(unsigned char* tfr, int unit)
 {
     hdf[unit].sectors_per_block = tfr[2];
-    printf("Set Multiple Mode %d\r",tfr[2]);
+    printf("Set Multiple Mode %d\n",tfr[2]);
     WriteStatus(IDE_STATUS_END | IDE_STATUS_IRQ);
 }
 
@@ -380,7 +369,7 @@ void ATA_ReadSectors(unsigned char* tfr, int sector, int cylinder, int head, int
 	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	lba=chs2lba(cylinder, head, sector, unit);
-	DEBUG3(multiple ? "ReadM %ld, %d" : "Read  %ld, %d",lba,sector_count);
+	DBG(multiple ? "ReadM %ld, %d" : "Read  %ld, %d",lba,sector_count);
 
 	while (sector_count)
 	{
@@ -499,7 +488,7 @@ void ATA_ReadSectors(unsigned char* tfr, int sector, int cylinder, int head, int
 					++lba;
 					--blk;
 				}
-#endif;
+#endif
 				break;
 		}
 
@@ -524,7 +513,7 @@ void ATA_WriteSectors(unsigned char* tfr, int sector, int cylinder, int head, in
 	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
 	lba=chs2lba(cylinder, head, sector, unit);
-	DEBUG3(multiple ? "WriteM %ld, %d" : "Write  %ld, %d",lba,sector_count);
+	DBG(multiple ? "WriteM %ld, %d" : "Write  %ld, %d",lba,sector_count);
 	lba+=hdf[unit].offset;
 
 	/* Advance CHS values */
@@ -588,7 +577,7 @@ void ATA_WriteSectors(unsigned char* tfr, int sector, int cylinder, int head, in
 				case HDF_CARDPART1:
 				case HDF_CARDPART2:
 				case HDF_CARDPART3:
-					DEBUG1("Write HDF_Card");
+					DBG("Write HDF_Card");
 					MMC_Write(lba,sector_buffer);
 					++lba;
 					break;
@@ -666,7 +655,7 @@ void HandleHDD(unsigned int c1, unsigned int c2)
     printf("IDE:");
     for (i = 1; i<=7; i++)
         printf("%02X.",tfr[i]);
-    printf(", C: %d, H: %d, S: %d, count: %d\r", cylinder,head,sector,sector_count);
+    printf(", C: %d, H: %d, S: %d, count: %d\n", cylinder,head,sector,sector_count);
 #endif
 		if ((tfr[7] & 0xF0) == ACMD_RECALIBRATE) {
 		  ATA_Recalibrate(tfr,  unit);
@@ -687,12 +676,12 @@ void HandleHDD(unsigned int c1, unsigned int c2)
 		} else if (tfr[7] == ACMD_WRITE_MULTIPLE) {
 		  ATA_WriteSectors(tfr, sector, cylinder, head, unit, sector_count,1);
 		} else {
-            printf("Unknown ATA command\r");
+            printf("Unknown ATA command\n");
 
             printf("IDE:");
             for (i = 1; i < 7; i++)
                 printf("%02X.", tfr[i]);
-            printf("%02X\r", tfr[7]);
+            printf("%02X\n", tfr[7]);
             WriteTaskFile(0x04, tfr[2], tfr[3], tfr[4], tfr[5], tfr[6]);
             WriteStatus(IDE_STATUS_END | IDE_STATUS_IRQ | IDE_STATUS_ERR);
         }
@@ -851,16 +840,16 @@ unsigned char OpenHardfile(unsigned int unit)
 					{
 						GetHardfileGeometry(&hdf[unit]);
 
-						printf("HARDFILE %d:\r", unit);
-						printf("file: \"%.8s.%.3s\"\r", hdf[unit].file.name, &hdf[unit].file.name[8]);
-						printf("size: %lu (%lu MB)\r", hdf[unit].file.size, hdf[unit].file.size >> 20);
+						printf("HARDFILE %d:\n", unit);
+						printf("file: \"%.8s.%.3s\"\n", hdf[unit].file.name, &hdf[unit].file.name[8]);
+						printf("size: %lu (%lu MB)\n", hdf[unit].file.size, hdf[unit].file.size >> 20);
 						printf("CHS: %u.%u.%u", hdf[unit].cylinders, hdf[unit].heads, hdf[unit].sectors);
-						printf(" (%lu MB)\r", ((((unsigned long) hdf[unit].cylinders) * hdf[unit].heads * hdf[unit].sectors) >> 11));
+						printf(" (%lu MB)\n", ((((unsigned long) hdf[unit].cylinders) * hdf[unit].heads * hdf[unit].sectors) >> 11));
 
 						time = GetTimer(0);
 						BuildHardfileIndex(&hdf[unit]);
 						time = GetTimer(0) - time;
-						printf("Hardfile indexed in %lu ms\r", time >> 16);
+						printf("Hardfile indexed in %lu ms\n", time >> 16);
 
 						if(hf->enabled & HDF_SYNTHRDB)
 							hdf[unit].offset=-(hdf[unit].heads*hdf[unit].sectors);
@@ -904,15 +893,14 @@ unsigned char OpenHardfile(unsigned int unit)
 }
 
 
-fileTYPE rdbfile;	// We scan for RDB without mounting the file as a unit, so need a file struct specifically for this task.
-
 unsigned char GetHDFFileType(char *filename)
 {
+    fileTYPE rdbfile;	// We scan for RDB without mounting the file as a unit, so need a file struct specifically for this task.
 	unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 	if(FileOpen(&rdbfile,filename))
 	{
 		int i;
-		DEBUG1("Hunting for RDB...");
+		DBG("Hunting for RDB...");
 		for(i=0;i<16;++i)
 		{
 			FileRead(&rdbfile,sector_buffer);
