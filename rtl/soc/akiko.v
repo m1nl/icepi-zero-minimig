@@ -17,7 +17,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // ---------------------------------------------------------------------------
 // Based on cornerturn.vhd by Alastair M. Robinson, converted to make use of
-// distributed RAM with a cost of 4 cycles spend to produce a single output
+// distributed RAM with a cost of 8 cycles spend to produce a single output
 // word (which is still okay assuming clk is 28MHz x 4).
 // ---------------------------------------------------------------------------
 
@@ -74,13 +74,13 @@ always @(posedge clk) begin
           mem0[wrptr] <= d[ 7:0];
           mem1[wrptr] <= d[15:8];
 
-          if (wrptr == 15)
-              armed <= 1;
+          if (wrptr[3])
+            armed <= 1;
 
           ack <= 1;
         end
-        default:begin
-            ack <= 1;
+        default: begin
+          ack <= 1;
         end
       endcase
 
