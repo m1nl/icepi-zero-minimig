@@ -28,7 +28,7 @@ architecture rtl of minimig_autoconfig_rom is
 		-- with a NULL board at 11 to terminate the chain.
 
 		-- Up to 8 meg of 24-bit Fast RAM
-		
+
 		 z2base+16#0#  => "1110",	-- Zorro-II card, add mem, no ROM
 		 z2base+16#2#/2  => "0000",	-- 0110 => 2MB, 0111 => 4MB, 0000 => 8MB
 		 z2base+16#10#/2  => "1110",	-- Manufacturer ID: 0x139c
@@ -37,7 +37,7 @@ architecture rtl of minimig_autoconfig_rom is
 		 z2base+16#16#/2  => "0011",
 		 z2base+16#26#/2  => "1110",	-- Serial no: 1
 
-		
+
 		-- 16 or 64 meg of 32-bit Fast RAM
 
 		 z3base+16#0#  => "1010",	-- Zorro-III card, add mem, no ROM
@@ -50,8 +50,8 @@ architecture rtl of minimig_autoconfig_rom is
 		 z3base+16#14#/2  => "0110",
 		 z3base+16#16#/2  => "0011",
 		 z3base+16#26#/2  => "1101",	-- Serial no: 2
-		
-		
+
+
 		-- Extra 32 meg of RAM for 64-meg platforms
 
 		 z3base2+16#0#  => "1010",	-- Zorro-III card, add mem, no ROM
@@ -83,7 +83,7 @@ architecture rtl of minimig_autoconfig_rom is
 
 
 		-- Ethernet
-		
+
 		 ethbase+16#0#  => "1000",	-- Zorro-III card, no link, no ROM
 		 ethbase+16#2#/2  => "0001",	-- Next board not related, size 16#40k
 		 ethbase+16#4#/2  => "1101",	-- ProductID = 0x20 (only setting upper nybble)
@@ -106,7 +106,7 @@ architecture rtl of minimig_autoconfig_rom is
 		 sndbase+16#12#/2  => "1000",
 		 sndbase+16#14#/2  => "1010",
 		 sndbase+16#16#/2  => "1011",
-		
+
 		-- Minimig Control board
 
 		 ctrlbase+16#0#  => "1100",    -- Zorro-II card, no link, no ROM
