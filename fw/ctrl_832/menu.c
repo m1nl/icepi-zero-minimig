@@ -1701,60 +1701,60 @@ void HandleUI(void)
     case MENU_HARDFILE_CHANGED2 :
         if (select)
         {
+			int upd0=0,upd1=0,upd2=0,upd3=0;
+			if(config.enable_ide!=t_enable_ide)
+			{
+				upd0=t_hardfile[0].enabled;
+				upd1=t_hardfile[1].enabled;
+				upd2=t_hardfile[2].enabled;
+				upd3=t_hardfile[3].enabled;
+			}
+        if ((config.hardfile[0].enabled != t_hardfile[0].enabled)
+				|| (strncmp(config.hardfile[0].name, t_hardfile[0].name, sizeof(t_hardfile[0].name)) != 0))
+				upd0=1;
+        if ((config.hardfile[1].enabled != t_hardfile[1].enabled)
+				|| (strncmp(config.hardfile[1].name, t_hardfile[1].name, sizeof(t_hardfile[1].name)) != 0))
+				upd1=1;
+        if ((config.secondaryhardfile[0].enabled != t_hardfile[2].enabled)
+				|| (strncmp(config.secondaryhardfile[0].name, t_hardfile[2].name, sizeof(t_hardfile[2].name)) != 0))
+				upd2=1;
+        if ((config.secondaryhardfile[1].enabled != t_hardfile[3].enabled)
+				|| (strncmp(config.secondaryhardfile[1].name, t_hardfile[3].name, sizeof(t_hardfile[3].name)) != 0))
+				upd3=1;
+
+			// Apply new configuration
+			config.hardfile[0]=t_hardfile[0];
+			config.hardfile[1]=t_hardfile[1];
+			config.secondaryhardfile[0]=t_hardfile[2];
+			config.secondaryhardfile[1]=t_hardfile[3];
+			config.enable_ide=t_enable_ide; // Apply new IDE on/off
+			config.hdfdir[0]=t_hdfdir[0];
+			config.hdfdir[1]=t_hdfdir[1];
+			config.hdfdir[2]=t_hdfdir[2];
+			config.hdfdir[3]=t_hdfdir[3];
+
+			// FIXME - waiting for user-confirmation increases the window of opportunity for file corruption!
+
+        if (upd0)
+            OpenHardfile(0);
+
+        if (upd1)
+            OpenHardfile(1);
+
+        if (upd2)
+            OpenHardfile(2);
+
+        if (upd3)
+            OpenHardfile(3);
+
+        ConfigIDE(config.enable_ide&1, config.hardfile[0].present && config.hardfile[0].enabled,
+					 config.hardfile[1].present && config.hardfile[1].enabled);
+        ConfigIDE(2|(config.enable_ide>>1), config.secondaryhardfile[0].present && config.secondaryhardfile[0].enabled,
+					 config.secondaryhardfile[1].present && config.secondaryhardfile[1].enabled);
+
             if (menusub == 0) // yes
             {
-				int upd0=0,upd1=0,upd2=0,upd3=0;
-				if(config.enable_ide!=t_enable_ide)
-				{
-					upd0=t_hardfile[0].enabled;
-					upd1=t_hardfile[1].enabled;
-					upd2=t_hardfile[2].enabled;
-					upd3=t_hardfile[3].enabled;
-				}
-                if ((config.hardfile[0].enabled != t_hardfile[0].enabled)
-					|| (strncmp(config.hardfile[0].name, t_hardfile[0].name, sizeof(t_hardfile[0].name)) != 0))
-					upd0=1;
-                if ((config.hardfile[1].enabled != t_hardfile[1].enabled)
-					|| (strncmp(config.hardfile[1].name, t_hardfile[1].name, sizeof(t_hardfile[1].name)) != 0))
-					upd1=1;
-                if ((config.secondaryhardfile[0].enabled != t_hardfile[2].enabled)
-					|| (strncmp(config.secondaryhardfile[0].name, t_hardfile[2].name, sizeof(t_hardfile[2].name)) != 0))
-					upd2=1;
-                if ((config.secondaryhardfile[1].enabled != t_hardfile[3].enabled)
-					|| (strncmp(config.secondaryhardfile[1].name, t_hardfile[3].name, sizeof(t_hardfile[3].name)) != 0))
-					upd3=1;
-
-				// Apply new configuration
-				config.hardfile[0]=t_hardfile[0];
-				config.hardfile[1]=t_hardfile[1];
-				config.secondaryhardfile[0]=t_hardfile[2];
-				config.secondaryhardfile[1]=t_hardfile[3];
-				config.enable_ide=t_enable_ide; // Apply new IDE on/off
-				config.hdfdir[0]=t_hdfdir[0];
-				config.hdfdir[1]=t_hdfdir[1];
-				config.hdfdir[2]=t_hdfdir[2];
-				config.hdfdir[3]=t_hdfdir[3];
-
-				// FIXME - waiting for user-confirmation increases the window of opportunity for file corruption!
-
-                if (upd0)
-                    OpenHardfile(0);
-
-                if (upd1)
-                    OpenHardfile(1);
-
-                if (upd2)
-                    OpenHardfile(2);
-
-                if (upd3)
-                    OpenHardfile(3);
-
-                ConfigIDE(config.enable_ide&1, config.hardfile[0].present && config.hardfile[0].enabled,
-						 config.hardfile[1].present && config.hardfile[1].enabled);
-                ConfigIDE(2|(config.enable_ide>>1), config.secondaryhardfile[0].present && config.secondaryhardfile[0].enabled,
-						 config.secondaryhardfile[1].present && config.secondaryhardfile[1].enabled);
    	            OsdReset();
-				
                 menustate = MENU_NONE1;
             }
             else if (menusub == 1) // no

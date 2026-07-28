@@ -62,6 +62,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rtc.h"
 #include "version.h"
 #include "usbhid.h"
+#include "aux_spi.h"
+#include "aux_hid.h"
 
 #include <stdio.h>
 
@@ -102,13 +104,22 @@ void HandleFpga(void)
     UpdateDriveStatus();
 }
 
-
 void inthandler()
 {
-	int ints=GetInterrupts();
+    unsigned int _spi = 0;
+    char temp[AUX_SPI_BUFFER_SIZE];
+    int i = 0;
+
 	DisableInterrupts();
-	akiko_inthandler();
-	c64keys_inthandler();
+
+    aux_spi_inthandler();
+
+	if (PLATFORM & (1 << PLATFORM_AMIGAHOST))
+		akiko_inthandler();
+	if (PLATFORM & (1 << PLATFORM_C64CARTRIDGE))
+		c64keys_inthandler();
+
+    AckInterrupt();
 	EnableInterrupts();
 }
 
@@ -206,14 +217,18 @@ struct cdimage cd;
 
 void setstack();
 
+__constructor(100.platform) void platform_init(void) { PLATFORM = _PLATFORM; printf("Platform init: %x\n", PLATFORM); }
+
 int main(void) {
+	setstack();
 	int c=0;
+
+	PLATFORM = _PLATFORM;
 	int rtc=PLATFORM & (1<<PLATFORM_SPIRTC);
 	int clockport=PLATFORM & (1<<PLATFORM_CLOCKPORT);
 	int cartridge=PLATFORM & (1<<PLATFORM_C64CARTRIDGE);
-	setstack();
 
-	puts("In main\n");
+	printf("PLATFORM %x\n", PLATFORM);
 
 	ClearError(ERROR_ALL);
 
@@ -254,6 +269,7 @@ int main(void) {
 			HandleFpga(); /* Stop talking to the disk subsystems if a fatal error occurs */
 
 		usbhid_handle();
+		aux_hid_handle();
 
         HandleUI();
     }

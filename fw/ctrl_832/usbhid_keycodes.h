@@ -55,7 +55,7 @@ const unsigned short usb2ami[256] = {
   0x1b,  // 30: ]
   0x0d,  // 31: backslash (only on us keyboards)
   0x2b,  // 32: Europe 1 (only on international keyboards)
-  0x29,  // 33: ; 
+  0x29,  // 33: ;
   0x2a,  // 34: '
   0x00,  // 35: `
   0x38,  // 36: ,
@@ -74,7 +74,7 @@ const unsigned short usb2ami[256] = {
   0x59,  // 43: F10
   0x5f,  // 44: F11
   KEY_MENU,  // 45: F12 (OSD)
-  0x6e,  // 46: Print Screen (OSD)
+  KEY_MENU,  // 46: Print Screen (OSD)
   MISS,  // 47: Scroll Lock (OSD)
   0x6f,  // 48: Pause
   0x0d,  // 49: backslash to avoid panic in Germany ;)

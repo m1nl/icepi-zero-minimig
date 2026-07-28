@@ -22,7 +22,13 @@ PROJECT=832OSDU0
 
 ### flags ###
 
-CFLAGS  = -+ -c99 -O=1343 -unsigned-char -D__geta4= -DNULL=0 -DFATBUFFER_ADDRESS=0x1000 -I. -I$(INCLUDE_DIR)/ -I$(LIBDIR)/
+CFLAGS  = -+ -c99 -O=1343 -unsigned-char -D__geta4= -DNULL=0 \
+	-DPLATFORM_CACHE_ADDRESS=0x1000 \
+	-DAUX_SPI_BUFFER_ADDRESS=0x1004 \
+	-DAUX_SPI_BUFFER_SIZE=32 \
+	-DFATBUFFER_ADDRESS=0x1024 \
+	-I. -I$(INCLUDE_DIR)/ -I$(LIBDIR)/
+
 ASFLAGS = -eb
 LDFLAGS  = -eb -s_STACKSIZE=0x0 -s_STACKTOP=0x1000 -b 0x2000
 
@@ -52,7 +58,8 @@ ALL_SOURCES=$(BUILD_DIR)/hardware.o $(BUILD_DIR)/config.o $(BUILD_DIR)/fat.o $(B
 	$(BUILD_DIR)/boot.o $(BUILD_DIR)/hdd.o $(BUILD_DIR)/main.o $(BUILD_DIR)/menu.o $(BUILD_DIR)/mmc.o $(BUILD_DIR)/spi.o \
 	$(BUILD_DIR)/osd.o $(BUILD_DIR)/rafile.o $(BUILD_DIR)/hexdump.o $(BUILD_DIR)/uart.o $(BUILD_DIR)/errors.o \
 	$(BUILD_DIR)/audiotrack.o $(BUILD_DIR)/bincue.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/c64keys.o $(BUILD_DIR)/akiko.o \
-	$(BUILD_DIR)/audio.o $(BUILD_DIR)/drivesounds.o $(BUILD_DIR)/rtc.o $(BUILD_DIR)/usbhid.o
+	$(BUILD_DIR)/audio.o $(BUILD_DIR)/drivesounds.o $(BUILD_DIR)/rtc.o $(BUILD_DIR)/usbhid.o $(BUILD_DIR)/aux_spi.o \
+	$(BUILD_DIR)/aux_hid.o
 
 
 ### build rules ###

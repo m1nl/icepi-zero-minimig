@@ -70,13 +70,21 @@
 #define SPI(x) (HW_SPI(HW_SPI_DATA)=x,HW_SPI(HW_SPI_DATA))
 #define RDSPI  HW_SPI(HW_SPI_DATA)
 
+#define HW_AUX_SPI *(volatile unsigned int *)(0x0fffff40)
+
 // A 16-bit register for platform-specific config.
 // On read:
 //   Bit 0 -> menu button
 //   Bit 1 -> 32meg supported
 //   Bit 8 -> Reconfig supportred
 
-#define PLATFORM (*(volatile unsigned short *)0x0fffffc2)
+#define _PLATFORM (*(volatile unsigned short *)0x0fffffc2)
+#ifdef PLATFORM_CACHE_ADDRESS
+#define PLATFORM (*(volatile unsigned short *)PLATFORM_CACHE_ADDRESS)
+#else
+#define PLATFORM _PLATFORM
+#endif
+
 #define PLATFORM_MENUBUTTON 0
 #define PLATFORM_32MEG 1
 #define PLATFORM_SPIRTC 2
@@ -86,6 +94,8 @@
 #define PLATFORM_C64CARTRIDGE 6
 #define PLATFORM_HRTMONCART 7
 #define PLATFORM_VIDEO_FILTER 8
+#define PLATFORM_AUDIO 9
+#define PLATFORM_AMIGAHOST 10
 
 // On write:
 //   Bit 0 -> Scandoubler enable

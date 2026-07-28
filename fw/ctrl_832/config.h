@@ -76,7 +76,14 @@ extern configTYPE config;
 extern char DebugMode;
 extern char DebugMsg[128];
 
-#define DBG(...) do { if(DebugMode) { snprintf(DebugMsg, sizeof(DebugMsg), __VA_ARGS__); DebugMessage(DebugMsg); puts(DebugMsg); }} while (0)
+#define DBG(...) do { \
+        snprintf(DebugMsg, sizeof(DebugMsg), __VA_ARGS__); \
+        if(DebugMode) { \
+            DebugMessage(DebugMsg); \
+        } \
+        puts(DebugMsg); \
+    } while (0)
+
 #else
 #define DBG(...) do { } while (0)
 #endif
