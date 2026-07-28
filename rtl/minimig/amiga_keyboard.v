@@ -108,11 +108,10 @@ assign keystrobe = keystrobe_reg | keystrobe_ps2;
 
 // !!! Amiga receives keycode ONE STEP ROTATED TO THE RIGHT AND INVERTED !!!
 always @(posedge clk) begin
-
 	if(osd_ctrl_strobe_ps2)
-		osd_ctrl_reg<=osd_ctrl_ps2;
+		osd_ctrl_reg <= osd_ctrl_ps2;
 	else if (kbd_mouse_strobe)
-		osd_ctrl_reg<=kbd_mouse_data;
+		osd_ctrl_reg <= kbd_mouse_data;
 
 	if (reset) begin
 		key_data <= 8'h00;
@@ -152,7 +151,7 @@ always @(posedge clk) begin
 		end
 end
 `endif
-  
+
 `else
 //MiST kbd
 
@@ -161,20 +160,18 @@ assign _lmb = 1'b1;
 assign _rmb = 1'b1;
 assign _joy2 = 6'b11_1111;
 assign mou_emu = 6'b11_1111;
-reg freeze_reg=0;
+
+reg kms_level_d;
+reg freeze_reg = 0;
+
 assign freeze = freeze_reg;
 assign aflock = 1'b0;
 
-reg keystrobe_reg;
-assign keystrobe = keystrobe_reg && ((kbd_mouse_type == 2) || (kbd_mouse_type == 3));
+assign keystrobe = (kms_level != kms_level_d) && ((kbd_mouse_type == 2) || (kbd_mouse_type == 3));
 
-
-reg kms_levelD;
 always @(posedge clk) begin
-	if (clk7n_en) begin
-		keystrobe_reg <= 0;
-		kms_levelD <= kms_level;
-		if (kms_level ^ kms_levelD)	keystrobe_reg <= 1;
+	if (clk7_en) begin
+		kms_level_d <= kms_level;
 	end
 end
 
