@@ -35,13 +35,16 @@ entity cfide is
 		havecart : integer := 0;
 		havevideofilter : integer := 0;
 		haveclockport : integer := 0;
-		haveamigahost : integer := 0
+		haveamigahost : integer := 0;
+		haveaudio : integer := 0;
+		haveusbhid : integer := 1;
+		haveauxspi : integer := 1
 	);
 	port (
 		sysclk	: in std_logic;
 		usbclk  : in std_logic;
 
-		n_reset	: in std_logic;
+		reset_n	: in std_logic;
 
 		addr	: in std_logic_vector(31 downto 2);
 		d		: in std_logic_vector(31 downto 0);
@@ -50,12 +53,17 @@ entity cfide is
 		wr 	: in std_logic;
 		ack 	: buffer std_logic;
 
+		aux_spi_csn : in std_logic;
+		aux_spi_clk : in std_logic;
+		aux_spi_mosi : in std_logic;
+
 		sd_di		: in std_logic;
 		sd_cs 	: out std_logic_vector(7 downto 0);
 		sd_clk 	: out std_logic;
 		sd_do		: out std_logic;
-		sd_dimm	: in std_logic;		--for sdcard
+		sd_dimm	: in std_logic;	-- for sdcard
 		sd_ack 	: in std_logic; -- indicates that SPI signal has made it to the wire
+
 		debugTxD : out std_logic;
 		debugRxD : in std_logic;
 		menu_button	: in std_logic:='1';
@@ -102,11 +110,26 @@ end cfide;
 
 architecture rtl of cfide is
 
-signal shift: std_logic_vector(9 downto 0);
-signal clkgen: unsigned(9 downto 0);
-signal shiftout: std_logic;
-signal txbusy: std_logic;
+signal uart_clkgen: unsigned(9 downto 0);
+signal uart_shift: std_logic_vector(9 downto 0);
+signal uart_shiftout: std_logic;
+signal uart_txbusy: std_logic;
 signal uart_ld: std_logic;
+
+signal aux_spi_data_wr : std_logic_vector(7 downto 0);
+signal aux_spi_data_wr_en : std_logic;
+signal aux_spi_data_rd : std_logic_vector(7 downto 0);
+signal aux_spi_data_rd_ack : std_logic;
+signal aux_spi_fifo_empty : std_logic;
+
+signal aux_spi_shift : std_logic_vector(7 downto 0);
+signal aux_spi_clk_r : std_logic_vector(3 downto 0);
+signal aux_spi_bit_cnt: integer range 0 to 7 := 0;
+signal aux_spi_select : std_logic;
+signal aux_spi_csn_r : std_Logic;
+signal aux_spi_mosi_r : std_Logic;
+signal aux_spi_status : std_logic_vector(1 downto 0);
+
 --signal IO_select : std_logic;
 signal platform_select: std_logic;
 signal timer_select: std_logic;
@@ -114,10 +137,6 @@ signal SPI_select: std_logic;
 signal platformdata: std_logic_vector(15 downto 0);
 signal IOdata: std_logic_vector(15 downto 0);
 signal IOcpuena: std_logic;
-
-type support_states is (idle, io_aktion);
-signal support_state		: support_states;
-signal next_support_state		: support_states;
 
 signal sd_out	: std_logic_vector(15 downto 0);
 signal sd_in	: std_logic_vector(15 downto 0);
@@ -142,18 +161,25 @@ signal audio_q : std_logic_vector(15 downto 0);
 signal audio_select : std_logic;
 
 signal interrupt_select : std_logic;
-signal interrupt_ena : std_logic;
-signal keyboard_select : std_logic;
+signal interrupt_en : std_logic;
+signal interrupt_trigger : std_logic;
+
+signal input_select : std_logic;
 signal keyboard_q : std_logic_vector(15 downto 0);
+signal joystick_d : std_logic_vector(23 downto 0);
 signal amiga_buffer  : std_logic_vector(15 downto 0);
 signal amiga_select : std_logic;
-signal amiga_ready_d : std_logic;
+signal amiga_req_d : std_logic;
+
+signal vbl_int_d : std_logic;
 
 signal usb_select_0 : std_logic;
 signal usbtohost_0 : std_logic_vector(31 downto 0);
 
 signal usb_select_1 : std_logic;
 signal usbtohost_1 : std_logic_vector(31 downto 0);
+
+signal ack_28m : std_logic;
 
 signal rtc_select : std_logic;
 signal reconfigpresent : std_logic;
@@ -162,6 +188,26 @@ signal iecpresent : std_logic;
 signal cartpresent : std_logic;
 signal videofilterpresent : std_logic;
 signal clockportpresent : std_logic;
+signal audiopresent : std_logic;
+signal amigahostpresent : std_logic;
+signal usbhidpresent : std_logic;
+signal auxspipresent : std_logic;
+
+component circular_fifo
+generic (
+	WIDTH : integer := 8;
+	DEPTH : integer := 8
+);
+port (
+	clk   : in std_logic;
+	rst   : in std_logic;
+	wr_en : in std_logic;
+	din   : in std_logic_vector(WIDTH-1 downto 0);
+	rd_ack : in std_logic;
+	dout  : out std_logic_vector(WIDTH-1 downto 0);
+	empty : out std_logic
+);
+end component;
 
 begin
 
@@ -171,8 +217,9 @@ q(15 downto 0) <=
 	IOdata WHEN rs232_select='1' or SPI_select='1' ELSE
 	std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
 	audio_q when audio_select='1' else
-	keyboard_q when keyboard_select='1' else
+	keyboard_q when input_select='1' else
 	amiga_buffer when amiga_select='1' else
+	(15 downto 8 => '0') & aux_spi_data_rd when aux_spi_select='1' else
 	usbtohost_0(15 downto 0) when usb_select_0='1' else
 	usbtohost_1(15 downto 0) when usb_select_1='1' else
 	platformdata;
@@ -180,6 +227,7 @@ q(15 downto 0) <=
 -- Peripheral registers, which are 32-bits wide.
 
 q(31 downto 16) <=
+	(aux_spi_status & (13 downto 0 => '0')) when aux_spi_select='1' else
 	usbtohost_0(31 downto 16) when usb_select_0='1' else
 	usbtohost_1(31 downto 16) when usb_select_1='1' else
 	(others => '0');
@@ -190,21 +238,44 @@ reconfigpresent <= '1' when havereconfig=1 else '0';
 cartpresent <= '1' when havecart=1 else '0';
 videofilterpresent <= '1' when havevideofilter=1 else '0';
 clockportpresent <= '1' when haveclockport=1 else '0';
+audiopresent <= '1' when haveaudio=1 else '0';
+amigahostpresent <= '1' when haveamigahost=1 else '0';
+usbhidpresent <= '1' when haveusbhid=1 else '0';
+auxspipresent <= '1' when haveauxspi=1 else '0';
 
-platformdata <=  "0000000" & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+platformdata <= "00000" & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
 
 IOdata <= sd_in;
 
-process(clk_28)
+process (sysclk)
+begin
+	if rising_edge(sysclk) then
+		ack <= '0';
+		if req='1' then
+			if SPI_select='1' then
+				if SD_busy='0' then
+					ack <= '1';
+				end if;
+			elsif rs232_select='1' or input_select='1' or audio_select='1' or platform_select='1' or rtc_select='1' then
+				ack <= ack_28m;
+			else
+				ack <= '1';
+			end if;
+		end if;
+	end if;
+end process;
+
+process (clk_28)
 begin
 	if rising_edge(clk_28) then
-		ack<='0';
+		ack_28m <= '0';
 		if req='1' then
-			if rs232_select='1' or SPI_select='1' then
-				ack<=IOcpuena;
-			elsif timer_select='1' or platform_select='1' or audio_select='1' or usb_select_0='1' or usb_select_1='1' or interrupt_select='1'
-						or keyboard_select='1' or amiga_select='1' or rtc_select='1' then
-				ack<='1';
+			if rs232_select='1' then
+				if uart_txbusy='0' then
+					ack_28m <= '1';
+				end if;
+			else
+				ack_28m <= '1';
 			end if;
 		end if;
 	end if;
@@ -213,36 +284,37 @@ end process;
 sd_in(15 downto 8) <= (others=>'0');
 sd_in(7 downto 0) <= sd_in_shift(7 downto 0);
 
-audio_q<=X"000"&"00"&audio_amiga&audio_buf;
+audio_q <= X"000" & "00" & audio_amiga & audio_buf;
 
 SPI_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" ELSE '0';
 rs232_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"F" ELSE '0';
 timer_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"D" ELSE '0';
 platform_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"C" ELSE '0';
-audio_select <='1' when addr(27)='1' and addr(7 downto 4)=X"B" else '0';
 interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
-keyboard_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
-amiga_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"8" else '0';
+input_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
+audio_select <= audiopresent when addr(27)='1' and addr(7 downto 4)=X"B" else '0';
+amiga_select <= amigahostpresent when addr(27)='1' and addr(7 downto 4)=X"8" else '0';
 rtc_select <= spirtcpresent when addr(27)='1' and addr(7 downto 4)=X"7" else '0';
-usb_select_0 <= '1' when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
-usb_select_1 <= '1' when addr(27)='1' and addr(7 downto 4)=X"5" else '0';
+usb_select_0 <= usbhidpresent when addr(27)='1' and addr(7 downto 4)=X"6" else '0';
+usb_select_1 <= usbhidpresent when addr(27)='1' and addr(7 downto 4)=X"5" else '0';
+aux_spi_select <= auxspipresent when addr(27)='1' and addr(7 downto 4)=X"4" else '0';
 
 -- RTC handling at 0fffff70
-process (clk_28,n_reset)
+process (clk_28, reset_n)
 begin
-	if n_reset='0' then
-		rtc_q<=(others=>'0');
+	if reset_n='0' then
+		rtc_q <= (others=>'0');
 	elsif rising_edge(clk_28) then
-		if rtc_select='1' and req='1' and wr='1' then
+		if rtc_select='1' and req='1' and ack_28m='0' and wr='1' then
 			case addr(3 downto 2) is
 				when "00" =>
-					rtc_q(63 downto 48)<=d(15 downto 0);
+					rtc_q(63 downto 48) <= d(15 downto 0);
 				when "01" =>
-					rtc_q(47 downto 32)<=d(15 downto 0);
+					rtc_q(47 downto 32) <= d(15 downto 0);
 				when "10" =>
-					rtc_q(31 downto 16)<=d(15 downto 0);
+					rtc_q(31 downto 16) <= d(15 downto 0);
 				when "11" =>
-					rtc_q(15 downto 0)<=d(15 downto 0);
+					rtc_q(15 downto 0) <= d(15 downto 0);
 				when others =>
 					null;
 			end case;
@@ -267,7 +339,7 @@ begin
 			end if;
 		end if;
 
-		if amiga_select='1' and req='1' then
+		if amiga_select='1' and req='1' and ack='0' then
 			if amiga_req='1' then
 				amiga_ack <= '1';
 			end if;
@@ -288,155 +360,227 @@ amiga_q <= (others => '0');
 end generate;
 
 -- C64 Keyboard handling at 0fffff90
-process (clk_28,n_reset)
+process (clk_28, reset_n)
 begin
-	if rising_edge(clk_28) then
-		amiga_key_stb<='0';
-		if keyboard_select='1' and req='1' then
-			if  wr='1' then
-				amiga_key<=d(15 downto 0);
-				amiga_key_stb<='1';
+	if reset_n='0' then
+		amiga_key <= (others => '0');
+		amiga_key_stb <= '0';
+		joystick_d <= (others => '0');
+
+	elsif rising_edge(clk_28) then
+		amiga_key_stb <= '0';
+
+		if input_select='1' and req='1' and ack_28m='0' then
+			if wr='1' then
+				case addr(3 downto 2) is
+					when "00" =>
+						amiga_key <= d(15 downto 0);
+						amiga_key_stb <= '1';
+					when "01" =>
+						joystick_d(11 downto 0) <= d(11 downto 0);
+					when "10" =>
+						joystick_d(23 downto 12) <= d(11 downto 0);
+					when others =>
+						null;
+				end case;
 			end if;
-			case addr(3 downto 2) is
-				when "00" =>
-					keyboard_q<=c64_keys(63 downto 48);
-				when "01" =>
-					keyboard_q<=c64_keys(47 downto 32);
-				when "10" =>
-					keyboard_q<=c64_keys(31 downto 16);
-				when "11" =>
-					keyboard_q<=c64_keys(15 downto 0);
-				when others =>
-					null;
-			end case;
+
+			if c64_present='1' then
+				case addr(3 downto 2) is
+					when "00" =>
+						keyboard_q <= c64_keys(63 downto 48);
+					when "01" =>
+						keyboard_q <= c64_keys(47 downto 32);
+					when "10" =>
+						keyboard_q <= c64_keys(31 downto 16);
+					when "11" =>
+						keyboard_q <= c64_keys(15 downto 0);
+					when others =>
+						null;
+				end case;
+			end if;
 		end if;
 	end if;
 end process;
 
 -- Interrupt handling at 0fffffa0
 -- Any access to this range will clear the interrupt flag;
-process (clk_28,n_reset)
+
+interrupt <= '1' when interrupt_trigger='1' and interrupt_en='1' else '0';
+
+process (sysclk)
 begin
-	if n_reset='0' then
-		interrupt<='0';
-		interrupt_ena<='0';
-	elsif rising_edge(clk_28) then
-		amiga_ready_d<=amiga_req;
-		if vbl_int='1' or (amiga_req='1' and amiga_ready_d='0') then
-			interrupt<=interrupt_ena;
-		end if;
-		if interrupt_select='1' and req='1' then
-			interrupt<='0';
-			if  wr='1' then
-				interrupt_ena<=d(0);
+	if rising_edge(sysclk) then
+		if reset_n='0' then
+			amiga_req_d <= '0';
+			vbl_int_d <= '0';
+
+			interrupt_trigger <= '0';
+			interrupt_en <= '0';
+
+		else
+			if interrupt_select='1' and req='1' and ack='0' then
+				if wr='1' then
+					interrupt_en <= d(0);
+				else
+					interrupt_trigger <= '0';
+				end if;
+			end if;
+
+			if amigahostpresent='1' then
+				amiga_req_d <= amiga_req;
+				if amiga_req='1' and amiga_req_d='0' then
+					interrupt_trigger <= '1';
+				end if;
+			end if;
+
+			if c64_present='1' then
+				vbl_int_d <= vbl_int;
+				if vbl_int='1' and vbl_int_d='0' then
+					interrupt_trigger <= '1';
+				end if;
+			end if;
+
+			if auxspipresent='1' then
+				if aux_spi_csn_r='0' then
+					interrupt_trigger <= '1';
+				end if;
 			end if;
 		end if;
 	end if;
 end process;
 
+
+fifo_inst : circular_fifo
+generic map (
+	WIDTH => 8,
+	DEPTH => 8
+)
+port map (
+	clk   => sysclk,
+	rst   => not reset_n,
+	wr_en => aux_spi_data_wr_en,
+	din   => aux_spi_data_wr,
+	rd_ack => aux_spi_data_rd_ack,
+	dout  => aux_spi_data_rd,
+	empty => aux_spi_fifo_empty
+);
+
+aux_spi_data_wr <= aux_spi_shift;
+-- aux_spi_data_rd_ack <= '1' when aux_spi_select='1' and req='0' and ack='1' else '0';
+
+process (sysclk)
+begin
+	if rising_edge(sysclk) then
+		aux_spi_clk_r <= aux_spi_clk_r(2 downto 0) & aux_spi_clk;
+		aux_spi_csn_r <= aux_spi_csn;
+		aux_spi_mosi_r <= aux_spi_mosi;
+
+		if reset_n='0' then
+			aux_spi_data_wr_en <= '0';
+			aux_spi_data_rd_ack <= '0';
+			aux_spi_status <= (others => '0');
+			aux_spi_bit_cnt <= 0;
+
+		else
+			aux_spi_data_wr_en <= '0';
+			aux_spi_data_rd_ack <= '0';
+
+			if aux_spi_select='1' and req='1' and ack='0' then
+				if aux_spi_csn_r='0' or aux_spi_bit_cnt/=0 then
+					aux_spi_status(1) <= '1';
+				else
+					aux_spi_status(1) <= '0';
+				end if;
+
+				aux_spi_status(0) <= not aux_spi_fifo_empty;
+				aux_spi_data_rd_ack <= not aux_spi_fifo_empty;
+			end if;
+
+			if aux_spi_csn_r='1' and aux_spi_bit_cnt=0 then
+				null; -- no-op
+
+			elsif aux_spi_clk_r="1100" then  -- CPOL=0 CPHA=1
+				aux_spi_shift <= aux_spi_shift(6 downto 0) & aux_spi_mosi_r;
+				aux_spi_bit_cnt <= aux_spi_bit_cnt + 1;
+
+				if aux_spi_bit_cnt=7 then
+					aux_spi_data_wr_en <= '1';
+				end if;
+			end if;
+		end if;
+	end if;
+end process;
 
 ---------------------------------
 -- Platform specific registers --
 ---------------------------------
 
-process(clk_28,n_reset)
+process (clk_28, reset_n)
 begin
-	if n_reset='0' then
-		reconfig<='0';
-		iecserial<='0';
-		invertsync<='0';
+	if reset_n='0' then
+		scandoubler <= '0';
+		invertsync <= '0';
+		iecserial <= '0';
+		reconfig <= '0';
+		audio_clear <= '0';
+		audio_ena <= '0';
+
 	elsif rising_edge(clk_28) then
-		if req='1' and wr='1' then
-
+		if req='1' and ack_28m='0' and wr='1' then
 			if platform_select='1' then	-- Write to platform registers
-				scandoubler<=d(0);
-				invertsync<=d(1);
-				reconfig<=d(3);
-				iecserial<=d(4);
+				scandoubler <= d(0);
+				invertsync <= d(1);
+				if (reconfigpresent='1') then
+					reconfig <= d(3);
+				end if;
+				if (iecpresent='1') then
+					iecserial <= d(4);
+				end if;
 			end if;
-
 			if audio_select='1' then
-				audio_clear<=d(1);
-				audio_ena<=d(0);
+				audio_clear <= d(1);
+				audio_ena <= d(0);
 			end if;
-
 		end if;
 	end if;
 end process;
 
 -----------------------------------------------------------------
--- Support States
------------------------------------------------------------------
-process(sysclk, shift)
-begin
-	IF rising_edge(sysclk) THEN
---		support_state <= idle;
-		IOcpuena <= '0';
-		CASE support_state IS
-			WHEN idle =>
-				uart_ld <= '0';
-				IF rs232_select='1' AND req='1' and wr='1' THEN
-					IF txbusy='0' THEN
-						uart_ld <= '1';
-						IOcpuena <= '1';
-					END IF;
-					if uart_ld='1' and txbusy = '1' then
-						uart_ld <= '0';
-						support_state <= io_aktion;
-					end if;
-				ELSIF SPI_select='1' and req='1' THEN
-					IF SD_busy='0' THEN
-						support_state <= io_aktion;
-						IOcpuena <= '1';
-					END IF;
-				END IF;
-
-			WHEN io_aktion =>
-				if req='0' then
-					support_state <= idle;
-				else
-					IOcpuena <= '1';
-				end if;
-
-			WHEN others =>
-				support_state <= idle;
-		END CASE;
-	END IF;
-end process;
-
------------------------------------------------------------------
 -- SPI-Interface
 -----------------------------------------------------------------
-	sd_cs <= NOT scs;
-	sd_clk <= NOT sck;
-	sd_do <= sd_out(15);
-	SD_busy <= shiftcnt(13);
+sd_cs <= NOT scs;
+sd_clk <= NOT sck;
+sd_do <= sd_out(15);
+SD_busy <= shiftcnt(13);
 
-	PROCESS (sysclk, n_reset, scs, sd_di, sd_dimm) BEGIN
-		IF scs(1)='0' and scs(7)='0' THEN
-			sd_di_in <= sd_di;
-		ELSE
-			sd_di_in <= sd_dimm;
-		END IF;
-		IF n_reset ='0' THEN
+PROCESS (sysclk, scs, sd_di, sd_dimm) BEGIN
+	IF scs(1)='0' and scs(7)='0' THEN
+		sd_di_in <= sd_di;
+	ELSE
+		sd_di_in <= sd_dimm;
+	end if;
+
+	if rising_edge(sysclk) then
+		if reset_n ='0' then
 			shiftcnt <= (others => '0');
 			spi_div <= (others => '0');
 			scs <= (others => '0');
 			sck <= '0';
 			spi_speed <= "00000000";
---			dscs <= '0';
+--		dscs <= '0';
 			spi_wait <= '0';
 			sd_out<=(others=>'0');
 			sd_in_shift<=(others=>'0');
-		ELSIF rising_edge(sysclk) THEN
 
+		else
 			spi_wait_d<=spi_wait;
 
 			if spi_wait_d='1' and sd_ack='1' then -- Unpause SPI as soon as the IO controller has written to the MUX
 				spi_wait<='0';
 			end if;
 
-			IF SPI_select='1' AND req='1' and wr='1' AND SD_busy='0' THEN	 --SD write
+			IF SPI_select='1' AND req='1' and ack='0' and wr='1' AND SD_busy='0' THEN	 --SD write
 				case addr(3 downto 2) is
 					when "10" => -- 8
 						spi_speed <= unsigned(d(7 downto 0));
@@ -444,25 +588,25 @@ end process;
 						scs(0) <= not d(0);
 						IF d(7)='1' THEN
 							scs(7) <= not d(0);
-						END IF;
+						end if;
 						IF d(6)='1' THEN
 							scs(6) <= not d(0);
-						END IF;
+						end if;
 						IF d(5)='1' THEN
 							scs(5) <= not d(0);
-						END IF;
+						end if;
 						IF d(4)='1' THEN
 							scs(4) <= not d(0);
-						END IF;
+						end if;
 						IF d(3)='1' THEN
 							scs(3) <= not d(0);
-						END IF;
+						end if;
 						IF d(2)='1' THEN
 							scs(2) <= not d(0);
-						END IF;
+						end if;
 						IF d(1)='1' THEN
 							scs(1) <= not d(0);
-						END IF;
+						end if;
 					when "00" => -- 0
 	--						ELSE							--DA4000
 						if scs(1)='1' THEN -- Wait for io component to propagate signals.
@@ -481,7 +625,7 @@ end process;
 						ELSE
 							shiftcnt <= "10000000000111";
 							sd_out(15 downto 8) <= d(7 downto 0);
-						END IF;
+						end if;
 						sck <= '1';
 					when others =>
 						null;
@@ -502,50 +646,48 @@ end process;
 						IF sck='0' THEN
 							IF shiftcnt(12 downto 0)/="0000000000000" THEN
 								sck <='1';
-							END IF;
+							end if;
 							shiftcnt <= shiftcnt-1;
 							sd_out <= sd_out(14 downto 0)&'1';
 						ELSE
 							sck <='0';
 							sd_in_shift <= sd_in_shift(14 downto 0)&sd_di_in;
-						END IF;
-					END IF;
+						end if;
+					end if;
 				ELSif spi_wait='0' then
 					spi_div <= spi_div-1;
-				END IF;
-			END IF;
-
-		END IF;
-	END PROCESS;
+				end if;
+			end if;
+		end if;
+	end if;
+END PROCESS;
 
 -----------------------------------------------------------------
 -- Simple UART only TxD
 -----------------------------------------------------------------
-debugTxD <= not shiftout;
-process(n_reset, clk_28, shift)
+debugTxD <= not uart_shiftout;
+uart_txbusy <= '0' when uart_shift = "0000000000" else '1';
+
+process(reset_n, clk_28, uart_shift)
 	constant CLKGEN_28_115 : unsigned(9 downto 0) := "0011110110";
 begin
-	if shift="0000000000" then
-		txbusy <= '0';
-	else
-		txbusy <= '1';
-	end if;
+	if reset_n='0' then
+		uart_shiftout <= '0';
+		uart_shift <= "0000000000";
+		uart_clkgen <= CLKGEN_28_115;
 
-	if n_reset='0' then
-		shiftout <= '0';
-		shift <= "0000000000";
-		clkgen<=CLKGEN_28_115;
 	elsif rising_edge(clk_28) then
-		if uart_ld = '1' then
-			shift <=  '1' & d(7 downto 0) & '0';			--STOP,MSB...LSB, START
+		if req='1' and ack_28m='0' and rs232_select='1' and uart_txbusy='0' then
+			uart_shift <= '1' & d(7 downto 0) & '0';			--STOP,MSB...LSB, START
 		end if;
-		if clkgen/=0 then
-			clkgen <= clkgen-1;
+
+		if uart_clkgen /= 0 then
+			uart_clkgen <= uart_clkgen - 1;
 		else
---			clkgen <= "1111011001";--985;		--113.5MHz/115200
-			clkgen <= CLKGEN_28_115;--246;		--28.36MHz/115200
-			shiftout <= not shift(0) and txbusy;
-			shift <=  '0' & shift(9 downto 1);
+--			uart_clkgen <= "1111011001";--985;		--113.5MHz/115200
+			uart_clkgen <= CLKGEN_28_115;--246;		--28.36MHz/115200
+			uart_shiftout <= not uart_shift(0) and uart_txbusy;
+			uart_shift <= '0' & uart_shift(9 downto 1);
 		end if;
 	end if;
 end process;
@@ -553,12 +695,14 @@ end process;
 -----------------------------------------------------------------
 -- timer
 -----------------------------------------------------------------
-process(clk_28)
+process(clk_28, reset_n)
 begin
-	IF rising_edge(clk_28) THEN
+	if reset_n='0' then
+		timecnt <= 0;
+	elsif rising_edge(clk_28) then
 		if tick_in='1' then
-			timecnt <= timecnt+1;
-		END IF;
+			timecnt <= timecnt + 1;
+		end if;
 	end if;
 end process;
 
@@ -566,7 +710,7 @@ end process;
 -- USB
 -----------------------------------------------------------------
 
-usbblock : block
+usbhid : block
 	signal usb_dp_o  : std_logic_vector(1 downto 0);
 	signal usb_dn_o  : std_logic_vector(1 downto 0);
 	signal usb_oe : std_logic_vector(1 downto 0);
@@ -825,9 +969,9 @@ begin
 		dbg_hid_regs   => open
 	);
 
-	process (usbclk, n_reset)
+	process (usbclk, reset_n)
 	begin
-		if n_reset = '0' then
+		if reset_n = '0' then
 			usbreset_sync1 <= '1';
 			usbreset_sync2 <= '1';
 
@@ -838,9 +982,9 @@ begin
 	end process;
 
 	-- Convert pulses to toggles in usbclk domain so they survive CDC regardless of pulse width
-	process (usbclk, n_reset)
+	process (usbclk, reset_n)
 	begin
-		if n_reset = '0' then
+		if reset_n = '0' then
 			full_report_toggle <= (others => '0');
 
 		elsif rising_edge(usbclk) then
@@ -850,44 +994,47 @@ begin
 	end process;
 
 	-- 3-stage shift-register sync in sysclk domain; bit(1) xor bit(2) gives a one-cycle set pulse
-	process (sysclk, n_reset)
+	process (sysclk)
 	begin
-		if n_reset = '0' then
-			hid_sync <= (others => (others => '0'));
-
-		elsif rising_edge(sysclk) then
-			for i in 0 to 1 loop
-				hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
-			end loop;
+		if rising_edge(sysclk) then
+			if reset_n = '0' then
+				hid_sync <= (others => (others => '0'));
+			else
+				for i in 0 to 1 loop
+					hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
+				end loop;
+			end if;
 		end if;
 	end process;
 
-	process (sysclk, n_reset) begin
-		if n_reset = '0' then
-			hid_report_ready_0 <= '0';
-
-		elsif rising_edge(sysclk) then
-			if hid_sync(0)(1) /= hid_sync(0)(2) then
-				hid_report_ready_0 <= '1';
-			end if;
-
-			if hid_report_ack_0 = '1' then
+	process (sysclk) begin
+		if rising_edge(sysclk) then
+			if reset_n = '0' then
 				hid_report_ready_0 <= '0';
+			else
+				if hid_sync(0)(1) /= hid_sync(0)(2) then
+					hid_report_ready_0 <= '1';
+				end if;
+
+				if hid_report_ack_0 = '1' then
+					hid_report_ready_0 <= '0';
+				end if;
 			end if;
 		end if;
 	end process;
 
-	process (sysclk, n_reset) begin
-		if n_reset = '0' then
-			hid_report_ready_1 <= '0';
-
-		elsif rising_edge(sysclk) then
-			if hid_sync(1)(1) /= hid_sync(1)(2) then
-				hid_report_ready_1 <= '1';
-			end if;
-
-			if hid_report_ack_1 = '1' then
+	process (sysclk) begin
+		if rising_edge(sysclk) then
+			if reset_n = '0' then
 				hid_report_ready_1 <= '0';
+			else
+				if hid_sync(1)(1) /= hid_sync(1)(2) then
+					hid_report_ready_1 <= '1';
+				end if;
+
+				if hid_report_ack_1 = '1' then
+					hid_report_ready_1 <= '0';
+				end if;
 			end if;
 		end if;
 	end process;
@@ -896,7 +1043,7 @@ begin
 		if rising_edge(sysclk) then
 			hid_report_ack_0 <= '0';
 
-			if usb_select_0 = '1' and req = '1' then
+			if usb_select_0 = '1' and req = '1' and ack = '0' then
 				if wr = '1' then
 					case addr(3 downto 2) is
 						when "00" =>
@@ -928,7 +1075,7 @@ begin
 		if rising_edge(sysclk) then
 			hid_report_ack_1 <= '0';
 
-			if usb_select_1 = '1' and req = '1' then
+			if usb_select_1 = '1' and req = '1' and ack = '0' then
 				if wr = '1' then
 					case addr(3 downto 2) is
 						when "00" =>
@@ -969,7 +1116,7 @@ begin
 		(usb_game_0(3) or usb_game_0(12)) &
 		 usb_game_0(0)  &
 		 usb_game_0(1)
-	) when usb_typ_0 = "11" else (others => '1');
+	) when usb_typ_0 = "11" else not joystick_d(11 downto 0);
 
 	joyb <= not (
 		(usb_game_1(8) or usb_game_1_combined) &
@@ -984,7 +1131,7 @@ begin
 		(usb_game_1(3) or usb_game_1(12)) &
 		 usb_game_1(0)  &
 		 usb_game_1(1)
-	) when usb_typ_1 = "11" else (others => '1');
+	) when usb_typ_1 = "11" else not joystick_d(23 downto 12);
 
 	usb_game_0_combined <= '1' when usb_game_0(7 downto 4) = "1111" else '0';
 	usb_game_1_combined <= '1' when usb_game_1(7 downto 4) = "1111" else '0';
