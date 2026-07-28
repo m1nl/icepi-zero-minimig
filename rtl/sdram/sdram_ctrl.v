@@ -47,6 +47,7 @@ module sdram_ctrl # (parameter addr_max_bits=26, parameter addr_prefix_bits=0, p
   input  wire [ 26-1:2] hostAddr,
   input  wire           hostce,
   input  wire           hostwe,
+  input  wire           hostinterrupt,
   input  wire [ 4-1:0 ] hostbytesel,
   output wire [ 16-1:0] hostRD,
   output wire           hostena,
@@ -453,7 +454,7 @@ always @(posedge sysclk) begin
 	end
 
 	// Has the host been waiting an unreasonably long time?
-	hostatn <= !(|hostslot_cnt) && hostce && (slot2_type==IDLE || slot2_bank != 2'b00);
+	hostatn <= (!(|hostslot_cnt) || hostinterrupt) && hostce && (slot2_type==IDLE || slot2_bank != 2'b00);
 end
 
 reg cpu_reservertg;

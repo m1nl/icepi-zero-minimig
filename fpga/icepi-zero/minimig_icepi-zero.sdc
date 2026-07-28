@@ -50,13 +50,12 @@ set_false_path -to [get_ports {led[*]}]
 
 set_false_path -from [get_cells {virtual_top.mycfide.usbblock\.u_usb_hid_host_0.typ[*]}]
 set_false_path -from [get_cells {virtual_top.mycfide.usbblock\.u_usb_hid_host_1.typ[*]}]
+set_false_path -from [get_cells {virtual_top.mycfide.joystick_d*}]
 set_false_path -from [get_cells {virtual_top.minimig.overclock*}]
 set_false_path -from [get_cells {virtual_top.minimig.ide_config*}]
 set_false_path -from [get_cells {virtual_top.minimig.chipset_config*}]
 set_false_path -from [get_cells {virtual_top.minimig.memory_config*}]
 set_false_path -from [get_cells {virtual_top.minimig.cpu_config*}]
-set_false_path -from [get_cells {virtual_top.minimig.CIAA1.regporta[0]}]  # ovl
-set_false_path -from [get_cells {virtual_top.minimig.CIAA1.ddrporta[0]}]  # ovl
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.beamcon0*}]
 
 # Clock going to SDRAM (180° shifted)

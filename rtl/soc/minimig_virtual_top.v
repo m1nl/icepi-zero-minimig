@@ -147,6 +147,10 @@ module minimig_virtual_top #(
 	inout wire [1:0]      USB_DP,
 	inout wire [1:0]      USB_DN,
 
+	input wire            AUX_SPI_CSN,
+	input wire            AUX_SPI_CLK,
+	input wire            AUX_SPI_MOSI,
+
 	output wire			RECONFIG,
 	output wire			IECSERIAL,
 	input wire			FREEZE
@@ -430,13 +434,13 @@ wire [25:0] aud_baseaddr=26'b0;
 
 reg [9:0] aud_ctr;
 always @(posedge CLK_28) begin
-	aud_ctr<=aud_ctr+1;
-	if (aud_ctr==10'd642) begin
-		aud_tick<=1'b1;
-		aud_ctr<=10'b0;
+	aud_tick <= 1'b0;
+	aud_ctr <= aud_ctr+1;
+
+	if (aud_ctr == 10'd642) begin
+		aud_tick <= 1'b1;
+		aud_ctr <= 10'd0;
 	end
-	else
-		aud_tick<=1'b0;
 end
 
 //  tick:   0 0 1 1 1 1 0 0
@@ -513,8 +517,8 @@ assign tg68_nrst_out=1'b1;
 `else
 
 always @(posedge CLK_114) begin
-	tg68_rst_d<=tg68_rst;
-	tg68_rst_sync<=tg68_rst_d;
+	tg68_rst_d <= tg68_rst;
+	tg68_rst_sync <= tg68_rst_d;
 end
 
 TG68K #(
@@ -596,21 +600,22 @@ TG68K #(
 
 `endif
 
-wire [ 32-1:0] hostRD;
-wire [ 32-1:0] hostWR;
-wire [ 32-1:2] hostaddr;
-wire [  3-1:0] hostState;
-wire [3:0]     hostbytesel;
-wire  [ 16-1:0] host_ramdata;
-wire           host_ramack;
-wire           host_ramreq;
-wire  [ 32-1:0] host_hwdata;
-wire           host_hwack;
-wire           host_hwreq;
-wire           host_we;
-wire           hostreq;
-wire           hostack;
-wire           hostce;
+wire	[31:0]	hostRD;
+wire	[31:0]	hostWR;
+wire	[31:2]	hostaddr;
+wire	[ 2:0]	hostState;
+wire	[ 3:0]	hostbytesel;
+wire		host_interrupt;
+wire	[15:0]	host_ramdata;
+wire		host_ramack;
+wire		host_ramreq;
+wire	[31:0]	host_hwdata;
+wire		host_hwack;
+wire		host_hwreq;
+wire		host_we;
+wire		hostreq;
+wire		hostack;
+wire		hostce;
 
 //sdram sdram (
 sdram_ctrl #(
@@ -635,6 +640,7 @@ sdram_ctrl #(
 	.hostAddr     (hostaddr         ),
 	.hostwe       (host_we          ),
 	.hostce       (host_ramreq      ),
+	.hostinterrupt(host_interrupt   ),
 	.hostbytesel  (hostbytesel      ),
 	.hostRD       (host_ramdata     ),
 	.hostena      (host_ramack      ),
@@ -709,72 +715,40 @@ assign RTC_CS = SPI_CS[7];
 
 // Keyboard-related signals
 
-wire	[15:0] c64_translated_key;
-wire	c64_translated_key_stb;
-reg	[7:0] kbd_mouse_data;
-wire	kbd_reset_n;
-reg	kbd_mouse_stb;
-reg	kbd_mouse_stb_r;
+wire	[15:0]	c64_translated_key;
+wire		c64_translated_key_stb;
 
-reg           mouse_idx;
-reg [  2-1:0] kbd_mouse_type;
-reg kms_level;
-reg [  3-1:0] mouse0_buttons;
-reg [  3-1:0] mouse1_buttons;
+reg	[7:0]	kbd_mouse_data;
+wire		kbd_reset_n;
+reg		kbd_mouse_stb;
 
-
-localparam capturewidth = 18;
-wire [capturewidth-1:0] capture;
-wire [capturewidth-1:0] capout;
-wire cap_upd;
-
-assign capture[0] = kbd_mouse_stb;
-assign capture[8:1] = kbd_mouse_data;
-assign capture[10:9] = kbd_mouse_type;
-assign capture[13:11] = mouse0_buttons;
-assign capture[16:14] = mouse1_buttons;
-assign capture[17] = kms_level;
-
-//jcapture #(.capturewidth(capturewidth),.triggerwidth(capturewidth)) cap_inst (
-//	.clk(CLK_114),
-//	.reset_n(reset_out),
-//	.stb(1'b1),
-//	.d(capture),
-//	.q(capout),
-//	.update(cap_upd)
-//);
-
+reg		mouse_idx;
+reg	[1:0]	kbd_mouse_type;
+reg		kms_level;
+reg	[2:0]	mouse0_buttons;
+reg	[2:0]	mouse1_buttons;
+reg		amiga_key_stb_r;
 
 assign kbd_reset_n = AMIGA_RESET_N;
 
-always @(posedge CLK_28) begin
-	kbd_mouse_stb <= kbd_mouse_stb_r;
-	kms_level <= kms_level ^ kbd_mouse_stb;
+always @(*) begin
+	kbd_mouse_data = amiga_key_stb_r ? AMIGA_KEY : c64_translated_key[ 7: 0];
+	kbd_mouse_type = amiga_key_stb_r ? 2'b10     : c64_translated_key[15:14];
+	mouse0_buttons = amiga_key_stb_r ? 3'b000    : c64_translated_key[10: 8];
+	mouse1_buttons = amiga_key_stb_r ? 3'b000    : c64_translated_key[13:11];
 end
 
-always @(posedge CLK_114) begin
-
-	if(kbd_mouse_stb) begin
-		kbd_mouse_stb_r<=1'b0;
+always @(posedge CLK_28) begin
+	if (clk7_en) begin
+		kbd_mouse_stb <= 1'b0;
+		amiga_key_stb_r <= 1'b0;
 	end
 
-	if(c64_translated_key_stb || AMIGA_KEY_STB) begin
-		kbd_mouse_data <= c64_translated_key_stb ? c64_translated_key[7:0] : AMIGA_KEY;
-		kbd_mouse_type <= c64_translated_key_stb ? c64_translated_key[15:14] : 2'b10;
-		mouse0_buttons <= c64_translated_key_stb ? c64_translated_key[10:8] : 3'b000;
-		mouse1_buttons <= c64_translated_key_stb ? c64_translated_key[13:11] : 3'b000;
-		kbd_mouse_stb_r<=1'b1;
+	if (c64_translated_key_stb || AMIGA_KEY_STB) begin
+		kbd_mouse_stb <= 1'b1;
+		kms_level     <= ~kms_level;
+		amiga_key_stb_r <= AMIGA_KEY_STB;
 	end
-
-//	if(cap_upd) begin
-//		kbd_mouse_stb_r <= 1'b1;
-//		kbd_mouse_data <= capout[8:1];
-//		kbd_mouse_type <= capout[10:9];
-//		mouse0_buttons <= capout[13:11];
-//		mouse1_buttons <= capout[16:14];
-//		mouse_idx <= capout[0];
-//	end
-
 end
 
 //// minimig top ////
@@ -853,7 +827,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	._15khz       (_15khz           ), // scandoubler disable
 	.rtc          (rtc              ), // real-time clock
 	.pwr_led      (LED_POWER        ), // power led
-	.disk_led     (LED_DISK         ), // power led
+	.disk_led     (LED_DISK         ), // disk led
 	.msdat_i      (PS2_MDAT_I       ), // PS2 mouse data
 	.msclk_i      (PS2_MCLK_I       ), // PS2 mouse clk
 	.kbddat_i     (PS2_DAT_I        ), // PS2 keyboard data
@@ -923,8 +897,6 @@ assign rtg_ena = havertg && rtg_ena_mm;
 
 `endif
 
-wire host_interrupt;
-
 EightThirtyTwo_Bridge #( debug) hostcpu
 (
 	.clk(CLK_114),
@@ -949,17 +921,22 @@ cfide #(
 	.havereconfig(havereconfig),
 	.havecart(havecart),
 	.havevideofilter(havevideofilter),
-	.haveamigahost(haveamigahost)
+	.haveamigahost(haveamigahost),
+	.haveaudio(haveaudio)
 ) mycfide (
 		.sysclk(CLK_114),
 		.usbclk(CLK_USB_IN),
-		.n_reset(reset_out),
+		.reset_n(reset_out),
 		.addr(hostaddr),
 		.d(hostWR),
 		.req(host_hwreq),
 		.wr(host_we),
 		.ack(host_hwack),
 		.q(host_hwdata),
+
+		.aux_spi_csn(AUX_SPI_CSN),
+		.aux_spi_clk(AUX_SPI_CLK),
+		.aux_spi_mosi(AUX_SPI_MOSI),
 
 		.sd_di(SPI_DO),
 		.sd_cs(SPI_CS),
@@ -1083,14 +1060,6 @@ always @(*) begin
 	DVI_DE = rtg_de;
 end
 assign DVI_STROBE = vga_stb; // rtg_ena ? rtg_pixel : vga_stb;
-
-`ifdef MINIMIG_CAPTURE_SYNC
-edge_capture #(.bits(2)) synccapture (
-	.clk(CLK_114),
-	.reset(~tg68_rst),
-	.d({VGA_VS_INT,VGA_HS_INT})
-);
-`endif
 
 endmodule
 // vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:

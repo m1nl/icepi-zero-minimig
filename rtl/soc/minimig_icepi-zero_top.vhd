@@ -37,7 +37,11 @@ port(
 	usb_pull_dp : out std_logic_vector(1 downto 0);
 	usb_pull_dn : out std_logic_vector(1 downto 0);
 
-	gpio : inout std_logic_vector(27 downto 0);
+	aux_spi_clk : in std_logic;
+	aux_spi_mosi : in std_logic;
+	aux_spi_csn : in std_logic;
+
+	-- gpio : inout std_logic_vector(27 downto 0);
 
 	gpdi_dp : out std_logic_vector(3 downto 0)	-- Quasi-differential output for digital video.
 	-- gpdi_dn : out std_logic_vector(3 downto 0)  -- Don't declare the _n pins - the _p pins are declared as
@@ -205,7 +209,7 @@ begin
 			AMIGA_KEY => (others=>'-'),
 			AMIGA_KEY_STB => '0',
 
-			c64_keys => (others => '1'),
+			C64_KEYS => (others => '1'),
 
 			JOYA => joya,
 			JOYB => joyb,
@@ -218,8 +222,12 @@ begin
 			SD_CS => sd_csn,
 			SD_ACK => '1',
 
-			usb_dp => usb_dp,
-			usb_dn => usb_dn
+			USB_DP => usb_dp,
+			USB_DN => usb_dn,
+
+			AUX_SPI_CSN => aux_spi_csn,
+			AUX_SPI_CLK => aux_spi_clk,
+			AUX_SPI_MOSI => aux_spi_mosi
 		);
 
 	-- Instantiate HDMI out:
