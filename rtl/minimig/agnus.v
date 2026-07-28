@@ -51,7 +51,7 @@
 //
 
 
-module agnus #(parameter wide_hblank=1'b0)
+module agnus #(parameter wide_hblank=1'b0, parameter do_refresh=1'b0)
 (
   input clk,            // clock
   input  clk7_en,            // 28MHz clock
@@ -318,11 +318,18 @@ assign ena_blt = ~(dma_ref | dma_dsk | dma_aud | dma_spr | dma_bpl | dma_cop) &&
 
 //--------------------------------------------------------------------------------------
 
-agnus_refresh ref1
-(
-  .hpos(hpos),
-  .dma(dma_ref)
-);
+generate
+  if (do_refresh) begin
+    agnus_refresh ref1
+    (
+      .hpos(hpos),
+      .dma(dma_ref)
+    );
+
+  end else begin
+    assign dma_ref = 1'b0;
+  end
+endgenerate
 
 //instantiate disk dma engine
 agnus_diskdma dsk1
