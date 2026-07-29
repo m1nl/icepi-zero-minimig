@@ -69,57 +69,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 const char version[] = MM_VERSTRING;
 
-extern adfTYPE df[4];
-
 extern int _bss_start__;
-int CheckSum(char *adr,int size)
+
+static inline void HandleFpga(void)
 {
-	int *end=(int *)(adr+size);
-	int *ptr=(int *)adr;
-	int sum=0;
-	while(ptr<end)
-	{
-		sum+=*ptr++;
-	}
-	return(sum);
-}
+	unsigned char  c1, c2,c3,c4;
 
+	EnableFpga();
+	c1 = SPI(0); // cmd request and drive number
+	c2 = SPI(0); // track number
+	SPI(0);
+	SPI(0);
+	c3 = SPI(0);
+	c4 = SPI(0);
+	DisableFpga();
 
-void HandleFpga(void)
-{
-    unsigned char  c1, c2,c3,c4;
+	HandleFDD(c1, c2, c3 ,c4);
+	HandleHDD(c1, c2);
 
-    EnableFpga();
-    c1 = SPI(0); // cmd request and drive number
-    c2 = SPI(0); // track number
-    SPI(0);
-    SPI(0);
-    c3 = SPI(0);
-    c4 = SPI(0);
-    DisableFpga();
-
-    HandleFDD(c1, c2, c3 ,c4);
-    HandleHDD(c1, c2);
-
-    UpdateDriveStatus();
+	UpdateDriveStatus();
 }
 
 void inthandler()
 {
-    unsigned int _spi = 0;
-    char temp[AUX_SPI_BUFFER_SIZE];
-    int i = 0;
-
 	DisableInterrupts();
 
-    aux_spi_inthandler();
+	aux_spi_inthandler();
 
 	if (PLATFORM & (1 << PLATFORM_AMIGAHOST))
 		akiko_inthandler();
 	if (PLATFORM & (1 << PLATFORM_C64CARTRIDGE))
 		c64keys_inthandler();
 
-    AckInterrupt();
+	AckInterrupt();
 	EnableInterrupts();
 }
 
@@ -131,17 +113,16 @@ int Init() {
 
 	DisableInterrupts();
 
-    if (MMC_Init())
+	if (MMC_Init())
 	{
 	    if (FindDrive())
 		{
 			int key;
 			int override=0;
-		    ChangeDirectory(DIRECTORY_ROOT);
-
+			ChangeDirectory(DIRECTORY_ROOT);
 			config.kickstart.name[0]=0;
 			SetConfigurationFilename(0); // Use default config
-		    LoadConfiguration(0);	// Use slot-based config filename
+			LoadConfiguration(0);	// Use slot-based config filename
 			ApplyConfiguration(0,0,1);  // Setup screenmodes, etc before loading KickStart.
 			result=1;
 		}
@@ -191,7 +172,7 @@ void ColdBoot() {
 		config.misc |= 1<<(PLATFORM_INVERTSYNC);  // High byte of platform register
 	}
 
-	if(override)
+	if (override)
 	{
 		BootPrintEx("Overriding screenmode.");
 		ApplyConfiguration(0,0,1);
@@ -201,7 +182,7 @@ void ColdBoot() {
 	ClearError(ERROR_FILESYSTEM); /* Don't report a missing drivesnd.bin */
 
 	BootPrintEx("Loading kickstart ROM...");
-	result=ApplyConfiguration(1,1,0);
+	result = ApplyConfiguration(1,1,0);
 
 	OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 
@@ -209,7 +190,7 @@ void ColdBoot() {
 	EnableInterrupts();
 
 	audio_clear();
-	if(drivesounds_loaded())
+	if (drivesounds_loaded())
 		drivesounds_enable(config.drivesounds);
 }
 
@@ -232,46 +213,43 @@ int main(void) {
 
 	ClearError(ERROR_ALL);
 
-	if(!Init())
+	if (!Init())
 		FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
 
-	if(clockport && cartridge)
+	if (clockport && cartridge)
 		FatalError(ERROR_GENERAL,"C64: use non-clockport core",0,0);
 
-	if(ErrorFatal) {
+	if (ErrorFatal) {
 		ShowError();
 		HandleUI();
 		while(1)
 			;
 	}
 
-    DISKLED_ON;
+	DISKLED_ON;
 
 	ColdBoot();
 
-//	cd_setcuefile(&cd,"EXODUS_THELASTWAR.CUE");
-//	cd_playaudio(&cd,4);
-
-    while(1)
-    {
+	while(1)
+	{
 		drivesounds_fill();
-		if(c64keyboard_checkreset())
+
+		if (cartridge && c64keyboard_checkreset())
 			OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 
-		if(rtc)
+		if (rtc)
 			HandleRTC();
 
-//		cd_continueaudio(&cd);
-		if(ErrorMask)
+		if (ErrorMask)
 			ShowError();
 
-		if(!ErrorFatal)
+		if (!ErrorFatal)
 			HandleFpga(); /* Stop talking to the disk subsystems if a fatal error occurs */
 
 		usbhid_handle();
 		aux_hid_handle();
 
-        HandleUI();
-    }
+		HandleUI();
+	}
 }
 

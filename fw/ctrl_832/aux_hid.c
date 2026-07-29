@@ -18,7 +18,7 @@ extern const unsigned short usb2ami[256];
 static int aux_mouse_buttons0 = 0;
 static unsigned char aux_qual = 0;
 
-static void aux_hid_send(int type, int code) {
+static inline void aux_hid_send(int type, int code) {
     int t = (type << 14) | (aux_mouse_buttons0 << 8) | (code & 0xff);
     HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
 }

@@ -39,7 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 
 unsigned char drives; // number of active drives reported by FPGA (may change only during reset)
-adfTYPE df[ADF_COUNT];            // drive 0 information structure
+adfTYPE df[ADF_COUNT];
 
 #define TRACK_SIZE 12668
 #define HEADER_SIZE 0x40

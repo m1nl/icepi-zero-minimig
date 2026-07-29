@@ -44,11 +44,19 @@ extern char s[40];
 
 int checksum_pre;
 
-
-int CheckSum(char *adr,int size);
+static inline int CheckSum(char *adr,int size)
+{
+    int *end=(int *)(adr+size);
+    int *ptr=(int *)adr;
+    int sum=0;
+    while(ptr<end)
+    {
+        sum+=*ptr++;
+    }
+    return(sum);
+}
 
 char BootPrint(const char *text);
-
 
 char kick1xfoundstr[] = "Kickstart v1.x found\n";
 const char applymemdetectionpatchstr[] = "Applying Kickstart 1.x memory detection patch\n";

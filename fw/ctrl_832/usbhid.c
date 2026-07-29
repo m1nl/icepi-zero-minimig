@@ -11,9 +11,8 @@
     ((((v) & 0xff000000u) >> 24) | (((v) & 0x00ff0000u) >> 8) | (((v) & 0x0000ff00u) << 8) |                          \
      (((v) & 0x000000ffu) << 24))
 
-#define KEYPAGES 5
-static unsigned int usbhid_prevtable[KEYPAGES];
-static unsigned int usbhid_keytable[KEYPAGES];
+static unsigned int usbhid_prevtable[USBHID_KEYPAGES];
+unsigned int usbhid_keytable[USBHID_KEYPAGES];
 
 static int mouse_buttons0 = 0;
 
@@ -29,11 +28,9 @@ static const struct {
 
 static unsigned int gamepad_prevbits[USBHID_PORTS];
 
-int usbhid_testkey(unsigned char code) { return usbhid_keytable[code >> 5] & (1 << (code & 31)); }
+static inline void usbhid_setkey(unsigned char code) { usbhid_keytable[code >> 5] |= 1 << (code & 31); }
 
-static void usbhid_setkey(unsigned char code) { usbhid_keytable[code >> 5] |= 1 << (code & 31); }
-
-static void usbhid_send(int type, int code) {
+static inline void usbhid_send(int type, int code) {
     int t = (type << 14) | (mouse_buttons0 << 8) | (code & 0xff);
     HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
 }
@@ -43,7 +40,7 @@ static void usbhid_handlekb(unsigned char *pkt) {
 
     DBG("KB: mod=%02x keys=%02x %02x %02x %02x %02x %02x\n", pkt[0], pkt[2], pkt[3], pkt[4], pkt[5], pkt[6], pkt[7]);
 
-    for (i = 0; i < KEYPAGES; ++i) {
+    for (i = 0; i < USBHID_KEYPAGES; ++i) {
         usbhid_prevtable[i] = usbhid_keytable[i];
         usbhid_keytable[i] = 0;
     }
@@ -63,7 +60,7 @@ static void usbhid_handlekb(unsigned char *pkt) {
     }
 
     code = 0;
-    for (i = 0; i < KEYPAGES; ++i) {
+    for (i = 0; i < USBHID_KEYPAGES; ++i) {
         unsigned int t = usbhid_prevtable[i] ^ usbhid_keytable[i];
         unsigned int k = usbhid_keytable[i];
         int j;
