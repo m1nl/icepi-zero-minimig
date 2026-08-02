@@ -29,7 +29,7 @@ module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1,
   input  wire           cpu_dr,         // cpu data read
   input  wire [ 16-1:0] cpu_dat_w,      // cpu write data
   output reg  [ 16-1:0] cpu_dat_r,      // cpu read data
-  output                cpu_ack,        // cpu acknowledge
+  output wire           cpu_ack,        // cpu acknowledge
   // sdram
   input  wire [ 16-1:0] sdr_dat_r,      // sdram read data
   output reg            sdr_read_req,   // sdram read request from cache
