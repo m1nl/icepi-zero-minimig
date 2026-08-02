@@ -151,7 +151,9 @@ begin
 			usethrottle => 0,
 			havecart => 0,
 			havevideofilter => 0,
-			haveaga => 1
+			haveaga => 1,
+			haveusbhid => 1,
+			haveauxspi => 1
 		)
 	PORT map
 		(
