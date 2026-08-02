@@ -4,12 +4,13 @@ use ieee.numeric_std.all;
 
 library work;
 use work.minimig_virtual_pkg.all;
+use work.board_config.all;
 
 -- -----------------------------------------------------------------------
 
 entity minimig_fleaohm_top is
- 
-	port(
+
+port(
 	-- JTAG
 	TDO : out std_logic;
 	TDI : in std_logic;
@@ -17,70 +18,65 @@ entity minimig_fleaohm_top is
 	TCK : in std_logic;
 
 	-- System clock and reset
-	sys_clock		: in		std_logic;	-- 25MHz clock input from external xtal oscillator.
-	sys_reset		: in		std_logic;	-- master reset input from reset header.
+	clk	: in	std_logic;	-- 25MHz clock input from external xtal oscillator.
+	reset_n	: in	std_logic;	-- master reset input from reset header.
 
 	-- On-board user buttons and status LED
-	n_led1			: out		std_logic;
- 
+	n_led1	: out	std_logic;
+
 	-- Digital video out
-	LVDS_Red		: out		std_logic_vector(0 downto 0);	-- 
-	LVDS_Green		: out		std_logic_vector(0 downto 0);	-- 
-	LVDS_Blue		: out		std_logic_vector(0 downto 0);	-- 
-	LVDS_ck			: out		std_logic_vector(0 downto 0);	-- 
-	
-	-- USB Slave (FT230x) debug interface 
-	slave_tx_o 		: out		std_logic;
-	slave_rx_i 		: in		std_logic;
-	slave_cts_i 	: in		std_logic;	-- Receives signal from #RTS pin on FT230x, where applicable.
+	lvds_dp : out std_logic_vector(3 downto 0);	-- Quasi-differential output for digital video.
+
+	-- USB Slave (FT230x) debug interface
+	slave_tx_o	: out	std_logic;
+	slave_rx_i	: in	std_logic;
+	slave_cts_i	: in	std_logic;	-- Receives signal from #RTS pin on FT230x, where applicable.
 
 	-- SDRAM interface (For use with 16Mx16bit or 32Mx16bit SDR DRAM, depending on version)
-	Dram_Clk		: out		std_logic;	-- clock to SDRAM
-	Dram_CKE		: out		std_logic;	-- clock to SDRAM
-	Dram_n_Ras		: out		std_logic;	-- SDRAM RAS
-	Dram_n_Cas		: out		std_logic;	-- SDRAM CAS
-	Dram_n_We		: out		std_logic;	-- SDRAM write-enable
-	Dram_BA			: out		std_logic_vector(1 downto 0);	-- SDRAM bank-address
-	Dram_Addr		: out		std_logic_vector(12 downto 0);	-- SDRAM address bus
-	Dram_Data		: inout		std_logic_vector(15 downto 0);	-- data bus to/from SDRAM
-	Dram_n_cs		: out		std_logic;
-	--Dram_dqm		: out		std_logic_vector(1 downto 0);
-	Dram_DQMH		: out		std_logic;
-	Dram_DQML		: out		std_logic;
+	sdram_clk	: out	std_logic;	-- clock to SDRAM
+	sdram_cke	: out	std_logic;	-- clock to SDRAM
+	sdram_rasn	: out	std_logic;	-- SDRAM RAS
+	sdram_casn	: out	std_logic;	-- SDRAM CAS
+	sdram_wen	: out	std_logic;	-- SDRAM write-enable
+	sdram_ba	: out	std_logic_vector(1 downto 0);	-- SDRAM bank-address
+	sdram_dqm	: out	std_logic_vector(1 downto 0);
+	sdram_a		: out	std_logic_vector(12 downto 0);	-- SDRAM address bus
+	sdram_dq	: inout	std_logic_vector(15 downto 0);	-- data bus to/from SDRAM
+	sdram_csn	: out	std_logic;
 
     -- GPIO Header (RasPi compatible GPIO format)
-	GPIO_2			: in		std_logic;
-	GPIO_3			: out		std_logic;
-	GPIO_4			: in		std_logic;
-	GPIO_5			: inout		std_logic;
-	GPIO_6			: inout		std_logic;	
-	GPIO_7			: in		std_logic;	
-	GPIO_8			: in		std_logic;	
-	GPIO_9			: in		std_logic;	
-	GPIO_10			: in		std_logic;
-	GPIO_11			: in		std_logic;	
-	GPIO_12			: out		std_logic;	
-	GPIO_13			: out		std_logic;	
-	GPIO_14			: inout		std_logic;	
-	GPIO_15			: in		std_logic;	
-	GPIO_16			: in		std_logic;
-	
-	GPIO_17			: in		std_logic;
-	GPIO_18			: in		std_logic;	
-	GPIO_19			: out		std_logic;	
-	GPIO_20			: in		std_logic;
-	GPIO_21			: in		std_logic;	
-	GPIO_22			: in		std_logic;	
-	GPIO_23			: in		std_logic;
-	GPIO_24			: in		std_logic;
-	GPIO_25			: inout		std_logic;	
-	GPIO_26			: inout		std_logic;	
-	GPIO_27			: inout		std_logic;
-	GPIO_IDSD		: inout		std_logic;
-	GPIO_IDSC		: inout		std_logic;
+	GPIO_2	: in	std_logic;
+	GPIO_3	: out	std_logic;
+	GPIO_4	: in	std_logic;
+	GPIO_5	: inout	std_logic;
+	GPIO_6	: inout	std_logic;
+	GPIO_7	: in	std_logic;
+	GPIO_8	: in	std_logic;
+	GPIO_9	: in	std_logic;
+	GPIO_10	: in	std_logic;
+	GPIO_11	: in	std_logic;
+	GPIO_12	: out	std_logic;
+	GPIO_13	: out	std_logic;
+	GPIO_14	: inout	std_logic;
+	GPIO_15	: in	std_logic;
+	GPIO_16	: in	std_logic;
 
-	
-	-- Sigma Delta ADC ('Enhanced' Ohm-specific GPIO functionality)	
+	GPIO_17	: in	std_logic;
+	GPIO_18	: in	std_logic;
+	GPIO_19	: out	std_logic;
+	GPIO_20	: in	std_logic;
+	GPIO_21	: in	std_logic;
+	GPIO_22	: in	std_logic;
+	GPIO_23	: in	std_logic;
+	GPIO_24	: in	std_logic;
+	GPIO_25	: inout	std_logic;
+	GPIO_26	: inout	std_logic;
+	GPIO_27	: inout	std_logic;
+	GPIO_IDSD	: inout	std_logic;
+	GPIO_IDSC	: inout	std_logic;
+
+
+	-- Sigma Delta ADC ('Enhanced' Ohm-specific GPIO functionality)
 	-- NOTE: Must comment out GPIO_5, GPIO_7, GPIO_10 AND GPIO_24 as instructed in the pin constraints file (.LPF) in order to use
 	--ADC0_input	: in		std_logic;
 	--ADC0_error	: buffer	std_logic;
@@ -92,209 +88,215 @@ entity minimig_fleaohm_top is
 	--ADC3_error	: buffer	std_logic;
 
 	-- SD/MMC Interface (Support either SPI or nibble-mode)
-	mmc_dat1		: in		std_logic;
-	mmc_dat2		: in		std_logic;
-	mmc_n_cs		: out		std_logic;
-	mmc_clk			: out		std_logic;
-	mmc_mosi		: out		std_logic; 
-	mmc_miso		: in		std_logic;
+	mmc_dat1	: in	std_logic;
+	mmc_dat2	: in	std_logic;
+	mmc_n_cs	: out	std_logic;
+	mmc_clk	: out	std_logic;
+	mmc_mosi	: out	std_logic;
+	mmc_miso	: in	std_logic;
 
 	-- PS/2 Mode enable, keyboard and Mouse interfaces
-	PS2_enable		: out		std_logic;
-	PS2_clk1		: inout		std_logic;
-	PS2_data1		: inout		std_logic;
-	
-	PS2_clk2		: inout		std_logic;
-	PS2_data2		: inout		std_logic
-	);
+	PS2_enable	: out	std_logic;
+	PS2_clk1	: inout	std_logic;
+	PS2_data1	: inout	std_logic;
+
+	PS2_clk2	: inout	std_logic;
+	PS2_data2	: inout	std_logic
+);
 end entity;
 
-  
 architecture arch of minimig_fleaohm_top is
-constant reset_cycles : integer := 131071;
-	
+-- SPI signals
+	signal led_power	:	std_logic;
+
+-- Video
+	signal dvi_red	:	std_logic_vector(7 downto 0);
+	signal dvi_green	:	std_logic_vector(7 downto 0);
+	signal dvi_blue	:	std_logic_vector(7 downto 0);
+	signal dvi_hsync	:	std_logic := '0';
+	signal dvi_vsync	:	std_logic := '0';
+	signal dvi_window	:	std_logic;
+	signal dvi_pixel	:	std_logic;
+	signal blank	:	std_logic := '0';
+	signal videoblank	:	std_logic;
+	signal vbl	:	std_logic;
+	signal n_15khz	:	std_logic;
+
+
+-- Amiga UART
+	signal amiga_rs232_txd	:	std_logic;
+	signal amiga_rs232_rxd	:	std_logic;
+
+-- RS232 serial
+	signal rs232_rxd	:	std_logic;
+	signal rs232_txd	:	std_logic;
+
+	signal audio_l	:	std_logic_vector(23 downto 0);
+	signal audio_r	:	std_logic_vector(23 downto 0);
+
+-- IO
+	signal n_joy1	:	std_logic_vector(6 downto 0);
+	signal n_joy2	:	std_logic_vector(6 downto 0);
+	signal joyc	:	std_logic_vector(6 downto 0);
+	signal joyd	:	std_logic_vector(6 downto 0);
+
 -- System clocks
 
-	signal sysclk : std_logic;
+	signal clk_sys	:	std_logic;
+	signal clk_pixel	:	std_logic;
+	signal clk_tmds	:	std_logic;
 
--- SPI signals
+	signal VTEMP_DAC	:	std_logic_vector(4 downto 0);
+	signal audio_data	:	std_logic_vector(17 downto 0);
+	signal convert_audio_data	:	std_logic_vector(17 downto 0);
 
-	signal diskled :std_logic;
-	signal floppyled : std_logic;
-	signal powerled : unsigned(1 downto 0);
+	signal ps2k_data_in	:	std_logic;
+	signal ps2k_clk_in	:	std_logic;
+	signal ps2k_data_out	:	std_logic;
+	signal ps2k_clk_out	:	std_logic;
+	signal ps2m_data_in	:	std_logic;
+	signal ps2m_clk_in	:	std_logic;
+	signal ps2m_data_out	:	std_logic;
+	signal ps2m_clk_out	:	std_logic;
 
-	signal sd_clk : std_logic;
-	signal sd_cs : std_logic;
-	signal sd_mosi : std_logic;
-	signal sd_miso : std_logic;
-	
-	
--- Video
-	signal dvi_red     : std_logic_vector(7 downto 0);
-	signal dvi_green   : std_logic_vector(7 downto 0);
-	signal dvi_blue    : std_logic_vector(7 downto 0);
-	signal dvi_hsync   : std_logic := '0';
-	signal dvi_vsync   : std_logic := '0';
-	signal dvi_window : std_logic;
-	signal dvi_pixel : std_logic;
-	signal blank   : std_logic := '0';
-	signal videoblank: std_logic;  
-	signal vbl : std_logic;
-	signal n_15khz : std_logic;
-	
-	
--- Amiga UART
-    signal amiga_rs232_txd : std_logic;
-	signal amiga_rs232_rxd : std_logic;
-	
--- RS232 serial
-	signal rs232_rxd : std_logic;
-	signal rs232_txd : std_logic;
-
-	signal audio_l : std_logic_vector(23 downto 0);
-	signal audio_r : std_logic_vector(23 downto 0);
-	
--- IO
-
-	signal n_joy1 : std_logic_vector(6 downto 0);
-	signal n_joy2 : std_logic_vector(6 downto 0);
-	signal joyc : std_logic_vector(6 downto 0);
-	signal joyd : std_logic_vector(6 downto 0);
-
-	signal clk28m  : std_logic := '0';   
-	
-   signal red_u     : std_logic_vector(7 downto 0);
-   signal green_u   : std_logic_vector(7 downto 0);
-   signal blue_u    : std_logic_vector(7 downto 0);
-  
-	signal VTEMP_DAC		:std_logic_vector(4 downto 0);
-	signal audio_data : std_logic_vector(17 downto 0);
-	signal convert_audio_data : std_logic_vector(17 downto 0);
-	
-	constant cnt_div: integer:=617;                  -- Countervalue for 48khz Audio Enable,  567 for 25MHz PCLK
-    signal   cnt:     integer range 0 to cnt_div-1; 
-    signal   ce:      std_logic;
-
-	signal ps2k_data_in : std_logic;
-	signal ps2k_clk_in : std_logic;
-	signal ps2k_data_out : std_logic;
-	signal ps2k_clk_out : std_logic;
-	signal ps2m_data_in : std_logic;
-	signal ps2m_clk_in : std_logic;
-	signal ps2m_data_out : std_logic;
-	signal ps2m_clk_out : std_logic;
+	component ODDRX1F
+	port (
+		D0	:	in std_logic;
+		D1	:	in std_logic;
+		Q	:	out std_logic;
+		SCLK	:	in std_logic;
+		RST	:	in std_logic
+	);
+	end component;
 begin
 
+ddr_sdramclk: ODDRX1F port map (D0=>'0', D1=>'1', Q=>sdram_clk, SCLK=>clk_sys, RST=>'0');
 
 -- Joystick bits(5-0) = fire2,fire,right,left,down,up mapped to GPIO header
-n_joy1(3)<= GPIO_4 ; -- up
-n_joy1(2)<= GPIO_7 ; -- down
-n_joy1(1)<= GPIO_8 ; -- left
-n_joy1(0)<= GPIO_9 ; -- right
-n_joy1(4)<= GPIO_10 ; -- fire
-n_joy1(5)<= GPIO_11 ; -- fire2
+n_joy1(3) <= GPIO_4 ; -- up
+n_joy1(2) <= GPIO_7 ; -- down
+n_joy1(1) <= GPIO_8 ; -- left
+n_joy1(0) <= GPIO_9 ; -- right
+n_joy1(4) <= GPIO_10 ; -- fire
+n_joy1(5) <= GPIO_11 ; -- fire2
 
-n_joy2(3)<= GPIO_15 ; -- up
-n_joy2(2)<= GPIO_17 ; -- down
-n_joy2(1)<= GPIO_18 ; -- left 
-n_joy2(0)<= GPIO_22 ; -- right  
-n_joy2(4)<= GPIO_23 ; -- fire
-n_joy2(5)<= GPIO_24 ; -- fire2 
+n_joy2(3) <= GPIO_15 ; -- up
+n_joy2(2) <= GPIO_17 ; -- down
+n_joy2(1) <= GPIO_18 ; -- left
+n_joy2(0) <= GPIO_22 ; -- right
+n_joy2(4) <= GPIO_23 ; -- fire
+n_joy2(5) <= GPIO_24 ; -- fire2
 
 -- Video output horizontal scanrate select 15/30kHz select via GPIO header
-n_15khz <= GPIO_21 ; -- Default is 30kHz video out if pin left unconnected. Connect to GND for 15kHz video. 
+n_15khz <= GPIO_21 ; -- Default is 30kHz video out if pin left unconnected. Connect to GND for 15kHz video.
 
 -- Amiga UART connection to GPIO header
 amiga_rs232_rxd <= GPIO_16;
 GPIO_12 <= amiga_rs232_txd;
-
-
 PS2_enable <= '1';
 
-
 -- SPI
-n_led1<=NOT sd_cs;
-mmc_n_cs<=sd_cs;
-mmc_mosi<=sd_mosi;
-sd_miso<=mmc_miso;
-mmc_clk<=sd_clk;
-
+n_led1 <= NOT led_power;
 
 virtual_top : COMPONENT minimig_virtual_top
 generic map (
-	  havertg => 1,
-	  haveaudio => 1,
-	  havec2p => 0,
-	  vga_width => 8,
-	  havecart => 0,
-	  haveaga => 0
+	hostonly => 0,
+	debug => 0,
+	spimux => 0,
+	haveiec => 0,
+	havereconfig => 0,
+	havertg => 0,
+	haveaudio => 0,
+	havec2p => 1,
+	haveamigahost => 0,
+	havespirtc => 0,
+	ram_64meg => 0,
+	vga_width => 8,
+	usethrottle => 0,
+	havecart => 0,
+	havevideofilter => 1,
+	haveaga => 1,
+	haveusbhid => 0,
+	haveauxspi => 0
 )
 PORT map
-	(
-		sys_tms => TMS,
-		sys_tdo => TDO,
-		sys_tdi => TDI,
-		sys_tck => TCK,
-		CLK_IN => sys_clock,
-		CLK_114 => sysclk,
-		RESET_N => sys_reset,
-		LED_POWER => open,
-		LED_DISK => open,
---		n_15khz => n_15khz,
-		MENU_BUTTON => GPIO_2,
-		CTRL_TX => rs232_txd,
-		CTRL_RX => rs232_rxd,
-		AMIGA_TX => amiga_rs232_txd,
-		AMIGA_RX => amiga_rs232_rxd,
-		
-		DVI_HS => dvi_hsync,
-		DVI_VS => dvi_vsync,
-		DVI_R	=> dvi_red,
-		DVI_G	=> dvi_green,
-		DVI_B	=> dvi_blue,
-		DVI_STROBE => dvi_pixel,
-		DVI_DE => dvi_window,
-	
-		SDRAM_DQ	=> Dram_Data,
-		SDRAM_A => Dram_Addr,
-		SDRAM_DQML => Dram_DQML,
-		SDRAM_DQMH => Dram_DQMH,
-		SDRAM_nWE => Dram_n_We,
-		SDRAM_nCAS => Dram_n_Cas,
-		SDRAM_nRAS => Dram_n_Ras,
-		SDRAM_nCS => Dram_n_cs,
-		SDRAM_BA => Dram_BA,
-		SDRAM_CLK => Dram_Clk,
-		SDRAM_CKE => Dram_CKE,
+(
+	sys_tms => TMS,
+	sys_tdo => TDO,
+	sys_tdi => TDI,
+	sys_tck => TCK,
+	CLK_IN => clk,
+	CLK_USB_IN => open,
+	CLK_114 => clk_sys,
+	CLK_28 => clk_pixel,
+	CLK_142 => clk_tmds,
+	RESET_N => reset_n,
+	LED_POWER => led_power,
+	LED_DISK => open,
+--	n_15khz => n_15khz,
+	MENU_BUTTON => GPIO_2,
+	CTRL_TX => rs232_txd,
+	CTRL_RX => rs232_rxd,
+	AMIGA_TX => amiga_rs232_txd,
+	AMIGA_RX => amiga_rs232_rxd,
 
-		AUDIO_L => audio_l,
-		AUDIO_R => audio_r,
+	DVI_HS => dvi_hsync,
+	DVI_VS => dvi_vsync,
+	DVI_R => dvi_red,
+	DVI_G => dvi_green,
+	DVI_B => dvi_blue,
+	DVI_STROBE => dvi_pixel,
+	DVI_DE => dvi_window,
 
-		PS2_DAT_I => ps2k_data_in,
-		PS2_DAT_O => ps2k_data_out,
-		PS2_CLK_I => ps2k_clk_in,
-		PS2_CLK_O => ps2k_clk_out,
-		
-		PS2_MDAT_I => ps2m_data_in,
-		PS2_MDAT_O => ps2m_data_out,
-		PS2_MCLK_I => ps2m_clk_in,
-		PS2_MCLK_O => ps2m_clk_out,
+	SDRAM_DQ => sdram_dq,
+	SDRAM_A => sdram_a,
+	SDRAM_DQML => sdram_dqm(0),
+	SDRAM_DQMH => sdram_dqm(1),
+	SDRAM_nWE => sdram_wen,
+	SDRAM_nCAS => sdram_casn,
+	SDRAM_nRAS => sdram_rasn,
+	SDRAM_nCS => sdram_csn,
+	SDRAM_BA => sdram_ba,
+--	SDRAM_CLK => sdram_clk,
+	SDRAM_CKE => sdram_cke,
 
-		JOYA => n_joy1,
-		JOYB => n_joy2,
-		JOYC => (others => '1'),
-		JOYD => (others => '1'),
-		
-		SD_MISO => sd_miso,
-		SD_MOSI => sd_mosi,
-		SD_CLK => sd_clk,
-		SD_CS => sd_cs,
-		SD_ACK => '1',
-		C64_KEYS => (others => '1'),
-		amiga_key => (others =>'0'),
-		amiga_reset_n=>'1',
-		amiga_key_stb=>'0'
-	);
+	AUDIO_MIX_L => audio_l,
+	AUDIO_MIX_R => audio_r,
+
+	PS2_DAT_I => ps2k_data_in,
+	PS2_DAT_O => ps2k_data_out,
+	PS2_CLK_I => ps2k_clk_in,
+	PS2_CLK_O => ps2k_clk_out,
+
+	PS2_MDAT_I => ps2m_data_in,
+	PS2_MDAT_O => ps2m_data_out,
+	PS2_MCLK_I => ps2m_clk_in,
+	PS2_MCLK_O => ps2m_clk_out,
+
+	JOYA => n_joy1,
+	JOYB => n_joy2,
+	JOYC => (others => '1'),
+	JOYD => (others => '1'),
+
+	SD_MISO => mmc_miso,
+	SD_MOSI => mmc_mosi,
+	SD_CLK => mmc_clk,
+	SD_CS => mmc_n_cs,
+	SD_ACK => '1',
+
+	AMIGA_RESET_N => '1',
+	AMIGA_KEY => (others=>'-'),
+	AMIGA_KEY_STB => '0',
+
+	C64_KEYS => (others => '1'),
+
+	USB_DP => open,
+	USB_DN => open,
+
+	AUX_SPI_CSN => open,
+	AUX_SPI_CLK => open,
+	AUX_SPI_MOSI => open
+);
 
 ps2k_data_in <= PS2_data1;
 ps2k_clk_in <= PS2_clk1;
@@ -304,173 +306,115 @@ PS2_clk1 <= '0' when ps2k_clk_out='0' else 'Z';
 ps2m_data_in <= PS2_data2;
 ps2m_clk_in <= PS2_clk2;
 PS2_data2 <= '0' when ps2m_data_out='0' else 'Z';
-PS2_clk2 <= '0' when ps2m_clk_out='0' else 'Z';	
-	
-slave_tx_o<=rs232_txd;
-rs232_rxd<=slave_rx_i;
+PS2_clk2 <= '0' when ps2m_clk_out='0' else 'Z';
 
-joyc<=(others=>'1');
-joyd<=(others=>'1');
+slave_tx_o <= rs232_txd;
+rs232_rxd <= slave_rx_i;
 
-	-- Instantiate DVI out:
-	genvideo: block
-		constant useddr : integer := 1;
-		
-		component dvi
-		generic ( DDR_ENABLED : integer := useddr );
-		port (
-			pclk : in std_logic;
-			tmds_clk : in std_logic; -- 10 times faster of pclk
+joyc <= (others=>'1');
+joyd <= (others=>'1');
 
-			in_vga_red : in std_logic_vector(7 downto 0);
-			in_vga_green : in std_logic_vector(7 downto 0);
-			in_vga_blue : in std_logic_vector(7 downto 0);
+-- Instantiate HDMI out:
+genvideo: block
+	component hdmi
+	generic (
+		IT_CONTENT : std_logic := '1';
+		DVI_OUTPUT : std_logic := '0';
+		VIDEO_RATE : integer := 28571400;
+		AUDIO_RATE : integer := 44100;
+		AUDIO_BIT_WIDTH : integer := 16;
+		VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
+		PRODUCT_DESCRIPTION : std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "A" + padding
+		SOURCE_DEVICE_INFORMATION : std_logic_vector(7 downto 0) := x"09"
+	);
+	port (
+		clk_pixel_x5 : in  std_logic;
+		clk_pixel    : in  std_logic;
+		reset        : in  std_logic;
 
-			in_vga_vsync : in std_logic;
-			in_vga_hsync : in std_logic;
-			in_vga_pixel : in std_logic;
-			in_vga_window : in std_logic;
+		pal_mode    : in  std_logic;
+		screen      : in  std_logic_vector(1 downto 0);
+		short_frame : in  std_logic;
+		interlace   : in  std_logic;
 
-			out_tmds_red : out std_logic_vector(useddr downto 0);
-			out_tmds_green : out std_logic_vector(useddr downto 0);
-			out_tmds_blue : out std_logic_vector(useddr downto 0);
-			out_tmds_clk : out std_logic_vector(useddr downto 0);
-			out_tmds_red_n : out std_logic_vector(useddr downto 0);
-			out_tmds_green_n : out std_logic_vector(useddr downto 0);
-			out_tmds_blue_n : out std_logic_vector(useddr downto 0);
-			out_tmds_clk_n : out std_logic_vector(useddr downto 0)
-		); end component;
-		
-		component ODDRX1F
-		port (
-			D0 : in std_logic;
-			D1 : in std_logic;
-			Q : out std_logic;
-			SCLK : in std_logic;
-			RST : in std_logic
-		); end component;
+		rgb : in  std_logic_vector(23 downto 0);
 
-		component DCSC
-		generic (
-			DCSMODE : string := "POS"
-		);
-		port (
-			CLK1, CLK0 : in std_logic;
-			SEL1, SEL0 : in std_logic;
-			MODESEL : in std_logic;
-			DCSOUT : out std_logic
-		);
-		end component;
+		audio_sample_word_0 : in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
+		audio_sample_word_1 : in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
+		audio_sample_en     : out std_logic;
 
-		signal pcnt : unsigned(3 downto 0);
-		signal clksel : std_logic_vector(1 downto 0);
+		tmds       : out std_logic_vector(2 downto 0);
+		tmds_clock : out std_logic
+	);
+	end component;
 
-		signal tmds_r : std_logic_vector(useddr downto 0);
-		signal tmds_g : std_logic_vector(useddr downto 0);
-		signal tmds_b : std_logic_vector(useddr downto 0);
-		signal tmds_clk : std_logic_vector(useddr downto 0);
-		signal tmds_r_n : std_logic_vector(useddr downto 0);
-		signal tmds_g_n : std_logic_vector(useddr downto 0);
-		signal tmds_b_n : std_logic_vector(useddr downto 0);
-		signal tmds_clk_n : std_logic_vector(useddr downto 0);
-		signal vidclks : std_logic_vector(3 downto 0);
-		signal clk_video : std_logic;
-		signal clk_tmds : std_logic;
-		
-		signal heartbeat_ctr : unsigned(27 downto 0);
-		
-	begin
+	component video_analyzer
+	port (
+		clk         : in  std_logic;
+		hs          : in  std_logic;
+		vs          : in  std_logic;
+		screen      : in  std_logic_vector(1 downto 0);
+		pal         : out std_logic;
+		short_frame : out std_logic;
+		interlace   : out std_logic;
+		vreset      : out std_logic
+	);
+	end component;
 
-		process(clk_video) begin
+	signal vreset : std_logic;
+	signal vpal : std_logic;
+	signal interlace : std_logic;
+	signal short_frame : std_logic;
+	signal screen : std_logic_vector(1 downto 0);
+	signal tmds_clock : std_logic;
+	signal tmds : std_logic_vector(2 downto 0);
+	signal rgb : std_logic_vector(23 downto 0);
 
-			-- Clock multiplexing:  Video timings are derived from the 114Hz clock.
-			-- dvi_pixel is high for one cycle at the start of each pixel, so by counting
-			-- the number of clocks between each pulse we can determine the pixel clock and
-			-- thus the appropriate TMDS clock to use.
-			-- We will see a pcnt value of 1 for 56MHz modes and 3 for 28MHz modes
-			-- Since we don't seem to be able to cascade DCSCs, we're stuck with just two
-			-- TDMS clocks, which will be 5*28MHz and 5*56Mhz.
-			if rising_edge(sysclk) then
-				if dvi_pixel='1' then
-					pcnt <=(others => '0');
-					clksel(0)<='0';
-					case pcnt is 
-						when X"1" => -- 56MHz pixel clock in RTG mode
-							clksel(0) <= '0';
-						when others => -- 28MHz pixel clock otherwise
-							clksel(0) <= '1';
-							null;
-					end case;
-				else
-					pcnt<=pcnt+1;
-				end if;
-			end if;
-			clksel(1) <= not clksel(0);
-		end process;
+begin
+	video_analyzer_inst : component video_analyzer
+	port map (
+		clk => clk_pixel,
+		hs => dvi_hsync,
+		vs => dvi_vsync,
+		pal => vpal,
+		short_frame => short_frame,
+		screen => screen,
+		interlace => interlace,
+		vreset => vreset
+	);
+	screen <= (others => '0');
 
-		vidpll : entity work.ecp5pll
-		generic map(
-			in_hz => natural(114.2857e6),
-			out0_hz => natural(142.857125e6),
-			out1_hz => natural(285.71425e6),
-			out2_hz => natural(114.2857e6)
-		)
-		port map (
-			clk_i => sysclk,
-			clk_o => vidclks
-		);
-		
-		clkmux1 : component DCSC
-		port map (
-			CLK0 => vidclks(0),
-			CLK1 => vidclks(1),
-			SEL1 => clksel(1),
-			SEL0 => clksel(0),
-			MODESEL => '1',
-			DCSOUT => clk_tmds
-		);
+	hdmi_inst : component hdmi
+	generic map (
+		VIDEO_RATE => 28571400,
+		AUDIO_RATE => 48000,
+		AUDIO_BIT_WIDTH => 24
+	)
+	port map (
+		clk_pixel_x5 => clk_tmds,
+		clk_pixel => clk_pixel,
+		reset => vreset,
 
-		clk_video <= vidclks(2);
+		pal_mode => vpal,
+		short_frame => short_frame,
+		screen => screen,
+		interlace => interlace,
 
-		dvi_inst : component dvi
-		generic map (
-			DDR_ENABLED => useddr
-		)
-		port map (
-			pclk => clk_video,
-			tmds_clk => clk_tmds,
+		rgb => rgb,
 
-			in_vga_red => dvi_red,
-			in_vga_green => dvi_green,
-			in_vga_blue => dvi_blue,
+		audio_sample_word_0 => audio_l,
+		audio_sample_word_1 => audio_r,
+		audio_sample_en => open,
 
-			in_vga_vsync => dvi_vsync,
-			in_vga_hsync => dvi_hsync,
-			in_vga_pixel => dvi_pixel,
-			in_vga_window => dvi_window,
+		tmds => tmds,
+		tmds_clock => tmds_clock
+	);
 
-			out_tmds_red => tmds_r,
-			out_tmds_green => tmds_g,
-			out_tmds_blue => tmds_b,
-			out_tmds_clk => tmds_clk,
-			out_tmds_red_n => tmds_r_n,
-			out_tmds_green_n => tmds_g_n,
-			out_tmds_blue_n => tmds_b_n,
-			out_tmds_clk_n => tmds_clk_n
-		);
+	rgb <= dvi_red & dvi_green & dvi_blue;
+	lvds_dp <= tmds_clock & tmds;
+end block;
 
-		dviout_c : component ODDRX1F port map (D0 => tmds_clk(0), D1=>tmds_clk(1), Q => LVDS_ck(0), SCLK =>clk_tmds, RST=>'0');
-		dviout_r : component ODDRX1F port map (D0 => tmds_r(0), D1=>tmds_r(1), Q => LVDS_Red(0), SCLK =>clk_tmds, RST=>'0');
-		dviout_g : component ODDRX1F port map (D0 => tmds_g(0), D1=>tmds_g(1), Q => LVDS_Green(0), SCLK =>clk_tmds, RST=>'0');
-		dviout_b : component ODDRX1F port map (D0 => tmds_b(0), D1=>tmds_b(1), Q => LVDS_Blue(0), SCLK =>clk_tmds, RST=>'0');
---		dviout_c_n : component ODDRX1F port map (D0 => tmds_clk_n(0), D1=>tmds_clk_n(1), Q => gpdi_dn(3), SCLK =>clk_tmds, RST=>'0');
---		dviout_r_n : component ODDRX1F port map (D0 => tmds_r_n(0), D1=>tmds_r_n(1), Q => gpdi_dn(2), SCLK =>clk_tmds, RST=>'0');
---		dviout_g_n : component ODDRX1F port map (D0 => tmds_g_n(0), D1=>tmds_g_n(1), Q => gpdi_dn(1), SCLK =>clk_tmds, RST=>'0');
---		dviout_b_n : component ODDRX1F port map (D0 => tmds_b_n(0), D1=>tmds_b_n(1), Q => gpdi_dn(0), SCLK =>clk_tmds, RST=>'0');
-
-	end block;
-
-audio : block 
+audio : block
 	signal DAC_L : std_logic;
 	signal DAC_R : std_logic;
 
@@ -488,13 +432,13 @@ audio : block
 
 begin
 	-- Audio output mapped to GPIO header
-	GPIO_13 <= DAC_R; 
+	GPIO_13 <= DAC_R;
 	GPIO_19 <= DAC_L;
-	
+
 	audiosd : COMPONENT hybrid_pwm_sd
 	PORT map
 	(
-		clk => sysclk,
+		clk => clk_sys,
 		terminate => '0',
 		d_l(15) => not audio_l(23),
 		d_l(14 downto 0) => audio_l(22 downto 8),

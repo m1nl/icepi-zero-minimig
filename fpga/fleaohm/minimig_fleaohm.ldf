@@ -24,12 +24,6 @@
         <Source name="../../rtl/rtg/rtg_video.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
-        <Source name="../../rtl/akiko/cornerturn.vhd" type="VHDL" type_short="VHDL">
-            <Options/>
-        </Source>
-        <Source name="../../rtl/akiko/akiko.vhd" type="VHDL" type_short="VHDL">
-            <Options/>
-        </Source>
         <Source name="../../rtl/audio/AudioMix.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
@@ -342,16 +336,10 @@
         <Source name="../../rtl/lattice/minimig_autoconfig_rom.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/lattice/tg68_regfile/tg68_regfile.sbx" type="sbx" type_short="SBX">
-            <Options/>
-        </Source>
         <Source name="../../rtl/lattice/colortable_ram/colortable_ram.sbx" type="sbx" type_short="SBX">
             <Options/>
         </Source>
         <Source name="../../rtl/audio/i2s_dac.vhd" type="VHDL" type_short="VHDL">
-            <Options/>
-        </Source>
-        <Source name="../../rtl/lattice/TG68KdotC_Kernel.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
         <Source name="../../rtl/jtag/jcapture.vhd" type="VHDL" type_short="VHDL">
@@ -369,13 +357,82 @@
         <Source name="../../rtl/jtag/vjtag_fifo.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/tmds/dvi.v" type="Verilog" type_short="Verilog">
+        <Source name="board_config.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/tmds/tmds_encoder_pipelined.v" type="Verilog" type_short="Verilog">
+        <Source name="../../rtl/lattice/amiga_clk_lattice_pll.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/lattice/bitplane_ram.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/lattice/sprite_ram.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/minimig/scale/frac_interp.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/minimig/scale/pixel_integrate.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/minimig/scale/scandoubler_rgb_integrate.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/minimig/scale/unsigned_division.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/soc/akiko.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/lattice/spram_be_512x32.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/tg68k/TG68KdotC_Kernel.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/soc/video_analyzer.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/hdmi/audio_clock_regeneration_packet.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/audio_info_frame.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/audio_sample_packet.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/auxiliary_video_information_info_frame.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/hdmi.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/packet_assembler.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/packet_picker.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/serializer.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/source_product_description_info_frame.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="../../rtl/hdmi/tmds_channel.sv" type="Verilog" type_short="Verilog">
+            <Options VerilogStandard="System Verilog"/>
+        </Source>
+        <Source name="Minimig_FleaOhm/Minimig_FleaOhm.xcf" type="Programming Project File" type_short="Programming">
+            <Options/>
+        </Source>
+        <Source name="eightthirtytwo_multicycles.sdc" type="Synplify Design Constraints File" type_short="SDC">
             <Options/>
         </Source>
         <Source name="fleaohm.lpf" type="Logic Preference" type_short="LPF">
+            <Options/>
+        </Source>
+        <Source name="minimig_fleaohm.sdc" type="Synplify Design Constraints File" type_short="SDC">
             <Options/>
         </Source>
     </Implementation>
