@@ -37,8 +37,8 @@ entity cfide is
 		haveclockport : integer := 0;
 		haveamigahost : integer := 0;
 		haveaudio : integer := 0;
-		haveusbhid : integer := 1;
-		haveauxspi : integer := 1
+		haveusbhid : integer := 0;
+		haveauxspi : integer := 0
 	);
 	port (
 		sysclk	: in std_logic;
@@ -110,6 +110,8 @@ end cfide;
 
 architecture rtl of cfide is
 
+signal reset : std_logic;
+
 signal uart_clkgen: unsigned(9 downto 0);
 signal uart_shift: std_logic_vector(9 downto 0);
 signal uart_shiftout: std_logic;
@@ -179,6 +181,12 @@ signal usbtohost_0 : std_logic_vector(31 downto 0);
 signal usb_select_1 : std_logic;
 signal usbtohost_1 : std_logic_vector(31 downto 0);
 
+signal usb_joya_en : std_logic;
+signal usb_joyb_en : std_logic;
+
+signal usb_joya : std_logic_vector(11 downto 0);
+signal usb_joyb : std_logic_vector(11 downto 0);
+
 signal ack_28m : std_logic;
 
 signal rtc_select : std_logic;
@@ -210,6 +218,8 @@ port (
 end component;
 
 begin
+
+reset <= not reset_n;
 
 -- Peripheral registers, which are only 16-bits wide.
 
@@ -243,7 +253,7 @@ amigahostpresent <= '1' when haveamigahost=1 else '0';
 usbhidpresent <= '1' when haveusbhid=1 else '0';
 auxspipresent <= '1' when haveauxspi=1 else '0';
 
-platformdata <= "00000" & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+platformdata <= "000" & auxspipresent & usbhidpresent & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
 
 IOdata <= sd_in;
 
@@ -458,7 +468,7 @@ generic map (
 )
 port map (
 	clk   => sysclk,
-	rst   => not reset_n,
+	rst   => reset,
 	wr_en => aux_spi_data_wr_en,
 	din   => aux_spi_data_wr,
 	rd_ack => aux_spi_data_rd_ack,
@@ -693,12 +703,12 @@ begin
 end process;
 
 -----------------------------------------------------------------
--- timer
+-- Timer
 -----------------------------------------------------------------
 process(clk_28, reset_n)
 begin
 	if reset_n='0' then
-		timecnt <= 0;
+		timecnt <= to_unsigned(0, timecnt'length);
 	elsif rising_edge(clk_28) then
 		if tick_in='1' then
 			timecnt <= timecnt + 1;
@@ -707,439 +717,468 @@ begin
 end process;
 
 -----------------------------------------------------------------
+-- Combined joystick logic
+-----------------------------------------------------------------
+joya <= usb_joya when usb_joya_en='1' else not joystick_d(11 downto 0);
+joyb <= usb_joyb when usb_joyb_en='1' else not joystick_d(23 downto 12);
+
+-----------------------------------------------------------------
 -- USB
 -----------------------------------------------------------------
-
-usbhid : block
-	signal usb_dp_o  : std_logic_vector(1 downto 0);
-	signal usb_dn_o  : std_logic_vector(1 downto 0);
-	signal usb_oe : std_logic_vector(1 downto 0);
-
-	signal rom_addra : std_logic_vector(9 downto 0);
-	signal rom_douta : std_logic_vector(3 downto 0);
-	signal rom_ena   : std_logic;
-
-	signal rom_addrb : std_logic_vector(9 downto 0);
-	signal rom_doutb : std_logic_vector(3 downto 0);
-	signal rom_enb   : std_logic;
-
-	signal usb_typ_0 : std_logic_vector(1 downto 0);
-	signal usb_typ_1 : std_logic_vector(1 downto 0);
-
-	signal usb_full_report_0 : std_logic;
-	signal usb_full_report_1 : std_logic;
-
-	signal usb_game_0 : std_logic_vector(13 downto 0);
-	signal usb_game_1 : std_logic_vector(13 downto 0);
-
-	signal usb_game_0_combined : std_logic;
-	signal usb_game_1_combined : std_logic;
-
-	signal usbreset       : std_logic;
-	signal usbreset_sync1 : std_logic;
-	signal usbreset_sync2 : std_logic;
-
-	type sync3_t is array (0 to 1) of std_logic_vector(2 downto 0);
-	signal hid_sync           : sync3_t := (others => (others => '0'));
-	signal full_report_toggle : std_logic_vector(1 downto 0) := (others => '0');
-
-	signal hid_report_ready_0 : std_logic;
-	signal hid_report_ready_1 : std_logic;
-	signal hid_report_ack_0 : std_logic;
-	signal hid_report_ack_1 : std_logic;
-
-	signal hid_report_0 : std_logic_vector(63 downto 0);
-	signal hid_report_1 : std_logic_vector(63 downto 0);
-
-	component usb_hid_host
-		generic (
-			FULL_SPEED       : integer := 1;
-			KEYBOARD_SUPPORT : integer := 1;
-			MOUSE_SUPPORT    : integer := 1;
-			GAME_SUPPORT     : integer := 1
-		);
-		port (
-			clk   : in  std_logic;
-			reset : in  std_logic;
-			cs    : in  std_logic;
-
-			usb_dm_i : in  std_logic;
-			usb_dp_i : in  std_logic;
-			usb_dm_o : out std_logic;
-			usb_dp_o : out std_logic;
-			usb_oe   : out std_logic;
-
-			typ         : out std_logic_vector(1 downto 0);
-			full_report : out std_logic;
-			connerr     : out std_logic;
-			busy        : out std_logic;
-
-			key_modifiers : out std_logic_vector(7 downto 0);
-			key_0         : out std_logic_vector(7 downto 0);
-			key_1         : out std_logic_vector(7 downto 0);
-			key_2         : out std_logic_vector(7 downto 0);
-			key_3         : out std_logic_vector(7 downto 0);
-			key_4         : out std_logic_vector(7 downto 0);
-			key_5         : out std_logic_vector(7 downto 0);
-
-			mouse_btn : out std_logic_vector(2 downto 0);
-			mouse_dx  : out signed(7 downto 0);
-			mouse_dy  : out signed(7 downto 0);
-
-			game_l   : out std_logic;
-			game_r   : out std_logic;
-			game_u   : out std_logic;
-			game_d   : out std_logic;
-
-			game_a   : out std_logic;
-			game_b   : out std_logic;
-			game_x   : out std_logic;
-			game_y   : out std_logic;
-			game_sel : out std_logic;
-			game_sta : out std_logic;
-
-			game_extra : out std_logic_vector(3 downto 0);
-
-			dbg_hid_report : out std_logic_vector(63 downto 0);
-			dbg_hid_regs   : out std_logic_vector(63 downto 0);
-
-			rom_addr : out std_logic_vector(9 downto 0);
-			rom_dout : in  std_logic_vector(3 downto 0);
-			rom_en   : out std_logic
-		);
-	end component;
-
-	component usb_hid_host_dual_rom
-		generic (
-			MEMORY_FILE : string := "usb_hid_host_rom.mem"
-		);
-		port (
-			clk : in std_logic;
-
-			addra : in  std_logic_vector(9 downto 0);
-			douta : out std_logic_vector(3 downto 0);
-			ena   : in  std_logic;
-
-			addrb : in  std_logic_vector(9 downto 0);
-			doutb : out std_logic_vector(3 downto 0);
-			enb   : in  std_logic
-		);
-	end component;
+gen_usbhid : if haveusbhid=1 generate
 begin
-	-- Drive outputs onto the bus
-	usb_dp(0) <= usb_dp_o(0) when usb_oe(0) = '1' else 'Z';
-	usb_dn(0) <= usb_dn_o(0) when usb_oe(0) = '1' else 'Z';
-	usb_dp(1) <= usb_dp_o(1) when usb_oe(1) = '1' else 'Z';
-	usb_dn(1) <= usb_dn_o(1) when usb_oe(1) = '1' else 'Z';
+	usbhid : block
+		signal usb_dp_o  : std_logic_vector(1 downto 0);
+		signal usb_dn_o  : std_logic_vector(1 downto 0);
+		signal usb_oe : std_logic_vector(1 downto 0);
 
-	u_rom : usb_hid_host_dual_rom
-	generic map (
-		MEMORY_FILE => "../../rtl/usb_hid_host/rom/usb_hid_host_rom.mem"
-	)
-	port map (
-		clk   => usbclk,
-		addra => rom_addra,
-		douta => rom_douta,
-		ena   => rom_ena,
-		addrb => rom_addrb,
-		doutb => rom_doutb,
-		enb   => rom_enb
-	);
+		signal rom_addra : std_logic_vector(9 downto 0);
+		signal rom_douta : std_logic_vector(3 downto 0);
+		signal rom_ena   : std_logic;
 
-	u_usb_hid_host_0 : usb_hid_host
-	generic map (
-		FULL_SPEED       => 1,
-		KEYBOARD_SUPPORT => 1,
-		MOUSE_SUPPORT    => 1,
-		GAME_SUPPORT     => 1
-	)
-	port map (
-		clk   => usbclk,
-		reset => usbreset,
-		cs    => '1',
+		signal rom_addrb : std_logic_vector(9 downto 0);
+		signal rom_doutb : std_logic_vector(3 downto 0);
+		signal rom_enb   : std_logic;
 
-		-- USB only
-		usb_dm_i => usb_dn(0),
-		usb_dp_i => usb_dp(0),
-		usb_dm_o => usb_dn_o(0),
-		usb_dp_o => usb_dp_o(0),
-		usb_oe   => usb_oe(0),
+		signal usb_typ_0 : std_logic_vector(1 downto 0);
+		signal usb_typ_1 : std_logic_vector(1 downto 0);
 
-		-- ROM only
-		rom_addr => rom_addra,
-		rom_dout => rom_douta,
-		rom_en   => open,
+		signal usb_full_report_0 : std_logic;
+		signal usb_full_report_1 : std_logic;
 
-		-- everything else unused
-		typ            => usb_typ_0,
-		full_report    => usb_full_report_0,
-		connerr        => open,
-		busy           => open,
+		signal usb_game_0 : std_logic_vector(13 downto 0);
+		signal usb_game_1 : std_logic_vector(13 downto 0);
 
-		key_modifiers  => open,
-		key_0          => open,
-		key_1          => open,
-		key_2          => open,
-		key_3          => open,
-		key_4          => open,
-		key_5          => open,
+		signal usb_game_0_combined : std_logic;
+		signal usb_game_1_combined : std_logic;
 
-		mouse_btn      => open,
-		mouse_dx       => open,
-		mouse_dy       => open,
+		signal usbreset       : std_logic;
+		signal usbreset_sync1 : std_logic;
+		signal usbreset_sync2 : std_logic;
 
-		game_l         => usb_game_0(0),
-		game_r         => usb_game_0(1),
-		game_u         => usb_game_0(2),
-		game_d         => usb_game_0(3),
+		type sync3_t is array (0 to 1) of std_logic_vector(2 downto 0);
+		signal hid_sync           : sync3_t := (others => (others => '0'));
+		signal full_report_toggle : std_logic_vector(1 downto 0) := (others => '0');
 
-		game_a         => usb_game_0(4),
-		game_b         => usb_game_0(5),
-		game_x         => usb_game_0(6),
-		game_y         => usb_game_0(7),
-		game_sel       => usb_game_0(8),
-		game_sta       => usb_game_0(9),
+		signal hid_report_ready_0 : std_logic;
+		signal hid_report_ready_1 : std_logic;
+		signal hid_report_ack_0 : std_logic;
+		signal hid_report_ack_1 : std_logic;
 
-		game_extra     => usb_game_0(13 downto 10),
+		signal hid_report_0 : std_logic_vector(63 downto 0);
+		signal hid_report_1 : std_logic_vector(63 downto 0);
 
-		dbg_hid_report => hid_report_0,
-		dbg_hid_regs   => open
-	);
+		component usb_hid_host
+			generic (
+				FULL_SPEED       : integer := 1;
+				KEYBOARD_SUPPORT : integer := 1;
+				MOUSE_SUPPORT    : integer := 1;
+				GAME_SUPPORT     : integer := 1
+			);
+			port (
+				clk   : in  std_logic;
+				reset : in  std_logic;
+				cs    : in  std_logic;
 
-	rom_ena <= '1';
-	rom_enb <= '1';
+				usb_dm_i : in  std_logic;
+				usb_dp_i : in  std_logic;
+				usb_dm_o : out std_logic;
+				usb_dp_o : out std_logic;
+				usb_oe   : out std_logic;
 
-	u_usb_hid_host_1 : usb_hid_host
-	generic map (
-		FULL_SPEED       => 1,
-		KEYBOARD_SUPPORT => 1,
-		MOUSE_SUPPORT    => 1,
-		GAME_SUPPORT     => 1
-	)
-	port map (
-		clk   => usbclk,
-		reset => usbreset,
-		cs    => '1',
+				typ         : out std_logic_vector(1 downto 0);
+				full_report : out std_logic;
+				connerr     : out std_logic;
+				busy        : out std_logic;
 
-		-- USB only
-		usb_dm_i => usb_dn(1),
-		usb_dp_i => usb_dp(1),
-		usb_dm_o => usb_dn_o(1),
-		usb_dp_o => usb_dp_o(1),
-		usb_oe   => usb_oe(1),
+				key_modifiers : out std_logic_vector(7 downto 0);
+				key_0         : out std_logic_vector(7 downto 0);
+				key_1         : out std_logic_vector(7 downto 0);
+				key_2         : out std_logic_vector(7 downto 0);
+				key_3         : out std_logic_vector(7 downto 0);
+				key_4         : out std_logic_vector(7 downto 0);
+				key_5         : out std_logic_vector(7 downto 0);
 
-		-- ROM only
-		rom_addr => rom_addrb,
-		rom_dout => rom_doutb,
-		rom_en   => open,
+				mouse_btn : out std_logic_vector(2 downto 0);
+				mouse_dx  : out signed(7 downto 0);
+				mouse_dy  : out signed(7 downto 0);
 
-		-- everything else unused
-		typ            => usb_typ_1,
-		full_report    => usb_full_report_1,
-		connerr        => open,
-		busy           => open,
+				game_l   : out std_logic;
+				game_r   : out std_logic;
+				game_u   : out std_logic;
+				game_d   : out std_logic;
 
-		key_modifiers  => open,
-		key_0          => open,
-		key_1          => open,
-		key_2          => open,
-		key_3          => open,
-		key_4          => open,
-		key_5          => open,
+				game_a   : out std_logic;
+				game_b   : out std_logic;
+				game_x   : out std_logic;
+				game_y   : out std_logic;
+				game_sel : out std_logic;
+				game_sta : out std_logic;
 
-		mouse_btn      => open,
-		mouse_dx       => open,
-		mouse_dy       => open,
+				game_extra : out std_logic_vector(3 downto 0);
 
-		game_l         => usb_game_1(0),
-		game_r         => usb_game_1(1),
-		game_u         => usb_game_1(2),
-		game_d         => usb_game_1(3),
+				dbg_hid_report : out std_logic_vector(63 downto 0);
+				dbg_hid_regs   : out std_logic_vector(63 downto 0);
 
-		game_a         => usb_game_1(4),
-		game_b         => usb_game_1(5),
-		game_x         => usb_game_1(6),
-		game_y         => usb_game_1(7),
-		game_sel       => usb_game_1(8),
-		game_sta       => usb_game_1(9),
+				rom_addr : out std_logic_vector(9 downto 0);
+				rom_dout : in  std_logic_vector(3 downto 0);
+				rom_en   : out std_logic
+			);
+		end component;
 
-		game_extra     => usb_game_1(13 downto 10),
+		component usb_hid_host_dual_rom
+			generic (
+				MEMORY_FILE : string := "usb_hid_host_rom.mem"
+			);
+			port (
+				clk : in std_logic;
 
-		dbg_hid_report => hid_report_1,
-		dbg_hid_regs   => open
-	);
+				addra : in  std_logic_vector(9 downto 0);
+				douta : out std_logic_vector(3 downto 0);
+				ena   : in  std_logic;
 
-	process (usbclk, reset_n)
+				addrb : in  std_logic_vector(9 downto 0);
+				doutb : out std_logic_vector(3 downto 0);
+				enb   : in  std_logic
+			);
+		end component;
 	begin
-		if reset_n = '0' then
-			usbreset_sync1 <= '1';
-			usbreset_sync2 <= '1';
+		-- Drive outputs onto the bus
+		usb_dp(0) <= usb_dp_o(0) when usb_oe(0) = '1' else 'Z';
+		usb_dn(0) <= usb_dn_o(0) when usb_oe(0) = '1' else 'Z';
+		usb_dp(1) <= usb_dp_o(1) when usb_oe(1) = '1' else 'Z';
+		usb_dn(1) <= usb_dn_o(1) when usb_oe(1) = '1' else 'Z';
 
-		elsif rising_edge(usbclk) then
-			usbreset_sync1 <= '0';
-			usbreset_sync2 <= usbreset_sync1;
-		end if;
-	end process;
+		u_rom : usb_hid_host_dual_rom
+		generic map (
+			MEMORY_FILE => "../../rtl/usb_hid_host/rom/usb_hid_host_rom.mem"
+		)
+		port map (
+			clk   => usbclk,
+			addra => rom_addra,
+			douta => rom_douta,
+			ena   => rom_ena,
+			addrb => rom_addrb,
+			doutb => rom_doutb,
+			enb   => rom_enb
+		);
 
-	-- Convert pulses to toggles in usbclk domain so they survive CDC regardless of pulse width
-	process (usbclk, reset_n)
-	begin
-		if reset_n = '0' then
-			full_report_toggle <= (others => '0');
+		u_usb_hid_host_0 : usb_hid_host
+		generic map (
+			FULL_SPEED       => 1,
+			KEYBOARD_SUPPORT => 1,
+			MOUSE_SUPPORT    => 1,
+			GAME_SUPPORT     => 1
+		)
+		port map (
+			clk   => usbclk,
+			reset => usbreset,
+			cs    => '1',
 
-		elsif rising_edge(usbclk) then
-			if usb_full_report_0 = '1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
-			if usb_full_report_1 = '1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
-		end if;
-	end process;
+			-- USB only
+			usb_dm_i => usb_dn(0),
+			usb_dp_i => usb_dp(0),
+			usb_dm_o => usb_dn_o(0),
+			usb_dp_o => usb_dp_o(0),
+			usb_oe   => usb_oe(0),
 
-	-- 3-stage shift-register sync in sysclk domain; bit(1) xor bit(2) gives a one-cycle set pulse
-	process (sysclk)
-	begin
-		if rising_edge(sysclk) then
+			-- ROM only
+			rom_addr => rom_addra,
+			rom_dout => rom_douta,
+			rom_en   => open,
+
+			-- everything else unused
+			typ            => usb_typ_0,
+			full_report    => usb_full_report_0,
+			connerr        => open,
+			busy           => open,
+
+			key_modifiers  => open,
+			key_0          => open,
+			key_1          => open,
+			key_2          => open,
+			key_3          => open,
+			key_4          => open,
+			key_5          => open,
+
+			mouse_btn      => open,
+			mouse_dx       => open,
+			mouse_dy       => open,
+
+			game_l         => usb_game_0(0),
+			game_r         => usb_game_0(1),
+			game_u         => usb_game_0(2),
+			game_d         => usb_game_0(3),
+
+			game_a         => usb_game_0(4),
+			game_b         => usb_game_0(5),
+			game_x         => usb_game_0(6),
+			game_y         => usb_game_0(7),
+			game_sel       => usb_game_0(8),
+			game_sta       => usb_game_0(9),
+
+			game_extra     => usb_game_0(13 downto 10),
+
+			dbg_hid_report => hid_report_0,
+			dbg_hid_regs   => open
+		);
+
+		rom_ena <= '1';
+		rom_enb <= '1';
+
+		u_usb_hid_host_1 : usb_hid_host
+		generic map (
+			FULL_SPEED       => 1,
+			KEYBOARD_SUPPORT => 1,
+			MOUSE_SUPPORT    => 1,
+			GAME_SUPPORT     => 1
+		)
+		port map (
+			clk   => usbclk,
+			reset => usbreset,
+			cs    => '1',
+
+			-- USB only
+			usb_dm_i => usb_dn(1),
+			usb_dp_i => usb_dp(1),
+			usb_dm_o => usb_dn_o(1),
+			usb_dp_o => usb_dp_o(1),
+			usb_oe   => usb_oe(1),
+
+			-- ROM only
+			rom_addr => rom_addrb,
+			rom_dout => rom_doutb,
+			rom_en   => open,
+
+			-- everything else unused
+			typ            => usb_typ_1,
+			full_report    => usb_full_report_1,
+			connerr        => open,
+			busy           => open,
+
+			key_modifiers  => open,
+			key_0          => open,
+			key_1          => open,
+			key_2          => open,
+			key_3          => open,
+			key_4          => open,
+			key_5          => open,
+
+			mouse_btn      => open,
+			mouse_dx       => open,
+			mouse_dy       => open,
+
+			game_l         => usb_game_1(0),
+			game_r         => usb_game_1(1),
+			game_u         => usb_game_1(2),
+			game_d         => usb_game_1(3),
+
+			game_a         => usb_game_1(4),
+			game_b         => usb_game_1(5),
+			game_x         => usb_game_1(6),
+			game_y         => usb_game_1(7),
+			game_sel       => usb_game_1(8),
+			game_sta       => usb_game_1(9),
+
+			game_extra     => usb_game_1(13 downto 10),
+
+			dbg_hid_report => hid_report_1,
+			dbg_hid_regs   => open
+		);
+
+		process (usbclk, reset_n)
+		begin
 			if reset_n = '0' then
-				hid_sync <= (others => (others => '0'));
-			else
-				for i in 0 to 1 loop
-					hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
-				end loop;
+				usbreset_sync1 <= '1';
+				usbreset_sync2 <= '1';
+
+			elsif rising_edge(usbclk) then
+				usbreset_sync1 <= '0';
+				usbreset_sync2 <= usbreset_sync1;
 			end if;
-		end if;
-	end process;
+		end process;
 
-	process (sysclk) begin
-		if rising_edge(sysclk) then
+		-- Convert pulses to toggles in usbclk domain so they survive CDC regardless of pulse width
+		process (usbclk, reset_n)
+		begin
 			if reset_n = '0' then
-				hid_report_ready_0 <= '0';
-			else
-				if hid_sync(0)(1) /= hid_sync(0)(2) then
-					hid_report_ready_0 <= '1';
-				end if;
+				full_report_toggle <= (others => '0');
 
-				if hid_report_ack_0 = '1' then
+			elsif rising_edge(usbclk) then
+				if usb_full_report_0 = '1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
+				if usb_full_report_1 = '1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
+			end if;
+		end process;
+
+		-- 3-stage shift-register sync in sysclk domain; bit(1) xor bit(2) gives a one-cycle set pulse
+		process (sysclk)
+		begin
+			if rising_edge(sysclk) then
+				if reset_n = '0' then
+					hid_sync <= (others => (others => '0'));
+				else
+					for i in 0 to 1 loop
+						hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
+					end loop;
+				end if;
+			end if;
+		end process;
+
+		process (sysclk) begin
+			if rising_edge(sysclk) then
+				if reset_n = '0' then
 					hid_report_ready_0 <= '0';
+				else
+					if hid_sync(0)(1) /= hid_sync(0)(2) then
+						hid_report_ready_0 <= '1';
+					end if;
+
+					if hid_report_ack_0 = '1' then
+						hid_report_ready_0 <= '0';
+					end if;
 				end if;
 			end if;
-		end if;
-	end process;
+		end process;
 
-	process (sysclk) begin
-		if rising_edge(sysclk) then
-			if reset_n = '0' then
-				hid_report_ready_1 <= '0';
-			else
-				if hid_sync(1)(1) /= hid_sync(1)(2) then
-					hid_report_ready_1 <= '1';
-				end if;
-
-				if hid_report_ack_1 = '1' then
+		process (sysclk) begin
+			if rising_edge(sysclk) then
+				if reset_n = '0' then
 					hid_report_ready_1 <= '0';
-				end if;
-			end if;
-		end if;
-	end process;
-
-	process (sysclk) begin
-		if rising_edge(sysclk) then
-			hid_report_ack_0 <= '0';
-
-			if usb_select_0 = '1' and req = '1' and ack = '0' then
-				if wr = '1' then
-					case addr(3 downto 2) is
-						when "00" =>
-							if d(2) = '1' then
-								hid_report_ack_0 <= '1';
-							end if;
-						when others =>
-							null;
-					end case;
 				else
-					case addr(3 downto 2) is
-						when "00" =>
-							usbtohost_0(31 downto 16) <= "00" & usb_game_0;
-							usbtohost_0(15 downto 3) <= (others => '0');
-							usbtohost_0(2 downto 0) <= hid_report_ready_0 & usb_typ_0;
-						when "01" =>
-							usbtohost_0 <= hid_report_0(31 downto 0);
-						when "10" =>
-							usbtohost_0 <= hid_report_0(63 downto 32);
-						when others =>
-							null;
-					end case;
+					if hid_sync(1)(1) /= hid_sync(1)(2) then
+						hid_report_ready_1 <= '1';
+					end if;
+
+					if hid_report_ack_1 = '1' then
+						hid_report_ready_1 <= '0';
+					end if;
 				end if;
 			end if;
-		end if;
-	end process;
+		end process;
 
-	process (sysclk) begin
-		if rising_edge(sysclk) then
-			hid_report_ack_1 <= '0';
+		process (sysclk) begin
+			if rising_edge(sysclk) then
+				hid_report_ack_0 <= '0';
 
-			if usb_select_1 = '1' and req = '1' and ack = '0' then
-				if wr = '1' then
-					case addr(3 downto 2) is
-						when "00" =>
-							if d(2) = '1' then
-								hid_report_ack_1 <= '1';
-							end if;
-						when others =>
-							null;
-					end case;
-				else
-					case addr(3 downto 2) is
-						when "00" =>
-							usbtohost_1(31 downto 16) <= "00" & usb_game_1;
-							usbtohost_1(15 downto 3) <= (others => '0');
-							usbtohost_1(2 downto 0) <= hid_report_ready_1 & usb_typ_1;
-						when "01" =>
-							usbtohost_1 <= hid_report_1(31 downto 0);
-						when "10" =>
-							usbtohost_1 <= hid_report_1(63 downto 32);
-						when others =>
-							null;
-					end case;
+				if usb_select_0 = '1' and req = '1' and ack = '0' then
+					if wr = '1' then
+						case addr(3 downto 2) is
+							when "00" =>
+								if d(2) = '1' then
+									hid_report_ack_0 <= '1';
+								end if;
+							when others =>
+								null;
+						end case;
+					else
+						case addr(3 downto 2) is
+							when "00" =>
+								usbtohost_0(31 downto 16) <= "00" & usb_game_0;
+								usbtohost_0(15 downto 3) <= (others => '0');
+								usbtohost_0(2 downto 0) <= hid_report_ready_0 & usb_typ_0;
+							when "01" =>
+								usbtohost_0 <= hid_report_0(31 downto 0);
+							when "10" =>
+								usbtohost_0 <= hid_report_0(63 downto 32);
+							when others =>
+								null;
+						end case;
+					end if;
 				end if;
 			end if;
-		end if;
-	end process;
+		end process;
 
-	joya <= not (
-		(usb_game_0(8) or usb_game_0_combined) &
-		 usb_game_0(9)  &
-		 usb_game_0(13) &
-		 usb_game_0(11) &
-		 usb_game_0(6)  &
-		 usb_game_0(7)  &
-		 usb_game_0(5)  &
-		 usb_game_0(4)  &
-		(usb_game_0(2) or usb_game_0(10)) &
-		(usb_game_0(3) or usb_game_0(12)) &
-		 usb_game_0(0)  &
-		 usb_game_0(1)
-	) when usb_typ_0 = "11" else not joystick_d(11 downto 0);
+		process (sysclk) begin
+			if rising_edge(sysclk) then
+				hid_report_ack_1 <= '0';
 
-	joyb <= not (
-		(usb_game_1(8) or usb_game_1_combined) &
-		 usb_game_1(9)  &
-		 usb_game_1(13) &
-		 usb_game_1(11) &
-		 usb_game_1(6)  &
-		 usb_game_1(7)  &
-		 usb_game_1(5)  &
-		 usb_game_1(4)  &
-		(usb_game_1(2) or usb_game_1(10)) &
-		(usb_game_1(3) or usb_game_1(12)) &
-		 usb_game_1(0)  &
-		 usb_game_1(1)
-	) when usb_typ_1 = "11" else not joystick_d(23 downto 12);
+				if usb_select_1 = '1' and req = '1' and ack = '0' then
+					if wr = '1' then
+						case addr(3 downto 2) is
+							when "00" =>
+								if d(2) = '1' then
+									hid_report_ack_1 <= '1';
+								end if;
+							when others =>
+								null;
+						end case;
+					else
+						case addr(3 downto 2) is
+							when "00" =>
+								usbtohost_1(31 downto 16) <= "00" & usb_game_1;
+								usbtohost_1(15 downto 3) <= (others => '0');
+								usbtohost_1(2 downto 0) <= hid_report_ready_1 & usb_typ_1;
+							when "01" =>
+								usbtohost_1 <= hid_report_1(31 downto 0);
+							when "10" =>
+								usbtohost_1 <= hid_report_1(63 downto 32);
+							when others =>
+								null;
+						end case;
+					end if;
+				end if;
+			end if;
+		end process;
 
-	usb_game_0_combined <= '1' when usb_game_0(7 downto 4) = "1111" else '0';
-	usb_game_1_combined <= '1' when usb_game_1(7 downto 4) = "1111" else '0';
+		usb_joya <= not (
+			(usb_game_0(8) or usb_game_0_combined) &
+			 usb_game_0(9)  &
+			 usb_game_0(13) &
+			 usb_game_0(11) &
+			 usb_game_0(6)  &
+			 usb_game_0(7)  &
+			 usb_game_0(5)  &
+			 usb_game_0(4)  &
+			(usb_game_0(2) or usb_game_0(10)) &
+			(usb_game_0(3) or usb_game_0(12)) &
+			 usb_game_0(0)  &
+			 usb_game_0(1)
+		);
 
-	usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
-	usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
+		usb_joyb <= not (
+			(usb_game_1(8) or usb_game_1_combined) &
+			 usb_game_1(9)  &
+			 usb_game_1(13) &
+			 usb_game_1(11) &
+			 usb_game_1(6)  &
+			 usb_game_1(7)  &
+			 usb_game_1(5)  &
+			 usb_game_1(4)  &
+			(usb_game_1(2) or usb_game_1(10)) &
+			(usb_game_1(3) or usb_game_1(12)) &
+			 usb_game_1(0)  &
+			 usb_game_1(1)
+		);
 
-	usbreset <= usbreset_sync2;
-end block;
+		usb_joya_en <= '1' when usb_typ_0 = "11" else '0';
+		usb_joyb_en <= '1' when usb_typ_1 = "11" else '0';
+
+		usb_game_0_combined <= '1' when usb_game_0(7 downto 4) = "1111" else '0';
+		usb_game_1_combined <= '1' when usb_game_1(7 downto 4) = "1111" else '0';
+
+		usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
+		usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';
+
+		usbreset <= usbreset_sync2;
+	end block;
+end generate;
+
+gen_nousbhid : if haveusbhid=0 generate
+begin
+	usb_dp(0) <= 'Z';
+	usb_dn(0) <= 'Z';
+	usb_dp(1) <= 'Z';
+	usb_dn(1) <= 'Z';
+
+	usb_joya_en <= '0';
+	usb_joyb_en <= '0';
+
+	usb_joya <= (others => '1');
+	usb_joyb <= (others => '1');
+
+	usb_connected(0) <= '0';
+	usb_connected(1) <= '0';
+end generate;
+
 end;
 -- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:

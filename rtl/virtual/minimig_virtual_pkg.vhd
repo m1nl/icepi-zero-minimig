@@ -23,7 +23,9 @@ package minimig_virtual_pkg is
 	  havespirtc : integer := 0;
 	  havecart : integer := 1;
 	  havevideofilter : integer := 1;
-	  haveaga : integer := 1
+	  haveaga : integer := 1;
+	  haveusbhid : integer := 0;
+	  haveauxspi : integer := 0
 	);
 	PORT
 	(

@@ -41,11 +41,13 @@ module minimig_virtual_top #(
 	parameter havertg = 1,
 	parameter haveaudio = 1,
 	parameter havec2p = 1,
-	parameter haveamigahost = 1,
+	parameter haveamigahost = 0,
 	parameter havespirtc = 0,
-	parameter havecart = 1,
+	parameter havecart = 0,
 	parameter havevideofilter = 1,
-	parameter haveaga = 1
+	parameter haveaga = 1,
+	parameter haveusbhid = 0,
+	parameter haveauxspi = 0
 ) (
 	// JTAG inputs
 	output sys_tdo,
@@ -922,7 +924,9 @@ cfide #(
 	.havecart(havecart),
 	.havevideofilter(havevideofilter),
 	.haveamigahost(haveamigahost),
-	.haveaudio(haveaudio)
+	.haveaudio(haveaudio),
+	.haveusbhid(haveusbhid),
+	.haveauxspi(haveauxspi)
 ) mycfide (
 		.sysclk(CLK_114),
 		.usbclk(CLK_USB_IN),
@@ -1059,6 +1063,7 @@ always @(*) begin
 	DVI_B = VGA_B_INT;
 	DVI_DE = rtg_de;
 end
+
 assign DVI_STROBE = vga_stb; // rtg_ena ? rtg_pixel : vga_stb;
 
 endmodule
