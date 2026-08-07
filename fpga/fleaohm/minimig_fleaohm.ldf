@@ -423,7 +423,10 @@
         <Source name="../../rtl/hdmi/tmds_channel.sv" type="Verilog" type_short="Verilog">
             <Options VerilogStandard="System Verilog"/>
         </Source>
-        <Source name="Minimig_FleaOhm/Minimig_FleaOhm.xcf" type="Programming Project File" type_short="Programming">
+        <Source name="../../rtl/usb_hid_host/rtl/usb_hid_host_dual_rom.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/usb_hid_host/rtl/usb_hid_host.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
         <Source name="eightthirtytwo_multicycles.sdc" type="Synplify Design Constraints File" type_short="SDC">
@@ -433,6 +436,9 @@
             <Options/>
         </Source>
         <Source name="minimig_fleaohm.sdc" type="Synplify Design Constraints File" type_short="SDC">
+            <Options/>
+        </Source>
+        <Source name="minimig_fleaohm.xcf" type="Programming Project File" type_short="Programming">
             <Options/>
         </Source>
     </Implementation>
