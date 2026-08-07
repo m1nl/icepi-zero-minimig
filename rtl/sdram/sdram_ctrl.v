@@ -191,8 +191,6 @@ reg  [16-1:0] writebufferWR2_reg;
 wire [ 2-1:0] writebuffer_dqm2;
 reg           writebuffer_ack;
 
-reg  [26+addr_prefix_bits-1:1] cpuAddr_r; // registered CPU address - cpuAddr must be stable one cycle before cpuCSn
-
 reg     [3:0] sd_cmd = CMD_INHIBIT;   // current command sent to sd ram
 
 // drive control signals according to current command
@@ -204,8 +202,6 @@ assign sd_we  = sd_cmd[0];
 ////////////////////////////////////////
 // misc signals
 ////////////////////////////////////////
-
-always @(posedge sysclk) cpuAddr_r <= cpuAddr;
 
 assign cpuLongword = cpustate[3];
 assign cpuCSn      = cpustate[2];
@@ -317,7 +313,7 @@ cpu_cache_new #(
 	.snoop_bs         (cache_snoop_bs)
 );
 
-assign longword_en = cpuLongword && cpuAddr_r[3:1]!=3'b111 && cpustate[1:0]==2'b11;
+assign longword_en = cpuLongword && cpuAddr[3:1]!=3'b111 && cpustate[1:0]==2'b11;
 assign cpuena = ccachehit;
 assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_fill_2 && slot2_type == CPU_READCACHE);
 
@@ -478,10 +474,10 @@ always @(posedge sysclk) begin
 
 	// If RTG is "hungry", we reserve slot 2 and prevent both the CPU and Writebuffer from using it.
 	// Additionally, we hold the CPU off slot 1 if it's accessing the same bank as RTG.
-	cpu_reservertg <= rtg_hungry && cpuAddr_r[24:23]==rtg_bank ? 1'b1 : 1'b0;
-	cpu_slot1ok <= !hostatn && !cpu_reservertg && (slot2_type == IDLE || slot2_bank != cpuAddr_r[24:23]) ? 1'b1 : 1'b0;
-	cpu_slot2ok <= !rtg_hungry && !refresh_pending && ((shortcut | |cpuAddr_r[24:23])   // Reserve bank 0 for slot 1
-	               && (slot1_type == IDLE || slot1_bank != cpuAddr_r[24:23])) ? 1'b1 : 1'b0;
+	cpu_reservertg <= rtg_hungry && cpuAddr[24:23]==rtg_bank ? 1'b1 : 1'b0;
+	cpu_slot1ok <= !hostatn && !cpu_reservertg && (slot2_type == IDLE || slot2_bank != cpuAddr[24:23]) ? 1'b1 : 1'b0;
+	cpu_slot2ok <= !rtg_hungry && !refresh_pending && ((shortcut | |cpuAddr[24:23])   // Reserve bank 0 for slot 1
+	               && (slot1_type == IDLE || slot1_bank != cpuAddr[24:23])) ? 1'b1 : 1'b0;
 
 	wb_reservertg <= rtg_hungry && writebufferAddr[24:23]==rtg_bank ? 1'b1 : 1'b0;
 	wb_slot1ok <= !wb_reservertg && (slot2_type == IDLE || slot2_bank != writebufferAddr[24:23]) ? 1'b1 : 1'b0;
@@ -572,11 +568,11 @@ always @ (posedge sysclk) begin
 			else if(cache_req && cpu_slot1ok) begin
 				// we only yield to the OSD CPU if it's both cycle-starved and ready to go
 				slot1_type          <= #1 CPU_READCACHE;
-				sdaddr_next         <= #1 cpuAddr_r[22:10];
-				slot1_bank          <= #1 cpuAddr_r[24:23];
+				sdaddr_next         <= #1 cpuAddr[22:10];
+				slot1_bank          <= #1 cpuAddr[24:23];
 				slot1_dqm           <= #1 {cpuU,cpuL};
 				sd_cmd_next         <= #1 CMD_ACTIVE;
-				slot1_addr          <= #1 {{(26-addr_max_bits){1'b0}}, cpuAddr_r[addr_max_bits-1:1], 1'b0};
+				slot1_addr          <= #1 {{(26-addr_max_bits){1'b0}}, cpuAddr[addr_max_bits-1:1], 1'b0};
 			end
 			else if(audce & aud_slot1ok) begin
 				slot1_type          <= #1 AUDIO;
@@ -784,10 +780,10 @@ always @ (posedge sysclk) begin
 			// request from read cache
 			else if(cache_req && cpu_slot2ok) begin
 				slot2_type        <= #1 CPU_READCACHE;
-				sdaddr_next       <= #1 cpuAddr_r[22:10];
-				slot2_bank        <= #1 cpuAddr_r[24:23];
+				sdaddr_next       <= #1 cpuAddr[22:10];
+				slot2_bank        <= #1 cpuAddr[24:23];
 				slot2_dqm         <= #1 {cpuU, cpuL};
-				slot2_addr        <= #1 {{(26-addr_max_bits){1'b0}}, cpuAddr_r[addr_max_bits-1:1], 1'b0};
+				slot2_addr        <= #1 {{(26-addr_max_bits){1'b0}}, cpuAddr[addr_max_bits-1:1], 1'b0};
 				sd_cmd_next       <= #1 CMD_ACTIVE;
 			end
 			else if(rtgce && rtg_slot2ok) begin // RTG is high priority if 'hungry', low priority otherwise
