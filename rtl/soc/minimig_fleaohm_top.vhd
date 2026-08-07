@@ -6,17 +6,8 @@ library work;
 use work.minimig_virtual_pkg.all;
 use work.board_config.all;
 
--- -----------------------------------------------------------------------
-
 entity minimig_fleaohm_top is
-
 port(
-	-- JTAG
-	TDO : out std_logic;
-	TDI : in std_logic;
-	TMS : in std_logic;
-	TCK : in std_logic;
-
 	-- System clock and reset
 	clk	: in	std_logic;	-- 25MHz clock input from external xtal oscillator.
 	reset_n	: in	std_logic;	-- master reset input from reset header.
@@ -44,7 +35,7 @@ port(
 	sdram_dq	: inout	std_logic_vector(15 downto 0);	-- data bus to/from SDRAM
 	sdram_csn	: out	std_logic;
 
-    -- GPIO Header (RasPi compatible GPIO format)
+	-- GPIO Header (RasPi compatible GPIO format)
 	GPIO_2	: in	std_logic;
 	GPIO_3	: out	std_logic;
 	GPIO_4	: in	std_logic;
@@ -75,7 +66,6 @@ port(
 	GPIO_IDSD	: inout	std_logic;
 	GPIO_IDSC	: inout	std_logic;
 
-
 	-- Sigma Delta ADC ('Enhanced' Ohm-specific GPIO functionality)
 	-- NOTE: Must comment out GPIO_5, GPIO_7, GPIO_10 AND GPIO_24 as instructed in the pin constraints file (.LPF) in order to use
 	--ADC0_input	: in		std_logic;
@@ -95,17 +85,13 @@ port(
 	mmc_mosi	: out	std_logic;
 	mmc_miso	: in	std_logic;
 
-	-- PS/2 Mode enable, keyboard and Mouse interfaces
-	PS2_enable	: out	std_logic;
-	PS2_clk1	: inout	std_logic;
-	PS2_data1	: inout	std_logic;
-
-	PS2_clk2	: inout	std_logic;
-	PS2_data2	: inout	std_logic
+	usb_dp	:	inout std_logic_vector(1 downto 0);
+	usb_dn	:	inout std_logic_vector(1 downto 0);
+	usb_pull	:	out std_logic
 );
 end entity;
 
-architecture arch of minimig_fleaohm_top is
+architecture rtl of minimig_fleaohm_top is
 -- SPI signals
 	signal led_power	:	std_logic;
 
@@ -120,44 +106,26 @@ architecture arch of minimig_fleaohm_top is
 	signal blank	:	std_logic := '0';
 	signal videoblank	:	std_logic;
 	signal vbl	:	std_logic;
-	signal n_15khz	:	std_logic;
 
-
--- Amiga UART
-	signal amiga_rs232_txd	:	std_logic;
-	signal amiga_rs232_rxd	:	std_logic;
-
--- RS232 serial
-	signal rs232_rxd	:	std_logic;
-	signal rs232_txd	:	std_logic;
-
-	signal audio_l	:	std_logic_vector(23 downto 0);
-	signal audio_r	:	std_logic_vector(23 downto 0);
+-- Audio
+	signal audio_l	:	std_logic_vector(15 downto 0);
+	signal audio_r	:	std_logic_vector(15 downto 0);
 
 -- IO
 	signal n_joy1	:	std_logic_vector(6 downto 0);
 	signal n_joy2	:	std_logic_vector(6 downto 0);
-	signal joyc	:	std_logic_vector(6 downto 0);
-	signal joyd	:	std_logic_vector(6 downto 0);
 
 -- System clocks
 
 	signal clk_sys	:	std_logic;
+	signal clk_usb	:	std_logic;
 	signal clk_pixel	:	std_logic;
 	signal clk_tmds	:	std_logic;
+	signal auxclks	:	std_logic_vector(3 downto 0);
 
 	signal VTEMP_DAC	:	std_logic_vector(4 downto 0);
 	signal audio_data	:	std_logic_vector(17 downto 0);
 	signal convert_audio_data	:	std_logic_vector(17 downto 0);
-
-	signal ps2k_data_in	:	std_logic;
-	signal ps2k_clk_in	:	std_logic;
-	signal ps2k_data_out	:	std_logic;
-	signal ps2k_clk_out	:	std_logic;
-	signal ps2m_data_in	:	std_logic;
-	signal ps2m_clk_in	:	std_logic;
-	signal ps2m_data_out	:	std_logic;
-	signal ps2m_clk_out	:	std_logic;
 
 	component ODDRX1F
 	port (
@@ -187,16 +155,24 @@ n_joy2(0) <= GPIO_22 ; -- right
 n_joy2(4) <= GPIO_23 ; -- fire
 n_joy2(5) <= GPIO_24 ; -- fire2
 
--- Video output horizontal scanrate select 15/30kHz select via GPIO header
-n_15khz <= GPIO_21 ; -- Default is 30kHz video out if pin left unconnected. Connect to GND for 15kHz video.
-
--- Amiga UART connection to GPIO header
-amiga_rs232_rxd <= GPIO_16;
-GPIO_12 <= amiga_rs232_txd;
-PS2_enable <= '1';
+-- Pull-down both USB lines
+usb_pull <= '0';
 
 -- SPI
 n_led1 <= NOT led_power;
+
+auxpll : entity work.ecp5pll
+generic map(
+	in_hz => natural(base_frequency),
+	out0_hz => natural(60e6),
+	out0_tol_hz => 1e4
+)
+port map (
+	clk_i => clk,
+	clk_o => auxclks
+);
+
+clk_usb <= auxclks(0);
 
 virtual_top : COMPONENT minimig_virtual_top
 generic map (
@@ -214,31 +190,32 @@ generic map (
 	vga_width => 8,
 	usethrottle => 0,
 	havecart => 0,
-	havevideofilter => 1,
+	havevideofilter => 0,
 	haveaga => 1,
-	haveusbhid => 0,
+	haveusbhid => 1,
 	haveauxspi => 0
 )
 PORT map
 (
-	sys_tms => TMS,
-	sys_tdo => TDO,
-	sys_tdi => TDI,
-	sys_tck => TCK,
 	CLK_IN => clk,
-	CLK_USB_IN => open,
+	CLK_USB_IN => clk_usb,
 	CLK_114 => clk_sys,
 	CLK_28 => clk_pixel,
 	CLK_142 => clk_tmds,
 	RESET_N => reset_n,
+
 	LED_POWER => led_power,
 	LED_DISK => open,
---	n_15khz => n_15khz,
+	LED_USB => open,
+	LED_AUX => open,
+
 	MENU_BUTTON => GPIO_2,
-	CTRL_TX => rs232_txd,
-	CTRL_RX => rs232_rxd,
-	AMIGA_TX => amiga_rs232_txd,
-	AMIGA_RX => amiga_rs232_rxd,
+
+	CTRL_TX => slave_tx_o,
+	CTRL_RX => slave_rx_i,
+
+	AMIGA_TX => open,
+	AMIGA_RX => '1',
 
 	DVI_HS => dvi_hsync,
 	DVI_VS => dvi_vsync,
@@ -260,18 +237,19 @@ PORT map
 --	SDRAM_CLK => sdram_clk,
 	SDRAM_CKE => sdram_cke,
 
-	AUDIO_MIX_L => audio_l,
-	AUDIO_MIX_R => audio_r,
+	AUDIO_PAULA_L => audio_l,
+	AUDIO_PAULA_R => audio_r,
+	AUDIO_TICK => open,
 
-	PS2_DAT_I => ps2k_data_in,
-	PS2_DAT_O => ps2k_data_out,
-	PS2_CLK_I => ps2k_clk_in,
-	PS2_CLK_O => ps2k_clk_out,
+	PS2_DAT_I => '1',
+	PS2_CLK_I => '1',
+	PS2_MDAT_I => '1',
+	PS2_MCLK_I => '1',
 
-	PS2_MDAT_I => ps2m_data_in,
-	PS2_MDAT_O => ps2m_data_out,
-	PS2_MCLK_I => ps2m_clk_in,
-	PS2_MCLK_O => ps2m_clk_out,
+	PS2_DAT_O => open,
+	PS2_CLK_O => open,
+	PS2_MDAT_O => open,
+	PS2_MCLK_O => open,
 
 	JOYA => n_joy1,
 	JOYB => n_joy2,
@@ -290,29 +268,13 @@ PORT map
 
 	C64_KEYS => (others => '1'),
 
-	USB_DP => open,
-	USB_DN => open,
+	USB_DP => usb_dp,
+	USB_DN => usb_dn,
 
 	AUX_SPI_CSN => open,
 	AUX_SPI_CLK => open,
 	AUX_SPI_MOSI => open
 );
-
-ps2k_data_in <= PS2_data1;
-ps2k_clk_in <= PS2_clk1;
-PS2_data1 <= '0' when ps2k_data_out='0' else 'Z';
-PS2_clk1 <= '0' when ps2k_clk_out='0' else 'Z';
-
-ps2m_data_in <= PS2_data2;
-ps2m_clk_in <= PS2_clk2;
-PS2_data2 <= '0' when ps2m_data_out='0' else 'Z';
-PS2_clk2 <= '0' when ps2m_clk_out='0' else 'Z';
-
-slave_tx_o <= rs232_txd;
-rs232_rxd <= slave_rx_i;
-
-joyc <= (others=>'1');
-joyd <= (others=>'1');
 
 -- Instantiate HDMI out:
 genvideo: block
@@ -388,7 +350,7 @@ begin
 	generic map (
 		VIDEO_RATE => 28571400,
 		AUDIO_RATE => 48000,
-		AUDIO_BIT_WIDTH => 24
+		AUDIO_BIT_WIDTH => 16
 	)
 	port map (
 		clk_pixel_x5 => clk_tmds,
@@ -413,42 +375,4 @@ begin
 	rgb <= dvi_red & dvi_green & dvi_blue;
 	lvds_dp <= tmds_clock & tmds;
 end block;
-
-audio : block
-	signal DAC_L : std_logic;
-	signal DAC_R : std_logic;
-
-	COMPONENT hybrid_pwm_sd
-		PORT
-		(
-			clk		:	 IN STD_LOGIC;
-			terminate : in std_logic:='0';
-			d_l		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-			q_l		:	 OUT STD_LOGIC;
-			d_r		:	 IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-			q_r		:	 OUT STD_LOGIC
-		);
-	END COMPONENT;
-
-begin
-	-- Audio output mapped to GPIO header
-	GPIO_13 <= DAC_R;
-	GPIO_19 <= DAC_L;
-
-	audiosd : COMPONENT hybrid_pwm_sd
-	PORT map
-	(
-		clk => clk_sys,
-		terminate => '0',
-		d_l(15) => not audio_l(23),
-		d_l(14 downto 0) => audio_l(22 downto 8),
-		q_l => DAC_L,
-		d_r(15) => not audio_r(23),
-		d_r(14 downto 0) => audio_r(22 downto 8),
-		q_r => DAC_R
-	);
-
-end block;
-
-end arch;
-
+end architecture;

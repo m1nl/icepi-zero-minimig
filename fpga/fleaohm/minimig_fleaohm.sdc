@@ -2,9 +2,10 @@ create_clock -name {clk} -period 40 [get_ports {clk}]
 create_clock -name {clk_sys} -period 8.75 [get_nets {virtual_top.amiga_clk.clk_114}]
 create_clock -name {clk_pixel} -period 35 [get_nets {virtual_top.amiga_clk.clk_28}]
 create_clock -name {clk_tmds} -period 7 [get_nets {virtual_top.amiga_clk.clk_142}]
+create_clock -name {clk_usb} -period 16.67 [get_nets {auxclks[0]}]
 create_clock -name {clk_spi} -period 35 [get_nets {virtual_top.mycfide.sck}]
 
-set_clock_groups -asynchronous -group [get_clocks {clk_sys clk_pixel clk_tmds}] -group [get_clocks {clk_spi}]
+set_clock_groups -asynchronous -group [get_clocks {clk_usb}] -group [get_clocks {clk_sys clk_pixel clk_tmds}] -group [get_clocks {clk_spi}]
 
 set_multicycle_path -from [get_clocks {clk_pixel}] -to [get_clocks {clk_sys}] 4
 set_multicycle_path -from [get_clocks {clk_sys}] -to [get_clocks {clk_pixel}] 2
