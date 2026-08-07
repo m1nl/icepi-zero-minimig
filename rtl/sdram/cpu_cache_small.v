@@ -461,8 +461,6 @@ always @ (posedge clk) begin
         cpu_adr_l <= cpu_adr;
         cpu_adr_blk_ptr <= #1 cpu_adr_blk;
         cpu_sm_adr <= #1 {cpu_adr_idx, cpu_adr_blk};
-        level1_i <= cpu_ir;
-        level1_d <= cpu_dr;
 
         if(cpu_cs)
            cpu_sm_state<= CPU_SM_WAIT;
