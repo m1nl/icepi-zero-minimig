@@ -130,6 +130,7 @@ signal sel_ram          : std_logic;
 signal ram_req          : std_logic;
 signal sel_chip         : std_logic;
 signal sel_chipram      : std_logic;
+signal chipset_req      : std_logic;
 signal overclock_d      : std_logic := '0';
 signal turbochip_d      : std_logic := '0';
 signal turbokick_d      : std_logic := '0';
@@ -267,7 +268,8 @@ process(clk) begin
 		sel_host_d <= sel_host;
 		host_ack_d <= host_ack;
 
-		ram_req <= sel_ram and NOT block_turbo and NOT sel_nmi_vector and NOT cpu_internal;
+		ram_req <= sel_ram and not block_turbo and not sel_nmi_vector and not cpu_internal;
+		chipset_req <= (not sel_ram or sel_nmi_vector or block_turbo) and not cpu_internal and not sel_gayle_ide and not sel_akiko and not sel_host and not sel_32;
 		sel_undecoded_d <= sel_32 and not sel_ram;
 	end if;
 end process;
@@ -339,9 +341,10 @@ sel_ram         <= '1' when (
 	sel_audio='1') else '0';
 
 ramcs_n <= '0' when ram_req='1' and slower(1)='0' and skipfetch='0' else '1';
-cpustate <= longword&ramcs_n&state(1 downto 0);
 ramlds <= lds_in;
 ramuds <= uds_in;
+
+cpustate <= longword & ramcs_n & state(1 downto 0);
 
 -- This is the mapping to the SDRAM
 -- map $00-$1F to $00-$1F (chipram), $A0-$FF to $20-$7F. All non-fastram goes into the first
@@ -515,7 +518,7 @@ buslogic : block
 	signal clkena_pre       : std_logic;
 begin
 	clkena <= '1' when slower(0)='0' and
-			((clkena_in='1' and ((ena7RDreg='1' and clkena_e='1') or (ena7WRreg='1' and clkena_f='1') or fast_rd='1')) or
+			((ena7RDreg='1' and clkena_e='1') or (ena7WRreg='1' and clkena_f='1') or (clkena_in='1' and fast_rd='1') or
 			cpu_internal='1' or sel_undecoded_d='1' or akiko_ack='1' or host_ack_d='1' or (ramready='1' and block_turbo='0')) else '0';
 
 	-- AMR - attempt to imitate A1200 speed more closely on chipram fetches:
@@ -584,9 +587,8 @@ begin
 
 	-- Block_turbo is only valid on the 4th cycle after clkena, but is only high when throttling is enabled, at which point
 	-- slower(0) is guaranteed to be high for more than 4 cycles.
-	-- When throttling chip-only cycles, block_turbo and sel_nmi_vector will prevent ram_cs going low, so their being late here shouldn't matter.
-	chipset_cycle <= '1' when cpu_internal='0' and clkena_in='1' and slower(0)='0' and (sel_ram='0' or sel_nmi_vector='1' or block_turbo='1')
-		 and sel_gayle_ide='0' and sel_akiko='0' and sel_host='0' and sel_undecoded_d='0' else '0';
+	-- When throttling chip-only cycles, block_turbo and sel_nmi_vector will prevent ram_csn going low, so their being late here shouldn't matter.
+	chipset_cycle <= '1' when chipset_req='1' and slower(0)='0' and skipfetch='0' and clkena_in='1' else '0';
 
 	process (clk) begin
 		if rising_edge(clk) then
@@ -656,7 +658,7 @@ begin
 			if ena7WRreg='1' then
 				case S_state is
 					when "00" =>
-						if cpu_internal='0' and chipset_cycle='1' then
+						if chipset_cycle='1' then
 							uds <= uds_in;
 							lds <= lds_in;
 							uds2 <= '1';
