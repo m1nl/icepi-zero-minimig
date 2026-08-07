@@ -37,9 +37,16 @@ port(
 	usb_pull_dp : out std_logic_vector(1 downto 0);
 	usb_pull_dn : out std_logic_vector(1 downto 0);
 
+	joya : std_logic_vector(5 downto 0);
+	joyb : std_logic_vector(5 downto 0);
+
 	aux_spi_clk : in std_logic;
 	aux_spi_mosi : in std_logic;
 	aux_spi_csn : in std_logic;
+
+	led_g : out std_logic;
+	led_y : out std_logic;
+	led_r : out std_logic;
 
 	-- gpio : inout std_logic_vector(27 downto 0);
 
@@ -83,10 +90,10 @@ architecture rtl of minimig_icepizero_top is
 	signal amiga_txd : std_logic;
 	signal amiga_rxd : std_logic;
 
-	signal joya : std_logic_vector(6 downto 0);
-	signal joyb : std_logic_vector(6 downto 0);
-	signal joyc : std_logic_vector(6 downto 0);
-	signal joyd : std_logic_vector(6 downto 0);
+	signal joya_i : std_logic_vector(6 downto 0);
+	signal joyb_i : std_logic_vector(6 downto 0);
+	signal joyc_i : std_logic_vector(6 downto 0);
+	signal joyd_i : std_logic_vector(6 downto 0);
 
 	signal auxclks : std_logic_vector(3 downto 0);
 
@@ -114,10 +121,10 @@ begin
 	ps2m_clk_in <= '1';
 	ps2m_dat_in <= '1';
 
-	joya <= (others=>'1');
-	joyb <= (others=>'1');
-	joyc <= (others=>'1');
-	joyd <= (others=>'1');
+	joya_i <= '1' & joya;
+	joyb_i <= '1' & joyb;
+	joyc_i <= (others=>'1');
+	joyd_i <= (others=>'1');
 
 	amiga_rxd <= '1';
 
@@ -213,10 +220,10 @@ begin
 
 			C64_KEYS => (others => '1'),
 
-			JOYA => joya,
-			JOYB => joyb,
-			JOYC => joyc,
-			JOYD => joyd,
+			JOYA => joya_i,
+			JOYB => joyb_i,
+			JOYC => joyc_i,
+			JOYD => joyd_i,
 
 			SD_MISO => sd_miso,
 			SD_MOSI => sd_mosi,
@@ -231,6 +238,25 @@ begin
 			AUX_SPI_CLK => aux_spi_clk,
 			AUX_SPI_MOSI => aux_spi_mosi
 		);
+
+
+	led_r <= led_i(4);
+	led_g <= led_i(3);
+	led_y <= '0';
+
+	process (clk_pixel)
+	begin
+		if rising_edge(clk_pixel) then
+			if audio_tick = '1' then
+				led <= (others => '0');
+				led_counter <= std_logic_vector(unsigned(led_counter) + 1);
+
+				if unsigned(led_counter) = 0 then
+					led <= led_i;
+				end if;
+			end if;
+		end if;
+	end process;
 
 	-- Instantiate HDMI out:
 	genvideo: block
@@ -328,21 +354,6 @@ begin
 
 		rgb <= dvi_red & dvi_green & dvi_blue;
 		gpdi_dp <= tmds_clock & tmds;
-
-		process (clk_pixel)
-		begin
-			if rising_edge(clk_pixel) then
-				if audio_tick = '1' then
-					led <= (others => '0');
-					led_counter <= std_logic_vector(unsigned(led_counter) + 1);
-
-					if unsigned(led_counter) = 0 then
-						led <= led_i;
-					end if;
-				end if;
-			end if;
-		end process;
-
 	end block;
 end architecture;
 -- vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:
