@@ -29,6 +29,8 @@ module userio_osd
 	output	reg [3:0] floppy_config = 0,
 	output	reg [1:0] scanline = 0,
   output  reg [1:0] dither = 0,
+  output  reg [7:0] xoffset = 0,
+  output  reg [7:0] yoffset = 0,
 	output	reg	[2:0] ide_config0 = 0,		//enable hard disk support
 	output	reg	[2:0] ide_config1 = 0,		//enable hard disk support
   output  reg [3:0] cpu_config = 0,
@@ -293,6 +295,8 @@ localparam [5:0]
   SPI_CPU_CFG_ADR      = 6'b0_001_01,
   SPI_MEMORY_CFG_ADR   = 6'b0_010_01,
   SPI_VIDEO_CFG_ADR    = 6'b0_011_01,
+  SPI_VIDEO_XOFF_ADR   = 6'b0_011_10,
+  SPI_VIDEO_YOFF_ADR   = 6'b0_011_11,
   SPI_FLOPPY_CFG_ADR   = 6'b0_100_01,
   SPI_HARDDISK0_CFG_ADR= 6'b0_101_01,
   SPI_HARDDISK1_CFG_ADR= 6'b0_101_10,
@@ -334,6 +338,8 @@ reg spi_chip_cfg_sel      = 1'b0;
 reg spi_cpu_cfg_sel       = 1'b0;
 reg spi_memory_cfg_sel    = 1'b0;
 reg spi_video_cfg_sel     = 1'b0;
+reg spi_video_xoff_sel    = 1'b0;
+reg spi_video_yoff_sel    = 1'b0;
 reg spi_floppy_cfg_sel    = 1'b0;
 reg spi_harddisk0_cfg_sel = 1'b0;
 reg spi_harddisk1_cfg_sel = 1'b0;
@@ -368,6 +374,8 @@ always @ (*) begin
     SPI_CPU_CFG_ADR      : spi_cpu_cfg_sel      = 1'b1;
     SPI_MEMORY_CFG_ADR   : spi_memory_cfg_sel   = 1'b1;
     SPI_VIDEO_CFG_ADR    : spi_video_cfg_sel    = 1'b1;
+    SPI_VIDEO_XOFF_ADR   : spi_video_xoff_sel   = 1'b1;
+    SPI_VIDEO_YOFF_ADR   : spi_video_yoff_sel   = 1'b1;
     SPI_FLOPPY_CFG_ADR   : spi_floppy_cfg_sel   = 1'b1;
     SPI_HARDDISK0_CFG_ADR: spi_harddisk0_cfg_sel= 1'b1;
     SPI_HARDDISK1_CFG_ADR: spi_harddisk1_cfg_sel= 1'b1;
@@ -385,6 +393,8 @@ always @ (*) begin
       spi_cpu_cfg_sel      = 1'b0;
       spi_memory_cfg_sel   = 1'b0;
       spi_video_cfg_sel    = 1'b0;
+      spi_video_xoff_sel   = 1'b0;
+      spi_video_yoff_sel   = 1'b0;
       spi_floppy_cfg_sel   = 1'b0;
       spi_harddisk0_cfg_sel= 1'b0;
       spi_harddisk1_cfg_sel= 1'b0;
@@ -425,6 +435,8 @@ always @ (posedge clk) begin
       if (spi_cpu_cfg_sel)      begin if (dat_cnt == 0) {t_overclock, t_cpu_config} <= #1 wrdat[4:0]; end
       if (spi_memory_cfg_sel)   begin if (dat_cnt == 0) t_memory_config <= #1 wrdat[6:0]; end
       if (spi_video_cfg_sel)    begin if (dat_cnt == 0) {dither, hr_filter, lr_filter, scanline} <= #1 wrdat[7:0]; end
+      if (spi_video_xoff_sel)   begin if (dat_cnt == 0) xoffset <= #1 wrdat[7:0]; end
+      if (spi_video_yoff_sel)   begin if (dat_cnt == 0) yoffset <= #1 wrdat[7:0]; end
       if (spi_floppy_cfg_sel)   begin if (dat_cnt == 0) floppy_config <= #1 wrdat[3:0]; end
       if (spi_harddisk0_cfg_sel)begin if (dat_cnt == 0) t_ide_config0 <= #1 wrdat[2:0]; end
       if (spi_harddisk1_cfg_sel)begin if (dat_cnt == 0) t_ide_config1 <= #1 wrdat[2:0]; end

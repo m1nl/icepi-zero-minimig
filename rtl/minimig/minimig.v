@@ -268,8 +268,8 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output	init_b,			// vertical sync for MCU (sync OSD update)
 	output	fifo_full,
 	// fifo / track display
-	output	[7:0]trackdisp,
-	output	[13:0]secdisp,
+	output	[7:0] trackdisp,
+	output	[13:0] secdisp,
 	output	floppy_fwr,
 	output	floppy_frd,
 	output	hd_fwr,
@@ -277,6 +277,11 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output	hblank_out,
 	output	vblank_out,
 	output	blank_out,
+	output  long_frame,
+	output  displaypal_out,
+	output  interlace_out,
+	output  [7:0] xoffset_out,
+	output  [7:0] yoffset_out,
 	output	osd_blank_out,		// Let the toplevel dither module handle drawing the OSD.
 	output	osd_pixel_out,
 	output	rtg_ena,
@@ -284,7 +289,7 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output	ntscmode,		//PAL/NTSC video mode selection
 	input	 ext_int2,		// External interrupt for Akiko
 	input	 ext_int6,		// External interrupt for AHI audio
-	input [1:0] ram_64meg,
+	input   [1:0] ram_64meg,
 	output	insert_sound,
 	output	eject_sound,
 	output	motor_sound,
@@ -488,7 +493,6 @@ assign reset = sys_reset | ~_cpu_reset_in; // both tg68k and minimig_syscontrol 
 
 assign vblank_out = vbl_int;
 
-wire long_frame;
 wire track_vsync;
 
 //--------------------------------------------------------------------------------------
@@ -570,6 +574,8 @@ agnus #(.wide_hblank(wide_hblank)) AGNUS1
 	.blank(blank),
 	.vblank_out(),
 	.long_frame(long_frame),
+	.displaypal_out(displaypal_out),
+	.interlace_out(interlace_out),
 	.track_vsync(track_vsync),
 	.sol(sol),
 	.sof(sof),
@@ -768,6 +774,8 @@ userio USERIO1
 	.floppy_config(userio_floppy_config),
 	.scanline(scanline),
 	.dither(dither),
+	.xoffset(xoffset_out),
+	.yoffset(yoffset_out),
 	.ide_config0(userio_ide_config0),
 	.ide_config1(userio_ide_config1),
 	.cpu_config(userio_cpu_config),

@@ -101,7 +101,9 @@ module agnus #(parameter wide_hblank=1'b0, parameter do_refresh=1'b0)
   output rtg_ena,
   output rtg_linecompare,
   output hblank_out,
-  output vblank_out
+  output vblank_out,
+  output displaypal_out,
+  output interlace_out
 );
 
 //register names and adresses
@@ -505,7 +507,9 @@ agnus_beamcounter #(.wide_hblank(wide_hblank)) bc1
   .rtg_linecompare(rtg_linecompare),
   .hblank_out(hblank_out),
   .track_vsync(track_vsync),
-  .long_frame(long_frame)
+  .long_frame(long_frame),
+  .displaypal_out(displaypal_out),
+  .interlace_out(interlace_out)
 );
 
 assign vblank_out = vbl;

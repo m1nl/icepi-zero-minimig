@@ -59,7 +59,9 @@ module agnus_beamcounter #(parameter wide_hblank=1'b0)
 	output rtg_linecompare,
 	output reg hblank_out,
 	input  track_vsync,             // Input selector for alternative interlace-over-HDMI mode
-	output long_frame
+	output long_frame,
+	output reg displaypal_out,
+	output reg interlace_out
 );
 
 // local beam position counters
@@ -140,19 +142,17 @@ always @(*)
 // BEAMCON0 register
 reg [15:0] beamcon0_reg;
 reg [15:0] beamcon0_sh;
-always @ (posedge clk) begin
-  if (clk7_en) begin
-    if (reset) begin
-      beamcon0_reg <= #1 {10'b0, ~ntsc, 5'b0};
-      beamcon0_sh <= #1 {10'b0, ~ntsc, 5'b0};
-	 end else if ((reg_address_in[8:1] == BEAMCON0[8:1]) && ecs) begin
+always @ (posedge clk, posedge reset) begin
+	if (reset) begin
+		beamcon0_reg <= #1 {10'b0, ~ntsc, 5'b0};
+		beamcon0_sh <= #1 {10'b0, ~ntsc, 5'b0};
+	end else if (clk7_en && (reg_address_in[8:1] == BEAMCON0[8:1]) && ecs) begin
 		// Write to shadow register only in RTG mode when lpendis or displaydual are high
 		if(!rd && (data_in[13] || data_in[6]))
 			beamcon0_sh <= #1 data_in;
 		else // Otherwise update the non-shadowed reg
 			beamcon0_reg <= #1 data_in;
-    end
-  end
+	end
 end
 
 
@@ -195,6 +195,10 @@ always @(posedge clk)
   		lace <= data_in[2];
   end
 
+always @(posedge clk) begin
+	displaypal_out <= (vtotal != VTOTAL_NTSC_VAL);
+	interlace_out <= lace;
+end
 
 // programmable display mode regs
 // AMR - shadow copies for RTG
@@ -225,20 +229,19 @@ reg [10:0] vbstop_sh;
 // AMR - Register for never-implemented-on-real-hardware Dual mode - we use as line compare
 reg [10:0] bplhstrt_reg;
 
-always @ (posedge clk) begin
-  if (clk7_en) begin
-    if (reset) begin
-      htotal_reg  <= #1 HTOTAL_VAL << 1;
-      hsstrt_reg  <= #1 HSSTRT_VAL;
-      hsstop_reg  <= #1 HSSTOP_VAL;
-      hcenter_reg <= #1 HCENTER_VAL;
-      hbstrt_reg  <= #1 HBSTRT_VAL;
-      hbstop_reg  <= #1 HBSTOP_VAL;
-      vtotal_reg  <= #1 displaypal ? VTOTAL_PAL_VAL : VTOTAL_NTSC_VAL;
-      vsstrt_reg  <= #1 VSSTRT_VAL;
-      vsstop_reg  <= #1 VSSTOP_VAL;
-      vbstrt_reg  <= #1 VBSTRT_VAL;
-    end else begin
+always @ (posedge clk, posedge reset) begin
+	if (reset) begin
+		htotal_reg  <= #1 HTOTAL_VAL << 1;
+		hsstrt_reg  <= #1 HSSTRT_VAL;
+		hsstop_reg  <= #1 HSSTOP_VAL;
+		hcenter_reg <= #1 HCENTER_VAL;
+		hbstrt_reg  <= #1 HBSTRT_VAL;
+		hbstop_reg  <= #1 HBSTOP_VAL;
+		vtotal_reg  <= #1 displaypal ? VTOTAL_PAL_VAL : VTOTAL_NTSC_VAL;
+		vsstrt_reg  <= #1 VSSTRT_VAL;
+		vsstop_reg  <= #1 VSSTOP_VAL;
+		vbstrt_reg  <= #1 VBSTRT_VAL;
+	end else if (clk7_en) begin
 		if(!displaydual || !lpendis) begin  // Normal registers when RTG is off, or lpendis is low
 			case (reg_address_in[8:1])
 			  BPLHSTRT[8:1]: bplhstrt_reg  <= #1 {data_in[10:0]};
@@ -273,8 +276,7 @@ always @ (posedge clk) begin
 			  default: ;
 			endcase
 		end
-    end
-  end
+	end
 end
 
 // programmable display mode values
@@ -305,7 +307,6 @@ assign vbstop  = varvben  && varbeamen ? (displaydual ? vbstop_sh : vbstop_reg) 
 assign htotal_out    = htotal;
 assign harddis_out   = harddis || varbeamen || varvben;
 assign varbeamen_out = varbeamen;
-
 
 //--------------------------------------------------------------------------------------//
 //                                                                                      //
