@@ -227,17 +227,17 @@ void fpga_init() {
 
 	BootHome();
 
-	snprintf(rtl_ver, 128, "Minimig AGA%s version 20%d-%d-%d for Turbo Chameleon 64", ver_beta ? " BETA" : "",
+	snprintf(rtl_ver, 128, "Minimig AGA%s version 20%d-%d-%d", ver_beta ? " BETA" : "",
 		ver_major, ver_minor, ver_minion);
 	BootPrintEx(rtl_ver);
 	snprintf(rtl_ver, 128, "Firmware version: %s",MM_FIRMWARE_VERSION);
 	BootPrintEx(rtl_ver);
 	BootPrintEx(" ");
-	BootPrintEx("Minimig AGA by Rok Krajnc.  Original Minimig by Dennis van Weeren");
+	BootPrintEx("Minimig AGA by Rok Krajnc.  Original Minimig by Dennis van Weeren.");
 	BootPrintEx("Updates by Jakub Bednarski, Tobias Gubener, Sascha Boing, A.M. Robinson & others");
 	BootPrintEx(" ");
-	BootPrintEx("Ported to Turbo Chameleon 64 by Alastair M. Robinson");
 	BootPrintEx("Ported to IcePi Zero by Alastair M. Robinson and Mateusz Nalewajski");
+	BootPrintEx(" ");
 	BootPrintEx(" ");
 	WaitTimer(1000);
 

@@ -875,6 +875,18 @@ void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlin
     DisableOsd();
 }
 
+void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset)
+{
+    EnableOsd();
+    SPI(OSD_CMD_VID_XOFF);
+    SPI(xoffset);
+    DisableOsd();
+    EnableOsd();
+    SPI(OSD_CMD_VID_YOFF);
+    SPI(yoffset);
+    DisableOsd();
+}
+
 void ConfigMemory(unsigned char memory)
 {
     EnableOsd();

@@ -3,6 +3,7 @@
 #include "c64keys.h"
 #include "config.h"
 #include "osd.h"
+#include "usbhid.h"
 #include <stdio.h>
 
 /* Defined in usbhid_keycodes.h, which is only ever #included from usbhid.c
@@ -21,6 +22,20 @@ static unsigned char aux_qual = 0;
 static inline void aux_hid_send(int type, int code) {
     int t = (type << 14) | (aux_mouse_buttons0 << 8) | (code & 0xff);
     HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
+}
+
+static inline void aux_joy_send(unsigned char index, unsigned short joy) {
+    // reverse index by default, to make joystick 2 to
+    // the default one unless USB HID already handles it
+#if USBHID_PORTS >= 2
+    if (usbhid_get_typ(1) != USBHID_GAMEPAD)
+#endif
+        index += 1;
+
+    if (index & 0x01)
+        HW_KEYBOARD(REG_JOYSTICK_1_OUT) = joy;
+    else
+        HW_KEYBOARD(REG_JOYSTICK_0_OUT) = joy;
 }
 
 static void aux_hid_handlekb(const unsigned char *p) {
@@ -57,11 +72,51 @@ static void aux_hid_handlemouse(const unsigned char *p) {
     DBG("AUX MOUSE: btn=%02x dx=%d dy=%d\n", p[0], (signed char)p[1], (signed char)p[2]);
 
     aux_mouse_buttons0 = p[0];
-    aux_hid_send(0, (signed char)p[1]); /* X */
-    aux_hid_send(1, (signed char)p[2]); /* Y */
+    aux_hid_send(0, MouseScale((signed char)p[1])); /* X */
+    aux_hid_send(1, MouseScale((signed char)p[2])); /* Y */
 }
 
-__constructor(102.aux_hid) void aux_hid_init(void) { puts("AUX HID init\n"); }
+// Amiga joystick (from LSB)
+// RLDU ABYX RB LB EJECT(ESC) OSD(MINIMIG-CUSTOM)
+// X-Input -> LB  = 0x1
+//         -> RB  = 0x2
+//         -> STA = 0x8
+//         -> SEL = 0x4
+
+#define JOY_XINPUT_LB 0x1
+#define JOY_XINPUT_RB 0x2
+
+#define JOY_XINPUT_SEL 0x4
+#define JOY_XINPUT_STA 0x8
+
+#define JOY_AMIGA_RB 0x100
+#define JOY_AMIGA_LB 0x200
+#define JOY_AMIGA_ESC 0x400
+#define JOY_AMIGA_OSD 0x800
+
+static void aux_hid_handlejoy(const unsigned char *p) {
+    DBG("AUX JOY: index=%02x joy=%02x ax=%02x ay=%02x btn_extra=%02x\n", p[0], p[1], p[2], p[3], p[4]);
+
+    unsigned short joy = (unsigned short)p[1];
+
+    if (p[4] & JOY_XINPUT_LB)
+        joy |= JOY_AMIGA_LB;
+    if (p[4] & JOY_XINPUT_RB)
+        joy |= JOY_AMIGA_RB;
+    if (p[4] & JOY_XINPUT_SEL)
+        joy |= JOY_AMIGA_ESC;
+    if (p[4] & JOY_XINPUT_STA)
+        joy |= JOY_AMIGA_OSD;
+
+    aux_joy_send(p[0], joy);
+}
+
+__constructor(102.aux_hid) void aux_hid_init(void) {
+    aux_mouse_buttons0 = 0;
+    aux_qual = 0;
+
+    puts("AUX HID init\n");
+}
 
 void aux_hid_handle(void) {
     unsigned char buf[AUX_SPI_BUFFER_SIZE];
@@ -80,6 +135,10 @@ void aux_hid_handle(void) {
         case SPI_HID_MOUSE:
             if (len >= 5)
                 aux_hid_handlemouse(&buf[2]);
+            break;
+        case SPI_HID_JOYSTICK:
+            if (len >= 7)
+                aux_hid_handlejoy(&buf[2]);
             break;
         default:
             DBG("AUX HID: ignoring type=%d\n", buf[1]);

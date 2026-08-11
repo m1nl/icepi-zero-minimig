@@ -6,6 +6,7 @@
 #include "osd.h"
 #include "usbhid_keycodes.h"
 #include <stdio.h>
+#include <string.h>
 
 #define BSWAP32(v)                                                                                                    \
     ((((v) & 0xff000000u) >> 24) | (((v) & 0x00ff0000u) >> 8) | (((v) & 0x0000ff00u) << 8) |                          \
@@ -13,6 +14,8 @@
 
 static unsigned int usbhid_prevtable[USBHID_KEYPAGES];
 unsigned int usbhid_keytable[USBHID_KEYPAGES];
+
+unsigned char usbhid_typ[USBHID_PORTS];
 
 static int mouse_buttons0 = 0;
 
@@ -83,8 +86,8 @@ static void usbhid_handlemouse(unsigned char *pkt) {
     DBG("MOUSE: btn=%02x dx=%d dy=%d\n", pkt[0], (signed char)pkt[1], (signed char)pkt[2]);
 
     mouse_buttons0 = pkt[0];
-    usbhid_send(0, (signed char)pkt[1]); /* X */
-    usbhid_send(1, (signed char)pkt[2]); /* Y */
+    usbhid_send(0, MouseScale((signed char)pkt[1])); /* X */
+    usbhid_send(1, MouseScale((signed char)pkt[2])); /* Y */
 }
 
 static void usbhid_handlegamepad(int port, unsigned int status) {
@@ -118,20 +121,22 @@ static void usbhid_handleport(int port) {
 
     typ = status & USBHID_STATUS_TYPE_MASK;
 
+    usbhid_typ[port] = (unsigned char)typ;
+
     DBG("HID port %d: status=%08x typ=%d\n", port, status, typ);
 
-    if (typ == KEYBOARD || typ == MOUSE) {
+    if (typ == USBHID_KEYBOARD || typ == USBHID_MOUSE) {
         unsigned char pkt[8];
         unsigned int *w = (unsigned int *)pkt;
         w[0] = BSWAP32(HW_USBHID(port, REG_USBHID_DATA_LO));
         w[1] = BSWAP32(HW_USBHID(port, REG_USBHID_DATA_HI));
 
-        if (typ == KEYBOARD)
+        if (typ == USBHID_KEYBOARD)
             usbhid_handlekb(pkt);
         else
             usbhid_handlemouse(pkt);
 
-    } else if (typ == GAMEPAD && (config.joystick & 0x4) == 0) { // do map joystick in CD32 mode
+    } else if (typ == USBHID_GAMEPAD && (config.joystick & ENABLE_CD32_PAD) == 0) { // do not map joystick in CD32 mode
         usbhid_handlegamepad(port, status);
     } else {
         DBG("HID port %d: ignoring typ=%d\n", port, typ);
@@ -141,9 +146,15 @@ static void usbhid_handleport(int port) {
     HW_USBHID_WRITE(port, REG_USBHID_STATUS, USBHID_STATUS_ACK);
 }
 
-__constructor(102.usbhid) void usbhid_init(void) { puts("USB HID init\n"); }
+__constructor(102.usbhid) void usbhid_init(void) {
+    memset(usbhid_prevtable, USBHID_KEYPAGES, 0);
+    memset(usbhid_keytable, USBHID_KEYPAGES, 0);
+    mouse_buttons0 = 0;
+
+    puts("USB HID init\n");
+}
 
 void usbhid_handle(void) {
-    usbhid_handleport(0);
-    usbhid_handleport(1);
+    for (int i = 0; i < USBHID_PORTS; i++)
+        usbhid_handleport(i);
 }

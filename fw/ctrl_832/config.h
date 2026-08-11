@@ -38,6 +38,13 @@ typedef struct
 #define ENABLE_IDE_PRIMARY 1
 #define ENABLE_IDE_SECONDARY 2
 
+#define ENABLE_CD32_PAD 4
+
+#define MOUSE_SPEED_1_00 0
+#define MOUSE_SPEED_0_75 1
+#define MOUSE_SPEED_0_50 2
+#define MOUSE_SPEED_0_25 3
+
 typedef struct
 {
     char          id[8];
@@ -65,6 +72,9 @@ typedef struct
 	unsigned long extromdir;	// Directory of ext rom file.
 	unsigned long hdfdir[4]; // Directory for HDF files.  Space for expansion to four devices.
     hardfileTYPE  secondaryhardfile[2]; // hardfile entries for potential secondary IDE devices.
+    unsigned char mouse_speed;
+    unsigned char x_offset;
+    unsigned char y_offset;
 } configTYPE;
 
 extern fileTYPE file;	// Temporary file available for use by other modules, to avoid repeated memory usage.
@@ -90,6 +100,19 @@ extern char DebugMsg[128];
 
 #define ERR(...) do { printf(__VA_ARGS__); } while (0)
 #define INFO(...) do { printf(__VA_ARGS__); } while (0)
+
+static inline signed char MouseScale(char v) {
+    switch (config.mouse_speed) {
+        case MOUSE_SPEED_0_75:
+            return (v >> 1) + (v >> 2);
+        case MOUSE_SPEED_0_50:
+            return (v >> 1);
+        case MOUSE_SPEED_0_25:
+            return (v >> 2);
+        default:
+            return v;
+    }
+}
 
 int UploadKickstart(unsigned long dir,char *name);
 char UploadActionReplay();

@@ -365,6 +365,8 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
 		config.memory = 0x15;
 		config.cpu = 0;
 		config.chipset = 0;
+		config.x_offset = 166;
+		config.y_offset = 48;
 		config.floppy.speed=CONFIG_FLOPPY2X;
 		config.floppy.drives=1;
 		config.enable_ide=0;
@@ -440,11 +442,18 @@ int ApplyConfiguration(char reloadkickstart, char applydrives, char ignoreovercl
     if (ignoreoverclock)
         cpu = cpu & ~CONFIG_OVERCLOCK;
 
+    // restore default offset values when invalid
+    if (config.x_offset == 0 || config.y_offset == 0) {
+		config.x_offset = 166;
+		config.y_offset = 48;
+    }
+
     ConfigCPU(cpu);
     ConfigMemory(config.memory);
     ConfigChipset(config.chipset);
     ConfigFloppy(config.floppy.drives, config.floppy.speed);
     ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines);
+    ConfigVideoOffset(config.x_offset, config.y_offset);
     ConfigMisc(config.misc);
 
     if(reloadkickstart) {

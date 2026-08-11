@@ -85,6 +85,7 @@ const char *config_cpu_msg[] = {"68000 ", "68010", "68EC020","68020"};
 const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4"};
 const char *config_chipset_msg[] = {"OCS-A500", "OCS-A1000", "ECS", "---", "---", "---", "AGA", "---"};
 const char *config_turbo_msg[] = {"\004\005\005\005\005\006", "\007\007\005\005\005\006", "\007\007\007\007\005\006", "\007\007\007\007\007\007"};
+const char *config_mouse_speed_msg[] = {"x1.00", "x0.75", "x0.50", "x0.25"};
 
 char *config_autofire_msg[] = {"        AUTOFIRE OFF", "        AUTOFIRE FAST", "        AUTOFIRE MEDIUM", "        AUTOFIRE SLOW"};
 
@@ -99,8 +100,8 @@ const char *helptexts[]={
 #else
 	"                                Minimig can make use of up to 2 megabytes of Chip RAM, up to 1.5 megabytes of Slow RAM (A500 Trapdoor RAM), and up to 28 megabytes of true Fast RAM.  To use the HRTMon feature you will need an appropriate ROM file on the SD card.  To activate the monitor hold Ctrl and press the Pause key.",
 #endif
-	"                                Minimig's video features include a blur filter, to simulate the poorer picture quality on older monitors, and also scanline generation to simulate the appearance of a screen with low vertical resolution.",
-	"                                Minimig can emulate a CD32 controller pad on joystick port 1.",
+	"                                Minimig video features may include a blur filter, to simulate the poorer picture quality on older monitors, and also scanline generation to simulate the appearance of a screen with low vertical resolution depending on the platform.",
+	"                                Minimig can emulate a CD32 controller pad on joystick ports.",
 	0
 };
 
@@ -578,19 +579,16 @@ void HandleUI(void)
         /******************************************************************/
     case MENU_MAIN2_1 :
         osd_item = 0;
-        menumask = 0x6f;
+        menumask = 0x7f;
         OsdColor(OSDCOLOR_TOPLEVEL);
 		helptext=helptexts[HELPTEXT_MAIN];
  		OsdSetTitle("Settings",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
         OsdWrite(osd_item++, "    load configuration", menusub == 0,0);
         OsdWrite(osd_item++, "    save configuration", menusub == 1,0);
-        OsdWrite(osd_item++, "", 0,0);
         OsdWrite(osd_item++, "    chipset settings \x16", menusub == 2,0);
         OsdWrite(osd_item++, "     memory settings \x16", menusub == 3,0);
-        if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
-            menumask |= 0x10;
-            OsdWrite(osd_item++, "      video settings \x16", menusub == 4,0);
-        }
+        menumask |= 0x10;
+        OsdWrite(osd_item++, "      video settings \x16", menusub == 4,0);
         OsdWrite(osd_item++, "      input settings \x16", menusub == 5,0);
         for (; osd_item < 7; osd_item++)
           OsdWrite(osd_item, "", 0,0);
@@ -1417,10 +1415,7 @@ void HandleUI(void)
         }
         else if (right)
         {
-            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER))
-                menustate = MENU_SETTINGS_VIDEO1;
-            else
-                menustate = MENU_SETTINGS_INPUT1;
+            menustate = MENU_SETTINGS_VIDEO1;
             menusub = 0;
         }
         else if (left)
@@ -1811,7 +1806,7 @@ void HandleUI(void)
         if (select || menu)
         {
             if (menusub == 0) // OK
-		        menustate = MENU_SETTINGS_HARDFILE1;
+            menustate = MENU_SETTINGS_HARDFILE1;
         }
         break;
 
@@ -1821,76 +1816,101 @@ void HandleUI(void)
         /******************************************************************/
     case MENU_SETTINGS_VIDEO1 :
         OsdColor(OSDCOLOR_SUBMENU);
-		menumask=0x1f;
-		parentstate=menustate;
-		helptext=helptexts[HELPTEXT_VIDEO];
-		OsdSetTitle("Video",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
-        OsdWrite(0, "", 0,0);
-        strcpy(s, "   Lores Filter : ");
-        strcat(s, config_filter_msg[config.filter.lores & 0x03]);
-        OsdWrite(1, s, menusub == 0,0);
-        strcpy(s, "   Hires Filter : ");
-        strcat(s, config_filter_msg[config.filter.hires & 0x03]);
-        OsdWrite(2, s, menusub == 1,0);
-        OsdWrite(3, "   Scanlines",0,0);
-        strcpy(s, "     Normal     : ");
-        strcat(s, config_scanlines_msg[config.scanlines & 3]);
-        OsdWrite(4, s, menusub == 2,0);
-        strcpy(s, "     Interlaced : ");
-        strcat(s, config_scanlines_msg[(config.scanlines & 0xc)>>2]);
-        OsdWrite(5, s, menusub == 3,0);
-        OsdWrite(6, "", 0,0);
-        OsdWrite(7, STD_BACK, menusub == 4,0);
+        menumask = 0x7;
+        osd_item = 0;
+        parentstate=menustate;
+        helptext=helptexts[HELPTEXT_VIDEO];
+        OsdSetTitle("Video",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
+        OsdWrite(osd_item++, "", 0,0);
+        snprintf(s, 32, "   X Offset      : %d", config.x_offset);
+        OsdWrite(osd_item++, s, menusub == 0,0);
+        snprintf(s, 32, "   Y Offset      : %d", config.y_offset);
+        OsdWrite(osd_item++, s, menusub == 1,0);
+        if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+            menumask = 0x7f;
+            strcpy(s, "   Lores Filter  : ");
+            strcat(s, config_filter_msg[config.filter.lores & 0x03]);
+            OsdWrite(osd_item++, s, menusub == 2,0);
+            strcpy(s, "   Hires Filter  : ");
+            strcat(s, config_filter_msg[config.filter.hires & 0x03]);
+            OsdWrite(osd_item++, s, menusub == 3,0);
+            strcpy(s, "   SL Normal     : ");
+            strcat(s, config_scanlines_msg[config.scanlines & 3]);
+            OsdWrite(osd_item++, s, menusub == 4,0);
+            strcpy(s, "   SL Interlaced : ");
+            strcat(s, config_scanlines_msg[(config.scanlines & 0xc)>>2]);
+            OsdWrite(osd_item++, s, menusub == 5,0);
+            for (; osd_item < 7; osd_item++)
+                OsdWrite(osd_item, "", 0,0);
+            OsdWrite(7, STD_BACK, menusub == 6,0);
 
+        } else {
+            for (; osd_item < 7; osd_item++)
+                OsdWrite(osd_item, "", 0,0);
+            OsdWrite(7, STD_BACK, menusub == 2,0);
+        }
         menustate = MENU_SETTINGS_VIDEO2;
         break;
 
     case MENU_SETTINGS_VIDEO2 :
         if (select)
         {
-            if (menusub == 0)
-            {
-                config.filter.lores++;
-                config.filter.lores &= 0x03;
+            if (menusub == 0) {
+                config.x_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+                ConfigVideoOffset(config.x_offset, config.y_offset);
             }
-            else if (menusub == 1)
-            {
-                config.filter.hires++;
-                config.filter.hires &= 0x03;
+            if (menusub == 1) {
+                config.y_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                ConfigFilter(config.filter.lores, config.filter.hires);
+                ConfigVideoOffset(config.x_offset, config.y_offset);
+            }
+            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
+                if (menusub == 2)
+                {
+                    config.filter.lores++;
+                    config.filter.lores &= 0x03;
+                    menustate = MENU_SETTINGS_VIDEO1;
+                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+                }
+                else if (menusub == 3)
+                {
+                    config.filter.hires++;
+                    config.filter.hires &= 0x03;
+                    menustate = MENU_SETTINGS_VIDEO1;
+                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+//                    ConfigFilter(config.filter.lores, config.filter.hires);
+                }
+                else if (menusub == 4)
+                {
+                    short tmp=config.scanlines+1;
+                    if((tmp&3)==3) tmp=0;
+                    config.scanlines=(config.scanlines&0xfc)|(tmp&3);
+                    menustate = MENU_SETTINGS_VIDEO1;
+                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+//                    ConfigScanlines(config.scanlines);
+                }
+                else if (menusub == 5)
+                {
+                    short tmp=config.scanlines+4;
+                    if((tmp&0xc)==0xc) tmp=0;
+                    config.scanlines=(config.scanlines&0xf3)|(tmp&0xc);
+                    menustate = MENU_SETTINGS_VIDEO1;
+                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+//                    ConfigScanlines(config.scanlines);
+                }
+                else if (menusub == 6)
+                {
+                    menustate = MENU_MAIN2_1;
+                    menusub = 4;
+                }
             }
             else if (menusub == 2)
-            {
-				short tmp=config.scanlines+1;
-				if((tmp&3)==3)
-					tmp=0;
-                config.scanlines=(config.scanlines&0xfc)|(tmp&3);
-                menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                ConfigScanlines(config.scanlines);
-            }
-            else if (menusub == 3)
-            {
- 				short tmp=config.scanlines+4;
-				if((tmp&0xc)==0xc)
-					tmp=0;
-                config.scanlines=(config.scanlines&0xf3)|(tmp&0xc);
-                menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                ConfigScanlines(config.scanlines);
-            }
-
-            else if (menusub == 4)
             {
                 menustate = MENU_MAIN2_1;
                 menusub = 4;
             }
         }
-
         if (menu)
         {
             menustate = MENU_MAIN2_1;
@@ -1898,13 +1918,36 @@ void HandleUI(void)
         }
         else if (right)
         {
-            menustate = MENU_SETTINGS_INPUT1;
-            menusub = 0;
+            if (menusub == 0) {
+                config.x_offset++;
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideoOffset(config.x_offset, config.y_offset);
+            } else if (menusub == 1) {
+                if (config.y_offset < 127)
+                    config.y_offset++;
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideoOffset(config.x_offset, config.y_offset);
+            } else {
+                menustate = MENU_SETTINGS_INPUT1;
+                menusub = 0;
+            }
         }
         else if (left)
         {
-            menustate = MENU_SETTINGS_MEMORY1;
-            menusub = 0;
+            if (menusub == 0) {
+                if (config.x_offset > 0)
+                    config.x_offset--;
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideoOffset(config.x_offset, config.y_offset);
+            } else if (menusub == 1) {
+                if (config.y_offset > 0)
+                    config.y_offset--;
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideoOffset(config.x_offset, config.y_offset);
+            } else {
+                menustate = MENU_SETTINGS_MEMORY1;
+                menusub = 0;
+            }
         }
         break;
 
@@ -1915,7 +1958,7 @@ void HandleUI(void)
         OsdColor(OSDCOLOR_SUBMENU);
         helptext=helptexts[HELPTEXT_INPUT];
         parentstate=menustate;
-        menumask=0x07;
+        menumask=0x0f;
         OsdSetTitle("Input",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
         OsdWrite(0, "", 0,0);
         strcpy(s, "     CD32 Pad : ");
@@ -1924,11 +1967,13 @@ void HandleUI(void)
         strcpy(s, "   Joy Invert : ");
         strcat(s, config_on_off_msg[(config.joystick >> 4) & 1]);
         OsdWrite(2, s, menusub == 1,0);
-        OsdWrite(3, "", 0,0);
+        strcpy(s, "  Mouse Speed : ");
+        strcat(s, config_mouse_speed_msg[config.mouse_speed & 3]);
+        OsdWrite(3, s, menusub == 2,0);
         OsdWrite(4, "", 0,0);
         OsdWrite(5, "", 0,0);
         OsdWrite(6, "", 0,0);
-        OsdWrite(7, STD_BACK, menusub == 2,0);
+        OsdWrite(7, STD_BACK, menusub == 3,0);
         menustate = MENU_SETTINGS_INPUT2;
         break;
 
@@ -1937,37 +1982,34 @@ void HandleUI(void)
         {
             if (menusub == 0)
             {
-				/* CD32 Pad */
-				config.joystick ^= (1 << 2);
+                /* CD32 Pad */
+                config.joystick ^= (1 << 2);
                 menustate = MENU_SETTINGS_INPUT1;
-				ConfigJoystick(config.joystick);
+                ConfigJoystick(config.joystick);
             }
             if (menusub == 1)
             {
-				/* Joy Invert */
-				config.joystick ^= (1 << 4);
+                /* Joy Invert */
+                config.joystick ^= (1 << 4);
                 menustate = MENU_SETTINGS_INPUT1;
-				ConfigJoystick(config.joystick);
+                ConfigJoystick(config.joystick);
             }
-            else if (menusub == 2)
+            if (menusub == 2)
+            {
+                /* Mouse Speed */
+                config.mouse_speed = (config.mouse_speed + 1) & 3;
+                menustate = MENU_SETTINGS_INPUT1;
+            }
+            else if (menusub == 3)
             {
                 menustate = MENU_MAIN2_1;
-                if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
-                    menusub = 5;
-                } else {
-                    menusub = 4;
-                }
+                menusub = 5;
             }
         }
-
         if (menu)
         {
             menustate = MENU_MAIN2_1;
-            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
-                menusub = 5;
-            } else {
-                menusub = 4;
-            }
+            menusub = 5;
         }
         else if (right)
         {
@@ -1976,11 +2018,7 @@ void HandleUI(void)
         }
         else if (left)
         {
-            if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
-                menustate = MENU_SETTINGS_VIDEO1;
-            } else {
-                menustate = MENU_SETTINGS_MEMORY1;
-            }
+            menustate = MENU_SETTINGS_VIDEO1;
             menusub = 0;
         }
         break;
@@ -1989,7 +2027,6 @@ void HandleUI(void)
         /* rom file selected menu                                         */
         /******************************************************************/
     case MENU_ROMFILE_SELECTED :
-
          menusub = 1;
 		 menustate=MENU_ROMFILE_SELECTED1;
          // no break intended

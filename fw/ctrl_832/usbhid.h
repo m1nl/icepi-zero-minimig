@@ -31,11 +31,13 @@
 
 #define USBHIDBASE1 0x0fffff50
 
-enum hidtype { NONE = 0, KEYBOARD = 1, MOUSE = 2, GAMEPAD = 3 };
+enum hidtype { USBHID_NONE = 0, USBHID_KEYBOARD = 1, USBHID_MOUSE = 2, USBHID_GAMEPAD = 3 };
 
 extern unsigned int usbhid_keytable[USBHID_KEYPAGES];
+extern unsigned char usbhid_typ[USBHID_PORTS];
 
-static inline int usbhid_testkey(unsigned char code) { return usbhid_keytable[code >> 5] & (1 << (code & 31)); }
+static inline int usbhid_test_key(unsigned char code) { return usbhid_keytable[code >> 5] & (1 << (code & 31)); }
+static inline char usbhid_get_typ(unsigned int port) { return usbhid_typ[port % USBHID_PORTS]; }
 
 void usbhid_init(void);
 void usbhid_handle(void);

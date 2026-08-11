@@ -5,6 +5,7 @@
 #define SPI_TARGET_HID 1
 #define SPI_HID_KEYBOARD 1
 #define SPI_HID_MOUSE 2
+#define SPI_HID_JOYSTICK 3
 
 void aux_hid_init(void);
 void aux_hid_handle(void);
