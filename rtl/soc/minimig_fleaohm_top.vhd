@@ -107,6 +107,13 @@ architecture rtl of minimig_fleaohm_top is
 	signal videoblank	:	std_logic;
 	signal vbl	:	std_logic;
 
+	signal display_pal	:	std_logic;
+	signal long_frame	:	std_logic;
+	signal interlace	:	std_logic;
+
+	signal video_xoffset	:	std_logic_vector(7 downto 0);
+	signal video_yoffset	:	std_logic_vector(7 downto 0);
+
 -- Audio
 	signal audio_l	:	std_logic_vector(15 downto 0);
 	signal audio_r	:	std_logic_vector(15 downto 0);
@@ -122,6 +129,8 @@ architecture rtl of minimig_fleaohm_top is
 	signal clk_pixel	:	std_logic;
 	signal clk_tmds	:	std_logic;
 	signal auxclks	:	std_logic_vector(3 downto 0);
+
+	signal pll_locked	:	std_logic;
 
 	signal VTEMP_DAC	:	std_logic_vector(4 downto 0);
 	signal audio_data	:	std_logic_vector(17 downto 0);
@@ -193,7 +202,8 @@ generic map (
 	havevideofilter => 0,
 	haveaga => 1,
 	haveusbhid => 1,
-	haveauxspi => 0
+	haveauxspi => 0,
+	haveuart => 0
 )
 PORT map
 (
@@ -202,7 +212,8 @@ PORT map
 	CLK_114 => clk_sys,
 	CLK_28 => clk_pixel,
 	CLK_142 => clk_tmds,
-	RESET_N => reset_n,
+	PLL_LOCKED => pll_locked,
+	RESET_N => '1',
 
 	LED_POWER => led_power,
 	LED_DISK => open,
@@ -214,8 +225,12 @@ PORT map
 	CTRL_TX => slave_tx_o,
 	CTRL_RX => slave_rx_i,
 
-	AMIGA_TX => open,
-	AMIGA_RX => '1',
+	AMIGA_TX => GPIO_12,
+	AMIGA_RX => GPIO_16,
+
+	AMIGA_RESET_N => reset_n,
+	AMIGA_KEY => (others=>'-'),
+	AMIGA_KEY_STB => '0',
 
 	DVI_HS => dvi_hsync,
 	DVI_VS => dvi_vsync,
@@ -224,6 +239,12 @@ PORT map
 	DVI_B => dvi_blue,
 	DVI_STROBE => dvi_pixel,
 	DVI_DE => dvi_window,
+
+	LONG_FRAME => long_frame,
+	DISPLAY_PAL => display_pal,
+	INTERLACE => interlace,
+	VIDEO_XOFFSET => video_xoffset,
+	VIDEO_YOFFSET => video_yoffset,
 
 	SDRAM_DQ => sdram_dq,
 	SDRAM_A => sdram_a,
@@ -262,10 +283,6 @@ PORT map
 	SD_CS => mmc_n_cs,
 	SD_ACK => '1',
 
-	AMIGA_RESET_N => '1',
-	AMIGA_KEY => (others=>'-'),
-	AMIGA_KEY_STB => '0',
-
 	C64_KEYS => (others => '1'),
 
 	USB_DP => usb_dp,
@@ -283,7 +300,7 @@ genvideo: block
 		IT_CONTENT : std_logic := '1';
 		DVI_OUTPUT : std_logic := '0';
 		VIDEO_RATE : integer := 28571400;
-		AUDIO_RATE : integer := 44100;
+		AUDIO_RATE : integer := 48000;
 		AUDIO_BIT_WIDTH : integer := 16;
 		VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
 		PRODUCT_DESCRIPTION : std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "A" + padding
@@ -295,9 +312,14 @@ genvideo: block
 		reset        : in  std_logic;
 
 		pal_mode    : in  std_logic;
-		screen      : in  std_logic_vector(1 downto 0);
-		short_frame : in  std_logic;
+		long_frame  : in  std_logic;
 		interlace   : in  std_logic;
+
+		vsync_in : in  std_logic;
+		hsync_in : in  std_logic;
+
+		offset_x : in  unsigned(7 downto 0);
+		offset_y : in  unsigned(6 downto 0);
 
 		rgb : in  std_logic_vector(23 downto 0);
 
@@ -310,41 +332,27 @@ genvideo: block
 	);
 	end component;
 
-	component video_analyzer
-	port (
-		clk         : in  std_logic;
-		hs          : in  std_logic;
-		vs          : in  std_logic;
-		screen      : in  std_logic_vector(1 downto 0);
-		pal         : out std_logic;
-		short_frame : out std_logic;
-		interlace   : out std_logic;
-		vreset      : out std_logic
-	);
-	end component;
+	signal vreset : std_logic_vector(1 downto 0) := "11";
 
-	signal vreset : std_logic;
-	signal vpal : std_logic;
-	signal interlace : std_logic;
-	signal short_frame : std_logic;
-	signal screen : std_logic_vector(1 downto 0);
 	signal tmds_clock : std_logic;
 	signal tmds : std_logic_vector(2 downto 0);
 	signal rgb : std_logic_vector(23 downto 0);
 
+	signal offset_x : unsigned(7 downto 0);
+	signal offset_y : unsigned(6 downto 0);
+
 begin
-	video_analyzer_inst : component video_analyzer
-	port map (
-		clk => clk_pixel,
-		hs => dvi_hsync,
-		vs => dvi_vsync,
-		pal => vpal,
-		short_frame => short_frame,
-		screen => screen,
-		interlace => interlace,
-		vreset => vreset
-	);
-	screen <= (others => '0');
+	process (clk_pixel, pll_locked)
+	begin
+	  if pll_locked = '0' then
+	    vreset <= "11";
+	  elsif rising_edge(clk_pixel) then
+	    vreset <= vreset(0) & '0';
+	  end if;
+	end process;
+
+	offset_x <= unsigned(video_xoffset(7 downto 0));
+	offset_y <= unsigned(video_yoffset(6 downto 0));
 
 	hdmi_inst : component hdmi
 	generic map (
@@ -355,12 +363,17 @@ begin
 	port map (
 		clk_pixel_x5 => clk_tmds,
 		clk_pixel => clk_pixel,
-		reset => vreset,
+		reset => vreset(1),
 
-		pal_mode => vpal,
-		short_frame => short_frame,
-		screen => screen,
+		pal_mode => display_pal,
+		long_frame => long_frame,
 		interlace => interlace,
+
+		vsync_in => dvi_vsync,
+		hsync_in => dvi_hsync,
+
+		offset_x => offset_x,
+		offset_y => offset_y,
 
 		rgb => rgb,
 
