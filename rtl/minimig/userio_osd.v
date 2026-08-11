@@ -29,8 +29,8 @@ module userio_osd
 	output	reg [3:0] floppy_config = 0,
 	output	reg [1:0] scanline = 0,
   output  reg [1:0] dither = 0,
-  output  reg [7:0] xoffset = 0,
-  output  reg [7:0] yoffset = 0,
+  output  reg [7:0] xoffset = 8'd166,
+  output  reg [7:0] yoffset = 8'd48,
 	output	reg	[2:0] ide_config0 = 0,		//enable hard disk support
 	output	reg	[2:0] ide_config1 = 0,		//enable hard disk support
   output  reg [3:0] cpu_config = 0,
@@ -357,6 +357,8 @@ always @ (*) begin
   spi_cpu_cfg_sel      = 1'b0;
   spi_memory_cfg_sel   = 1'b0;
   spi_video_cfg_sel    = 1'b0;
+  spi_video_xoff_sel   = 1'b0;
+  spi_video_yoff_sel   = 1'b0;
   spi_floppy_cfg_sel   = 1'b0;
   spi_harddisk0_cfg_sel= 1'b0;
   spi_harddisk1_cfg_sel= 1'b0;

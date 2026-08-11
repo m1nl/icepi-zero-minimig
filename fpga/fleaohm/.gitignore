@@ -1,0 +1,11 @@
+*
+!*.sdc
+!*.lpf
+!*.ldf
+!*.sdc
+!*.sty
+!*.vhd
+!*.sv
+!*.vh
+!*.v
+!.gitignore

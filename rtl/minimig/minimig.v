@@ -837,7 +837,11 @@ denise DENISE1
 amber AMBER1
 (
 	.clk(clk),
+`ifdef MINIMIG_STATIC_HDMI_TIMING
+	.dblscan(1'b1),
+`else
 	.dblscan(_15khz && !varbeamen),
+`endif
 	.varbeamen(varbeamen),
 	.lr_filter(usevideofilter ? lr_filter : 2'b00),
 	.hr_filter(usevideofilter ? hr_filter : 2'b00),

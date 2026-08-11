@@ -25,7 +25,8 @@ package minimig_virtual_pkg is
 	  havevideofilter : integer := 1;
 	  haveaga : integer := 1;
 	  haveusbhid : integer := 0;
-	  haveauxspi : integer := 0
+	  haveauxspi : integer := 0;
+	  haveuart : integer := 1
 	);
 	PORT
 	(
@@ -67,6 +68,11 @@ package minimig_virtual_pkg is
 		DVI_B		:	 OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
 		DVI_STROBE  :   OUT STD_LOGIC;
 		DVI_DE      :   OUT STD_LOGIC;
+		LONG_FRAME	:	OUT STD_LOGIC;
+		DISPLAY_PAL	:	OUT STD_LOGIC;
+		INTERLACE	:	OUT STD_LOGIC;
+		VIDEO_XOFFSET	:	OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
+		VIDEO_YOFFSET	:	OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
 		SDRAM_DQ		:	 INOUT STD_LOGIC_VECTOR(15 DOWNTO 0);
 		SDRAM_A		:	 OUT STD_LOGIC_VECTOR(12 DOWNTO 0);
 		SDRAM_DQML		:	 OUT STD_LOGIC;

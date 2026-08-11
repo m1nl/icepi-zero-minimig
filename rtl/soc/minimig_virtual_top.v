@@ -20,11 +20,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 
 // board type define
-`define MINIMIG_VIRTUAL
-`define MINIMIG_USB
-`define MINIMIG_ASPECT_CORRECTION
-//`define HOSTONLY
-
+`include "minimig_board.vh"
 `include "minimig_defines.vh"
 
 `default_nettype none
@@ -47,7 +43,8 @@ module minimig_virtual_top #(
 	parameter havevideofilter = 1,
 	parameter haveaga = 1,
 	parameter haveusbhid = 0,
-	parameter haveauxspi = 0
+	parameter haveauxspi = 0,
+	parameter haveuart = 0
 ) (
 	// JTAG inputs
 	output sys_tdo,
@@ -96,6 +93,13 @@ module minimig_virtual_top #(
 	output reg [  7:0]    DVI_B,      // VGA Blue[5:0]
 	output                DVI_STROBE,
 	output reg            DVI_DE,
+
+	// AUX video signals
+	output wire           LONG_FRAME,
+	output wire           DISPLAY_PAL,
+	output wire           INTERLACE,
+	output wire [  8-1:0] VIDEO_XOFFSET,
+	output wire [  8-1:0] VIDEO_YOFFSET,
 
 	// SDRAM
 	inout  wire [ 16-1:0] SDRAM_DQ,   // SDRAM Data bus 16 Bits
@@ -886,6 +890,11 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.hblank_out   (hblank_amiga     ),
 	.vblank_out   (vblank_amiga     ),
 	.blank_out    (blank_amiga      ),
+	.long_frame   (LONG_FRAME       ),
+	.displaypal_out (DISPLAY_PAL    ),
+	.interlace_out(INTERLACE        ),
+	.xoffset_out  (VIDEO_XOFFSET    ),
+	.yoffset_out  (VIDEO_YOFFSET    ),
 	.osd_blank_out(osd_window       ),  // Let the toplevel dither module handle drawing the OSD.
 	.osd_pixel_out(osd_pixel        ),
 	.rtg_ena      (rtg_ena_mm       ),
@@ -926,7 +935,8 @@ cfide #(
 	.haveamigahost(haveamigahost),
 	.haveaudio(haveaudio),
 	.haveusbhid(haveusbhid),
-	.haveauxspi(haveauxspi)
+	.haveauxspi(haveauxspi),
+	.haveuart(haveuart)
 ) mycfide (
 		.sysclk(CLK_114),
 		.usbclk(CLK_USB_IN),
@@ -1003,10 +1013,15 @@ reg [2:0] vga_strobe_ctr;
 always @(posedge CLK_114) begin
 	if(rtg_ena)
 		vga_strobe_ctr<={vga_strobe_ctr[2],2'b00}+3'b100;
+`ifdef MINIMIG_STATIC_HDMI_TIMING
+	else
+		vga_strobe_ctr<={vga_strobe_ctr[2:1],1'b0}+3'b010;
+`else
 	else if (_15khz)
 		vga_strobe_ctr<={vga_strobe_ctr[2:1],1'b0}+3'b010;
 	else
 		vga_strobe_ctr<= vga_strobe_ctr+3'b001;
+`endif
 end
 
 wire vga_stb;
