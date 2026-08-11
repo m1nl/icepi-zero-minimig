@@ -142,18 +142,19 @@ always @(*)
 // BEAMCON0 register
 reg [15:0] beamcon0_reg;
 reg [15:0] beamcon0_sh;
-always @ (posedge clk, posedge reset) begin
-	if (reset) begin
-		beamcon0_reg <= #1 {10'b0, ~ntsc, 5'b0};
-		beamcon0_sh <= #1 {10'b0, ~ntsc, 5'b0};
-	end else if (clk7_en && (reg_address_in[8:1] == BEAMCON0[8:1]) && ecs) begin
-		// Write to shadow register only in RTG mode when lpendis or displaydual are high
-		if(!rd && (data_in[13] || data_in[6]))
-			beamcon0_sh <= #1 data_in;
-		else // Otherwise update the non-shadowed reg
-			beamcon0_reg <= #1 data_in;
-	end
-end
+always @ (posedge clk)
+  if (clk7_en) begin
+  	if (reset) begin
+  		beamcon0_reg <= #1 {10'b0, ~ntsc, 5'b0};
+  		beamcon0_sh <= #1 {10'b0, ~ntsc, 5'b0};
+  	end else if ((reg_address_in[8:1] == BEAMCON0[8:1]) && ecs) begin
+  		// Write to shadow register only in RTG mode when lpendis or displaydual are high
+  		if(!rd && (data_in[13] || data_in[6]))
+  			beamcon0_sh <= #1 data_in;
+  		else // Otherwise update the non-shadowed reg
+  			beamcon0_reg <= #1 data_in;
+  	end
+  end
 
 
 // Multiplex between standard and shadow regs depending on whether RTG is on.
@@ -229,6 +230,26 @@ reg [10:0] vbstop_sh;
 // AMR - Register for never-implemented-on-real-hardware Dual mode - we use as line compare
 reg [10:0] bplhstrt_reg;
 
+always @ (posedge clk)
+  if (clk7_en) begin
+  	if (reset) begin
+  		vtotal_reg  <= #1 displaypal ? VTOTAL_PAL_VAL : VTOTAL_NTSC_VAL;
+  	end else begin
+  		if(!displaydual || !lpendis) begin  // Normal registers when RTG is off, or lpendis is low
+  			case (reg_address_in[8:1])
+  			  VTOTAL [8:1] : vtotal_reg  <= #1 {data_in[10:0]};
+  			  default: ;
+  			endcase
+  		end
+  		if(displaydual && lpendis) begin  // Shadow regs when RTG is on and lpendis is high
+  			case (reg_address_in[8:1])
+  			  VTOTAL [8:1] : vtotal_sh  <= #1 {data_in[10:0]};
+  			  default: ;
+  			endcase
+  		end
+  	end
+  end
+
 always @ (posedge clk, posedge reset) begin
 	if (reset) begin
 		htotal_reg  <= #1 HTOTAL_VAL << 1;
@@ -237,7 +258,6 @@ always @ (posedge clk, posedge reset) begin
 		hcenter_reg <= #1 HCENTER_VAL;
 		hbstrt_reg  <= #1 HBSTRT_VAL;
 		hbstop_reg  <= #1 HBSTOP_VAL;
-		vtotal_reg  <= #1 displaypal ? VTOTAL_PAL_VAL : VTOTAL_NTSC_VAL;
 		vsstrt_reg  <= #1 VSSTRT_VAL;
 		vsstop_reg  <= #1 VSSTOP_VAL;
 		vbstrt_reg  <= #1 VBSTRT_VAL;
@@ -251,7 +271,6 @@ always @ (posedge clk, posedge reset) begin
 			  HCENTER[8:1] : hcenter_reg <= #1 {data_in[ 7:0], 1'b0};
 			  HBSTRT [8:1] : hbstrt_reg  <= #1 {data_in[ 7:0], 1'b0}; // TODO fix this
 			  HBSTOP [8:1] : hbstop_reg  <= #1 {data_in[ 7:0], 1'b0};
-			  VTOTAL [8:1] : vtotal_reg  <= #1 {data_in[10:0]};
 			  VSSTRT [8:1] : vsstrt_reg  <= #1 {data_in[10:0]};
 			  VSSTOP [8:1] : vsstop_reg  <= #1 {data_in[10:0]};
 			  VBSTRT [8:1] : vbstrt_reg  <= #1 {data_in[10:0]};
@@ -268,7 +287,6 @@ always @ (posedge clk, posedge reset) begin
 			  HCENTER[8:1] : hcenter_sh <= #1 {data_in[ 7:0], 1'b0};
 			  HBSTRT [8:1] : hbstrt_sh  <= #1 {data_in[ 7:0], 1'b0}; // TODO fix this
 			  HBSTOP [8:1] : hbstop_sh  <= #1 {data_in[ 7:0], 1'b0};
-			  VTOTAL [8:1] : vtotal_sh  <= #1 {data_in[10:0]};
 			  VSSTRT [8:1] : vsstrt_sh  <= #1 {data_in[10:0]};
 			  VSSTOP [8:1] : vsstop_sh  <= #1 {data_in[10:0]};
 			  VBSTRT [8:1] : vbstrt_sh  <= #1 {data_in[10:0]};
