@@ -390,9 +390,6 @@
         <Source name="../../rtl/tg68k/TG68KdotC_Kernel.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/soc/video_analyzer.v" type="Verilog" type_short="Verilog">
-            <Options/>
-        </Source>
         <Source name="../../rtl/hdmi/audio_clock_regeneration_packet.sv" type="Verilog" type_short="Verilog">
             <Options VerilogStandard="System Verilog"/>
         </Source>
