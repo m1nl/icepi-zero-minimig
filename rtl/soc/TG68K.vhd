@@ -280,7 +280,7 @@ toram <= w_datatg68;
 -- Register incoming data
 process(clk) begin
 	if rising_edge(clk) then
-		if (reset='0' or nResetOut='0' or sel_undecoded_d ='1') then
+		if sel_undecoded_d ='1' then
 			datatg68_c <= X"FFFF";
 		elsif sel_host_d='1' then
 			datatg68_c <= host_q;
