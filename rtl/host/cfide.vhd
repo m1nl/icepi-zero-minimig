@@ -38,7 +38,8 @@ entity cfide is
 		haveamigahost : integer := 0;
 		haveaudio : integer := 0;
 		haveusbhid : integer := 0;
-		haveauxspi : integer := 0
+		haveauxspi : integer := 0;
+		haveuart : integer := 0
 	);
 	port (
 		sysclk	: in std_logic;
@@ -200,6 +201,7 @@ signal audiopresent : std_logic;
 signal amigahostpresent : std_logic;
 signal usbhidpresent : std_logic;
 signal auxspipresent : std_logic;
+signal uartpresent : std_logic;
 
 component circular_fifo
 generic (
@@ -252,8 +254,9 @@ audiopresent <= '1' when haveaudio=1 else '0';
 amigahostpresent <= '1' when haveamigahost=1 else '0';
 usbhidpresent <= '1' when haveusbhid=1 else '0';
 auxspipresent <= '1' when haveauxspi=1 else '0';
+uartpresent <= '1' when haveuart=1 else '0';
 
-platformdata <= "000" & auxspipresent & usbhidpresent & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
+platformdata <= "00" & uartpresent & auxspipresent & usbhidpresent & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
 
 IOdata <= sd_in;
 
@@ -297,7 +300,7 @@ sd_in(7 downto 0) <= sd_in_shift(7 downto 0);
 audio_q <= X"000" & "00" & audio_amiga & audio_buf;
 
 SPI_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" ELSE '0';
-rs232_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"F" ELSE '0';
+rs232_select <= uartpresent when addr(27)='1' and addr(7 downto 4)=X"F" ELSE '0';
 timer_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"D" ELSE '0';
 platform_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"C" ELSE '0';
 interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
@@ -314,6 +317,7 @@ process (clk_28, reset_n)
 begin
 	if reset_n='0' then
 		rtc_q <= (others=>'0');
+
 	elsif rising_edge(clk_28) then
 		if rtc_select='1' and req='1' and ack_28m='0' and wr='1' then
 			case addr(3 downto 2) is
@@ -418,43 +422,41 @@ end process;
 
 interrupt <= '1' when interrupt_trigger='1' and interrupt_en='1' else '0';
 
-process (sysclk)
+process (sysclk, reset_n)
 begin
-	if rising_edge(sysclk) then
-		if reset_n='0' then
-			amiga_req_d <= '0';
-			vbl_int_d <= '0';
+	if reset_n='0' then
+		amiga_req_d <= '0';
+		vbl_int_d <= '0';
 
-			interrupt_trigger <= '0';
-			interrupt_en <= '0';
+		interrupt_trigger <= '0';
+		interrupt_en <= '0';
 
-		else
-			if interrupt_select='1' and req='1' and ack='0' then
-				if wr='1' then
-					interrupt_en <= d(0);
-				else
-					interrupt_trigger <= '0';
-				end if;
+	elsif rising_edge(sysclk) then
+		if interrupt_select='1' and req='1' and ack='0' then
+			if wr='1' then
+				interrupt_en <= d(0);
+			else
+				interrupt_trigger <= '0';
 			end if;
+		end if;
 
-			if amigahostpresent='1' then
-				amiga_req_d <= amiga_req;
-				if amiga_req='1' and amiga_req_d='0' then
-					interrupt_trigger <= '1';
-				end if;
+		if amigahostpresent='1' then
+			amiga_req_d <= amiga_req;
+			if amiga_req='1' and amiga_req_d='0' then
+				interrupt_trigger <= '1';
 			end if;
+		end if;
 
-			if c64_present='1' then
-				vbl_int_d <= vbl_int;
-				if vbl_int='1' and vbl_int_d='0' then
-					interrupt_trigger <= '1';
-				end if;
+		if c64_present='1' then
+			vbl_int_d <= vbl_int;
+			if vbl_int='1' and vbl_int_d='0' then
+				interrupt_trigger <= '1';
 			end if;
+		end if;
 
-			if auxspipresent='1' then
-				if aux_spi_csn_r='0' then
-					interrupt_trigger <= '1';
-				end if;
+		if auxspipresent='1' then
+			if aux_spi_csn_r='0' then
+				interrupt_trigger <= '1';
 			end if;
 		end if;
 	end if;
@@ -479,44 +481,42 @@ port map (
 aux_spi_data_wr <= aux_spi_shift;
 -- aux_spi_data_rd_ack <= '1' when aux_spi_select='1' and req='0' and ack='1' else '0';
 
-process (sysclk)
+process (sysclk, reset_n)
 begin
-	if rising_edge(sysclk) then
+	if reset_n='0' then
+		aux_spi_data_wr_en <= '0';
+		aux_spi_data_rd_ack <= '0';
+		aux_spi_status <= (others => '0');
+		aux_spi_bit_cnt <= 0;
+
+	elsif rising_edge(sysclk) then
 		aux_spi_clk_r <= aux_spi_clk_r(2 downto 0) & aux_spi_clk;
 		aux_spi_csn_r <= aux_spi_csn;
 		aux_spi_mosi_r <= aux_spi_mosi;
 
-		if reset_n='0' then
-			aux_spi_data_wr_en <= '0';
-			aux_spi_data_rd_ack <= '0';
-			aux_spi_status <= (others => '0');
-			aux_spi_bit_cnt <= 0;
+		aux_spi_data_wr_en <= '0';
+		aux_spi_data_rd_ack <= '0';
 
-		else
-			aux_spi_data_wr_en <= '0';
-			aux_spi_data_rd_ack <= '0';
-
-			if aux_spi_select='1' and req='1' and ack='0' then
-				if aux_spi_csn_r='0' or aux_spi_bit_cnt/=0 then
-					aux_spi_status(1) <= '1';
-				else
-					aux_spi_status(1) <= '0';
-				end if;
-
-				aux_spi_status(0) <= not aux_spi_fifo_empty;
-				aux_spi_data_rd_ack <= not aux_spi_fifo_empty;
+		if aux_spi_select='1' and req='1' and ack='0' then
+			if aux_spi_csn_r='0' or aux_spi_bit_cnt/=0 then
+				aux_spi_status(1) <= '1';
+			else
+				aux_spi_status(1) <= '0';
 			end if;
 
-			if aux_spi_csn_r='1' and aux_spi_bit_cnt=0 then
-				null; -- no-op
+			aux_spi_status(0) <= not aux_spi_fifo_empty;
+			aux_spi_data_rd_ack <= not aux_spi_fifo_empty;
+		end if;
 
-			elsif aux_spi_clk_r="1100" then  -- CPOL=0 CPHA=1
-				aux_spi_shift <= aux_spi_shift(6 downto 0) & aux_spi_mosi_r;
-				aux_spi_bit_cnt <= aux_spi_bit_cnt + 1;
+		if aux_spi_csn_r='1' and aux_spi_bit_cnt=0 then
+			null; -- no-op
 
-				if aux_spi_bit_cnt=7 then
-					aux_spi_data_wr_en <= '1';
-				end if;
+		elsif aux_spi_clk_r="1100" then  -- CPOL=0 CPHA=1
+			aux_spi_shift <= aux_spi_shift(6 downto 0) & aux_spi_mosi_r;
+			aux_spi_bit_cnt <= aux_spi_bit_cnt + 1;
+
+			if aux_spi_bit_cnt=7 then
+				aux_spi_data_wr_en <= '1';
 			end if;
 		end if;
 	end if;
@@ -564,87 +564,63 @@ sd_clk <= NOT sck;
 sd_do <= sd_out(15);
 SD_busy <= shiftcnt(13);
 
-PROCESS (sysclk, scs, sd_di, sd_dimm) BEGIN
+PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 	IF scs(1)='0' and scs(7)='0' THEN
 		sd_di_in <= sd_di;
 	ELSE
 		sd_di_in <= sd_dimm;
 	end if;
 
-	if rising_edge(sysclk) then
-		if reset_n ='0' then
-			shiftcnt <= (others => '0');
-			spi_div <= (others => '0');
-			scs <= (others => '0');
-			sck <= '0';
-			spi_speed <= "00000000";
+	if reset_n='0' then
+		shiftcnt <= (others => '0');
+		spi_div <= (others => '0');
+		scs <= (others => '0');
+		sck <= '0';
+		spi_speed <= "00000000";
 --		dscs <= '0';
-			spi_wait <= '0';
-			sd_out<=(others=>'0');
-			sd_in_shift<=(others=>'0');
+		spi_wait <= '0';
+		sd_out<=(others=>'0');
+		sd_in_shift<=(others=>'0');
 
-		else
-			spi_wait_d<=spi_wait;
+	elsif rising_edge(sysclk) then
+		spi_wait_d<=spi_wait;
 
-			if spi_wait_d='1' and sd_ack='1' then -- Unpause SPI as soon as the IO controller has written to the MUX
-				spi_wait<='0';
-			end if;
+		if spi_wait_d='1' and sd_ack='1' then -- Unpause SPI as soon as the IO controller has written to the MUX
+			spi_wait<='0';
+		end if;
 
-			IF SPI_select='1' AND req='1' and ack='0' and wr='1' AND SD_busy='0' THEN	 --SD write
-				case addr(3 downto 2) is
-					when "10" => -- 8
-						spi_speed <= unsigned(d(7 downto 0));
-					when "01" => -- 4
-						scs(0) <= not d(0);
-						IF d(7)='1' THEN
-							scs(7) <= not d(0);
-						end if;
-						IF d(6)='1' THEN
-							scs(6) <= not d(0);
-						end if;
-						IF d(5)='1' THEN
-							scs(5) <= not d(0);
-						end if;
-						IF d(4)='1' THEN
-							scs(4) <= not d(0);
-						end if;
-						IF d(3)='1' THEN
-							scs(3) <= not d(0);
-						end if;
-						IF d(2)='1' THEN
-							scs(2) <= not d(0);
-						end if;
-						IF d(1)='1' THEN
-							scs(1) <= not d(0);
-						end if;
-					when "00" => -- 0
-	--						ELSE							--DA4000
-						if scs(1)='1' THEN -- Wait for io component to propagate signals.
-							spi_wait<='1'; -- Only wait if SPI needs to go through the MUX
-							if spimux = 1 then
-								spi_div(8 downto 1) <= spi_speed+4;
-							else
-								spi_div(8 downto 1) <= spi_speed;
-							end if;
-						else
-							spi_div(8 downto 1) <= spi_speed;
-						end if;
-						IF scs(6)='1' THEN		-- SPI direkt Mode
-							shiftcnt <= "10111111111111";
-							sd_out <= X"FFFF";
-						ELSE
-							shiftcnt <= "10000000000111";
-							sd_out(15 downto 8) <= d(7 downto 0);
-						end if;
-						sck <= '1';
-					when others =>
-						null;
-				end case;
-			ELSE
-				IF spi_div="0000000000" THEN
+		IF SPI_select='1' AND req='1' and ack='0' and wr='1' AND SD_busy='0' THEN	 --SD write
+			case addr(3 downto 2) is
+				when "10" => -- 8
+					spi_speed <= unsigned(d(7 downto 0));
+				when "01" => -- 4
+					scs(0) <= not d(0);
+					IF d(7)='1' THEN
+						scs(7) <= not d(0);
+					end if;
+					IF d(6)='1' THEN
+						scs(6) <= not d(0);
+					end if;
+					IF d(5)='1' THEN
+						scs(5) <= not d(0);
+					end if;
+					IF d(4)='1' THEN
+						scs(4) <= not d(0);
+					end if;
+					IF d(3)='1' THEN
+						scs(3) <= not d(0);
+					end if;
+					IF d(2)='1' THEN
+						scs(2) <= not d(0);
+					end if;
+					IF d(1)='1' THEN
+						scs(1) <= not d(0);
+					end if;
+				when "00" => -- 0
+	--					ELSE							--DA4000
 					if scs(1)='1' THEN -- Wait for io component to propagate signals.
 						spi_wait<='1'; -- Only wait if SPI needs to go through the MUX
-						if spimux=1 then
+						if spimux = 1 then
 							spi_div(8 downto 1) <= spi_speed+4;
 						else
 							spi_div(8 downto 1) <= spi_speed;
@@ -652,21 +628,43 @@ PROCESS (sysclk, scs, sd_di, sd_dimm) BEGIN
 					else
 						spi_div(8 downto 1) <= spi_speed;
 					end if;
-					IF SD_busy='1' THEN
-						IF sck='0' THEN
-							IF shiftcnt(12 downto 0)/="0000000000000" THEN
-								sck <='1';
-							end if;
-							shiftcnt <= shiftcnt-1;
-							sd_out <= sd_out(14 downto 0)&'1';
-						ELSE
-							sck <='0';
-							sd_in_shift <= sd_in_shift(14 downto 0)&sd_di_in;
-						end if;
+					IF scs(6)='1' THEN		-- SPI direkt Mode
+						shiftcnt <= "10111111111111";
+						sd_out <= X"FFFF";
+					ELSE
+						shiftcnt <= "10000000000111";
+						sd_out(15 downto 8) <= d(7 downto 0);
 					end if;
-				ELSif spi_wait='0' then
-					spi_div <= spi_div-1;
+					sck <= '1';
+				when others =>
+					null;
+			end case;
+		ELSE
+			IF spi_div="0000000000" THEN
+				if scs(1)='1' THEN -- Wait for io component to propagate signals.
+					spi_wait<='1'; -- Only wait if SPI needs to go through the MUX
+					if spimux=1 then
+						spi_div(8 downto 1) <= spi_speed+4;
+					else
+						spi_div(8 downto 1) <= spi_speed;
+					end if;
+				else
+					spi_div(8 downto 1) <= spi_speed;
 				end if;
+				IF SD_busy='1' THEN
+					IF sck='0' THEN
+						IF shiftcnt(12 downto 0)/="0000000000000" THEN
+							sck <='1';
+						end if;
+						shiftcnt <= shiftcnt-1;
+						sd_out <= sd_out(14 downto 0)&'1';
+					ELSE
+						sck <='0';
+						sd_in_shift <= sd_in_shift(14 downto 0)&sd_di_in;
+					end if;
+				end if;
+			elsif spi_wait='0' then
+				spi_div <= spi_div-1;
 			end if;
 		end if;
 	end if;
@@ -678,7 +676,7 @@ END PROCESS;
 debugTxD <= not uart_shiftout;
 uart_txbusy <= '0' when uart_shift = "0000000000" else '1';
 
-process(reset_n, clk_28, uart_shift)
+process(clk_28, reset_n)
 	constant CLKGEN_28_115 : unsigned(9 downto 0) := "0011110110";
 begin
 	if reset_n='0' then
@@ -709,6 +707,7 @@ process(clk_28, reset_n)
 begin
 	if reset_n='0' then
 		timecnt <= to_unsigned(0, timecnt'length);
+
 	elsif rising_edge(clk_28) then
 		if tick_in='1' then
 			timecnt <= timecnt + 1;
