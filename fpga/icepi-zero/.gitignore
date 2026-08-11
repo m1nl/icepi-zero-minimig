@@ -7,5 +7,7 @@
 !*.vhd
 !*.sv
 !*.vh
+!*.sv
 !*.v
+!*.xcf
 !.gitignore
