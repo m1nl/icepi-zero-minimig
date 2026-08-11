@@ -1,5 +1,5 @@
 # Minimig AGA
-Ported to IcePi Zero
+Ported to IcePi Zero and FleaFPGA Ohm
 
 ### Foreword
 
@@ -53,7 +53,11 @@ Other low-speed and full-speed USB 2.0 HID devices should generally work as well
 
 To use this Minimig core, you will at the minimum need an SD/SDHC card, formatted with the FAT32 filesystem, USB HID keyboard / mouse and a HDMI monitor / TV.
 
-### Installing from binary release
+IcePi Zero core is compatible with [IcePi Carrier](https://github.com/MiSTle-Dev/Boards/tree/main/icepi_carrier) board so you can use more USB ports or have better USB compatibility. Only USB / HID features of FPGA Companion firmware are in use.
+
+FleaFPGA Ohm core retains original [pin assignments](https://github.com/Basman74/Minimig_ECS/blob/master/Minimig_setup_README.pdf) except for analog audio and 30/15kHz video output select. Ping me if you need IcePi carrier-compatible build.
+
+### Installing from binary release for IcePi Zero
 
 * download latest release from GitHub
 * copy `832OSDU0.bin` file to root directory of your SD card
@@ -67,7 +71,13 @@ $ openFPGALoader -b icepi-zero --write-flash fpga/icepi-zero/Minimig_IcePi-Zero/
 * optionally place minimig.bal, minimig.art & minimig.cop files on the root of your SD card for a nice bootup animation
 * enjoy minimig! :)
 
-### Building minimig-mist from sources for IcePi Zero
+### Installing from binary release for FleaFPGA Ohm
+
+* download latest release from GitHub
+* copy `832OSDU0.bin` file to root directory of your SD card
+* refer to original instructions in the [FleaFPGA-JTAG flasher repository](https://github.com/XarkLabs/FleaFPGA-JTAG) on how to flash bitstream
+
+### Building minimig-mist from sources
 
 * checkout the source 
 * download / install [Lattice Diamond](https://www.latticesemi.com/en/Products/DesignSoftwareAndIP/FPGAandLDS/LatticeDiamond)
@@ -78,11 +88,16 @@ $ cd fw
 $ make
 ```
 * copy `832OSDU0.bin` file to root directory of your SD card
-* build the core using Lattice Diamond GUI (project file in fpga/icepi-zero/)
-* flash bitstream to flash memory using openFPGALoader
+* build the core using Lattice Diamond GUI (project file in fpga/icepi-zero/ or fpga/fleaohm/)
+* for IcePi Zero flash bitstream to flash memory using openFPGALoader
 ```
 $ openFPGALoader -b icepi-zero --write-flash fpga/icepi-zero/Minimig_IcePi-Zero/minimig_icepi-zero_Minimig_IcePi-Zero.bit
 ```
+* for FleaFPGA Ohm open XCF file in Diamond from File List, right click on first row, Device Properties, pick bit file and click Load from file button and **save XCF file**, then:
+```
+diamond/3.14/bin/lin64/ddtcmd -oft -fullvme -if fpga/fleaohm/Minimig_FleaOhm/Minimig_FleaOhm.xcf  -nocompress -noheader -of fpga/fleaohm/Minimig_FleaOhm/Minimig_FleaOhm.vme
+```
+* for FleaFPGA Ohm flash .vme according to instructions from [FleaFPGA-JTAG flasher repository](https://github.com/XarkLabs/FleaFPGA-JTAG)
 * don't forget to place kickstart ROM of your choosing on the root of the SD card (these are still copyrighted, so either copy the ROM from your real Amiga, or buy AmigaForever)
 * place some ADF (floppy disk images) of your favourite games / demos / programs on your SD card
 * optionally place minimig.bal, minimig.art & minimig.cop files on the root of your SD card for a nice bootup animation
@@ -112,7 +127,7 @@ For Workbench usage, you can try turning TURBO=FULL for a speed increase.
 
 Keyboard special keys:
 
-* F12 - OSD menu
+* F12, Print Screen - OSD menu (F12 does not work with IcePi Carrier board)
 * Hold Windows key and direction keys - move mouse (Workbench only)
 * Hold Windows key and press left ALT - left mouse click (Workbench only)
 
