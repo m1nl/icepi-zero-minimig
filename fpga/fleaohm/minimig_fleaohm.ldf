@@ -336,9 +336,6 @@
         <Source name="../../rtl/lattice/minimig_autoconfig_rom.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/lattice/colortable_ram/colortable_ram.sbx" type="sbx" type_short="SBX">
-            <Options/>
-        </Source>
         <Source name="../../rtl/audio/i2s_dac.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>

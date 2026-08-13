@@ -342,12 +342,6 @@
         <Source name="../../rtl/lattice/minimig_autoconfig_rom.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
-        <Source name="../../rtl/lattice/tg68_regfile/tg68_regfile.sbx" type="sbx" type_short="SBX">
-            <Options/>
-        </Source>
-        <Source name="../../rtl/lattice/colortable_ram/colortable_ram.sbx" type="sbx" type_short="SBX">
-            <Options/>
-        </Source>
         <Source name="../../rtl/audio/i2s_dac.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
@@ -418,9 +412,6 @@
             <Options/>
         </Source>
         <Source name="../../rtl/usb_hid_host/rtl/usb_hid_host_dual_rom.v" type="Verilog" type_short="Verilog">
-            <Options/>
-        </Source>
-        <Source name="../../rtl/lattice/TG68KdotC_Kernel.vhd" type="VHDL" type_short="VHDL" excluded="TRUE">
             <Options/>
         </Source>
         <Source name="../../rtl/tg68k/TG68KdotC_Kernel.vhd" type="VHDL" type_short="VHDL">
