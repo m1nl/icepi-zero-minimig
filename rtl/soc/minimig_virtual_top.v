@@ -825,7 +825,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.mouse0_btn   (mouse0_buttons   ),  // mouse buttons for first mouse
 	.mouse1_btn   (mouse1_buttons   ),  // mouse buttons for second mouse
 	.mouse_idx    (mouse_idx        ),  // mouse index
-	.kbd_reset_n  (1'b1             ),  // Aux keyboard reset (not used with MiST)
+	.kbd_reset_n  (kbd_reset_n      ),  // Aux keyboard reset
 	.kbd_mouse_data (kbd_mouse_data ),  // mouse direction data, keycodes
 	.kbd_mouse_type (kbd_mouse_type ),  // type of data
 	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
