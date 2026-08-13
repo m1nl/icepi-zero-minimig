@@ -34,10 +34,12 @@ module denise_bitplane_shifter
   input  wire           clk,          // 35ns pixel clock
   input  wire           clk7_en,      // 7MHz clock enable
   input  wire           aen,          // address enable
+  input  wire           bpl1,
   input  wire           shift,        // shifter/scroller enable (shared)
   input  wire           shifter_load, // load next byte into shifter (shared)
-  input  wire [  3-1:0] ram_addra,    // BRAM write address (shared)
-  input  wire [  4-1:0] ram_addrb,    // BRAM read address  (shared)
+  input  wire           ld_start,     // fetch start
+  input  wire [  2-1:0] ram_addra,    // BRAM write address (shared)
+  input  wire [  3-1:0] ram_addrb,    // BRAM read address  (shared)
   input  wire [ 16-1:0] bpl_dat,
   input  wire [  6-1:0] fmode_mask,   // fetchmode mask (shared)
   input  wire           hires,        // high resolution select
@@ -62,12 +64,16 @@ wire  [7:0] ram_doutb;
 wire [15:0] ram_din;
 reg         ram_wea;
 
+// skip buffers for BPL1 as it triggers shifter reload anyway
+reg         ram_bufa;             // BRAM write buffer select
+reg         ram_bufb;             // BRAM read buffer select
+
 bitplane_ram ram (
   .clk(clk),
   .wea(ram_wea),
-  .addra(ram_addra),
+  .addra({bpl1 ? 1'b0 : ram_bufa, ram_addra}),
   .dina(ram_din),
-  .addrb(ram_addrb),
+  .addrb({bpl1 ? 1'b0 : ram_bufb, ram_addrb}),
   .doutb(ram_doutb)
 );
 
@@ -78,14 +84,23 @@ assign ram_din = bpl_dat;
 // data register (aen) is addressed; the write window closes at the first bank
 always @(posedge clk) begin
   if (clk7_en) begin
-    // finish writing when we get a full 7MHz cycle
+    // finish writing when we get next full 7MHz cycle
     ram_wea <= 0;
 
     // initiate data transfer and continue for the next 4 cycles
-    if (aen)
-      ram_wea <= 1;
+    if (aen) begin
+      ram_wea  <= 1;
+
+      // ensure we won't overwrite currently read data
+      ram_bufa <= ~ram_bufb;
+    end
   end
 end
+
+// update BRAM buffer select before actual shift starts
+always @(posedge clk)
+  if (ld_start)
+    ram_bufb <= ram_bufa;
 
 // shifter pixel select (scroll is per-plane, so this stays local)
 always @ (*) begin

@@ -48,14 +48,14 @@ parameter BPLXDATBASE = 9'h110;
 parameter FMODE       = 9'h1fc;
 
 //local signals
-wire    selbpl0;        // select bitplane 0
-wire    selbpl1;        // select bitplane 1
-wire    selbpl2;        // select bitplane 2
-wire    selbpl3;        // select bitplane 3
-wire    selbpl4;        // select bitplane 4
-wire    selbpl5;        // select bitplane 5
-wire    selbpl6;        // select bitplane 6
-wire    selbpl7;        // select bitplane 7
+wire    selbpl1;        // select bitplane 0
+wire    selbpl2;        // select bitplane 1
+wire    selbpl3;        // select bitplane 2
+wire    selbpl4;        // select bitplane 3
+wire    selbpl5;        // select bitplane 4
+wire    selbpl6;        // select bitplane 5
+wire    selbpl7;        // select bitplane 6
+wire    selbpl8;        // select bitplane 7
 
 reg   [15:0] bplcon1;    // bplcon1 register
 reg   [15:0] fmode;     // fmod reg
@@ -76,14 +76,14 @@ reg    [7:0] pf2h_del;    // delayed playfield 2 horizontal scroll
 wire  selbplx;
 
 assign selbplx = BPLXDATBASE[8:4]==reg_address_in[8:4];
-assign selbpl0 = selbplx && reg_address_in[3:1]==3'd0;
-assign selbpl1 = selbplx && reg_address_in[3:1]==3'd1;
-assign selbpl2 = selbplx && reg_address_in[3:1]==3'd2;
-assign selbpl3 = selbplx && reg_address_in[3:1]==3'd3;
-assign selbpl4 = selbplx && reg_address_in[3:1]==3'd4;
-assign selbpl5 = selbplx && reg_address_in[3:1]==3'd5;
-assign selbpl6 = selbplx && reg_address_in[3:1]==3'd6;
-assign selbpl7 = selbplx && reg_address_in[3:1]==3'd7;
+assign selbpl1 = selbplx && reg_address_in[3:1]==3'd0;
+assign selbpl2 = selbplx && reg_address_in[3:1]==3'd1;
+assign selbpl3 = selbplx && reg_address_in[3:1]==3'd2;
+assign selbpl4 = selbplx && reg_address_in[3:1]==3'd3;
+assign selbpl5 = selbplx && reg_address_in[3:1]==3'd4;
+assign selbpl6 = selbplx && reg_address_in[3:1]==3'd5;
+assign selbpl7 = selbplx && reg_address_in[3:1]==3'd6;
+assign selbpl8 = selbplx && reg_address_in[3:1]==3'd7;
 
 //--------------------------------------------------------------------------------------
 
@@ -187,9 +187,7 @@ end
 //--------------------------------------------------------------------------------------
 
 wire [1:0] bpl_bankwr_idx;    // BRAM write bank index
-reg        bpl_bankwr_buf;    // BRAM write buffer select
 reg  [2:0] bpl_bankrd_idx;    // BRAM read bank index
-reg        bpl_bankrd_buf;    // BRAM read buffer select
 reg  [2:0] bpl_bankrd_num;    // BRAM max read bank index
 
 assign bpl_bankwr_idx = chip16_idx;
@@ -197,7 +195,7 @@ assign bpl_bankwr_idx = chip16_idx;
 always @(posedge clk) begin
   if (clk7_en) begin
     // generate load signal when plane 1 is written
-    load <= selbpl0;
+    load <= selbpl1;
   end
 end
 
@@ -207,7 +205,7 @@ reg [2:0] shiftidx;      // current shift index
 
 // c1 is the 7MHz clock, c3 the same clock shifted 90deg; together they mark
 // the four phases of a 7MHz period within the 28MHz clk domain
-wire ld_start   = selbpl0 & clk7_en;       // fetch start
+wire ld_start   = selbpl1 & clk7_en;       // fetch start
 wire ld_pix     = load & ~c1 & ~c3;        // load first byte (c1,c3 = 0,0)
 wire idx_last   = &shiftidx;               // current byte shifted out
 wire fetch_next = shift & idx_last;        // time to advance to next byte
@@ -215,8 +213,8 @@ wire reload     = fetch_next & (bpl_bankrd_idx != bpl_bankrd_num);
 wire shifter_load = ld_pix | reload;       // load strobe fed to every shifter
 
 // BRAM addresses shared by all planes (writes 16-bit, reads 8-bit)
-wire [2:0] ram_addra = {bpl_bankwr_buf, bpl_bankwr_idx};
-wire [3:0] ram_addrb = {bpl_bankrd_buf, bpl_bankrd_idx};
+wire [1:0] ram_addra = bpl_bankwr_idx;
+wire [2:0] ram_addrb = bpl_bankrd_idx;
 
 // fetchmode mask
 always @ (*) begin
@@ -237,11 +235,8 @@ end
 
 // bank read/write address control
 always @ (posedge clk) begin
-  // one 7MHz cycle after bpldat0 write
+  // one 7MHz cycle after bpldat1 write
   if (load && clk7_en) begin
-    // switch write buffer for next transfer
-    bpl_bankwr_buf <= ~bpl_bankrd_buf;
-
     // set number of banks to be read according to fmode
     case(fmode[1:0])
       2'b11   : bpl_bankrd_num <= 0;
@@ -252,8 +247,7 @@ always @ (posedge clk) begin
   end
 
   if (ld_start) begin
-    // switch reads to current write buffer and reset read bank index
-    bpl_bankrd_buf <= bpl_bankwr_buf;
+    // reset read bank index
     bpl_bankrd_idx <= 3'd0;
 
   end else if (shifter_load) begin
@@ -275,7 +269,7 @@ end
 //instantiate the 8 bitplane parallel to serial converters; odd planes scroll
 //with playfield 1, even planes with playfield 2. All shared control is wired
 //in identically; only aen, scroll and out differ per plane.
-wire [7:0] selbpl = {selbpl7, selbpl6, selbpl5, selbpl4, selbpl3, selbpl2, selbpl1, selbpl0};
+wire [8:1] selbpl = {selbpl8, selbpl7, selbpl6, selbpl5, selbpl4, selbpl3, selbpl2, selbpl1};
 
 genvar i;
 generate
@@ -284,9 +278,11 @@ generate
     (
       .clk(clk),
       .clk7_en(clk7_en),
-      .aen(selbpl[i-1]),
+      .aen(selbpl[i]),
+      .bpl1(i == 1),
       .shift(shift),
       .shifter_load(shifter_load),
+      .ld_start(ld_start),
       .ram_addra(ram_addra),
       .ram_addrb(ram_addrb),
       .bpl_dat(chip16_r),
