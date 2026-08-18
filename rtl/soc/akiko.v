@@ -59,8 +59,7 @@ always @(posedge clk) begin
     ack   <= 0;
 
   end else begin
-    if (!req)
-      ack <= 0;
+    ack <= 0;
 
     if (wrreq) begin
       casez (addr)

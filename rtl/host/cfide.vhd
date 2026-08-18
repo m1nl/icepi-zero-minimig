@@ -343,9 +343,7 @@ begin
 process (sysclk)
 begin
 	if rising_edge(sysclk) then
-		if amiga_req='0' then
-			amiga_ack <= '0';
-		end if;
+		amiga_ack <= '0';
 
 		if amiga_req='1' then
 			if amiga_wr='1' then

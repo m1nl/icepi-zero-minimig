@@ -119,13 +119,13 @@ signal cpuIPL           : std_logic_vector(2 downto 0);
 
 signal clkena_e         : std_logic;
 signal clkena_f         : std_logic;
+signal clkena           : std_logic;
+signal req_enable       : std_logic;
 signal wr_n             : std_logic;
 signal uds_in           : std_logic;
 signal lds_in           : std_logic;
 signal state            : std_logic_vector(1 downto 0);
 signal longword         : std_logic;
-signal clkena_akiko     : std_logic;
-signal clkena           : std_logic;
 signal sel_ram          : std_logic;
 signal ram_req          : std_logic;
 signal sel_chip         : std_logic;
@@ -186,10 +186,6 @@ signal akiko_ack        : std_logic;
 
 -- Host ACK delayed (because we register output)
 signal host_ack_d       : std_logic;
-
--- Throttling
-signal block_turbo      : std_logic := '0';
-signal throttle_sel     : std_logic_vector(1 downto 0);
 
 -- HRTMon
 signal sel_nmi_vector   : std_logic;
@@ -263,14 +259,25 @@ end generate;
 
 process(clk) begin
 	if rising_edge(clk) then
-		sel_akiko_d <= sel_akiko;
+		if (clkena='1') then
+			sel_akiko_d <= '0';
+			sel_host_d <= '0';
+			sel_undecoded_d <= '0';
 
-		sel_host_d <= sel_host;
-		host_ack_d <= host_ack;
+			ram_req <= '0';
+			chipset_req <= '0';
 
-		ram_req <= sel_ram and not block_turbo and not sel_nmi_vector and not cpu_internal;
-		chipset_req <= (not sel_ram or sel_nmi_vector or block_turbo) and not cpu_internal and not sel_gayle_ide and not sel_akiko and not sel_host and not sel_32;
-		sel_undecoded_d <= sel_32 and not sel_ram;
+			host_ack_d <= '0';
+		else
+			sel_akiko_d <= sel_akiko and not cpu_internal;
+			sel_host_d <= sel_host and not cpu_internal;
+			sel_undecoded_d <= sel_32 and not sel_ram;
+
+			ram_req <= sel_ram and not sel_nmi_vector and not cpu_internal;
+			chipset_req <= (not sel_ram or sel_nmi_vector) and not cpu_internal and not sel_gayle_ide and not sel_akiko and not sel_host and not sel_32;
+
+			host_ack_d <= host_ack;
+		end if;
 	end if;
 end process;
 
@@ -340,7 +347,9 @@ sel_ram         <= '1' when (
 	sel_kickram='1' or
 	sel_audio='1') else '0';
 
-ramcs_n <= '0' when ram_req='1' and slower(1)='0' and skipfetch='0' else '1';
+req_enable <= '1' when (overclock_d='1' and slower(2)='0') or slower(1)='0' else '0';
+
+ramcs_n <= '0' when ram_req='1' and req_enable='1' and skipfetch='0' else '1';
 ramlds <= lds_in;
 ramuds <= uds_in;
 
@@ -494,16 +503,15 @@ port map
 	q => akiko_q
 );
 
-akiko_req <= '1' when sel_akiko_d='1' and slower(0)='0' and (cpu_write='1' or cpu_read='1') else '0';
+akiko_req <= '1' when sel_akiko_d='1' and req_enable='1' else '0';
 akiko_wr <= '1' when cpu_write='1' else '0';
 akiko_d <= w_datatg68;
 
-host_req <= '1' when sel_host_d='1' and slower(0)='0' and (cpu_write='1' or cpu_read='1') else '0';
+host_req <= '1' when sel_host_d='1' and req_enable='1' else '0';
 host_wr <= '1' when cpu_write='1' else '0';
 host_d <= w_datatg68;
 
 buslogic : block
-	signal throttle         : std_logic_vector(2 downto 0);
 	signal chipset_cycle    : std_logic;
 	signal vpad             : std_logic;
 	signal waitm            : std_logic;
@@ -517,77 +525,30 @@ buslogic : block
 	signal fast_rd_d        : std_logic;
 	signal clkena_pre       : std_logic;
 begin
-	clkena <= '1' when slower(0)='0' and
-			((ena7RDreg='1' and clkena_e='1') or (ena7WRreg='1' and clkena_f='1') or (clkena_in='1' and fast_rd='1') or
-			cpu_internal='1' or sel_undecoded_d='1' or akiko_ack='1' or host_ack_d='1' or (ramready='1' and block_turbo='0')) else '0';
-
-	-- AMR - attempt to imitate A1200 speed more closely on chipram fetches:
-	-- Perform throttling of the CPU depending on turbo mode:  (Temporary mapping for evaluation)
-	-- Turbo set to both: no throttling
-	-- Turbo set to kick only: mild throttling
-	-- Turbo set to chip only: more severe throttling
-	-- Turbo set to none: severe throttling selected but has no effect since all chipram accesses go through the slow path.
-
-	-- When throttling is enabled:
-	--   Data reads to Chip RAM go through the slow path as normal
-	--   Fetches go via the cache (unless CACR says otherwise) but the CPU is slowed by the throttling
-	--   Writes go through the fast path (since real AGA hardware buffers writes.) but again the CPU is slowed by throttling.
-
-	-- Need to decide how to handle C00000 RAM and Fast RAM in throttled modes
-	--   For compatibility, C00000 RAM should probably run at chip RAM speeds
-	--   Fast RAM should perhaps be throttled in Chip (i.e. A1200) mode, but not otherwise?
-
-	process (clk) begin
-		if rising_edge(clk) then
-			if (reset='0' or nResetOut='0' or usethrottle=0) then
-				throttle_sel <= "00";
-			elsif clkena='1' then
-				-- If throttling is enabled, block turbo for CPU data reads, and instruction fetch if cache is disabled.
-				throttle_sel(0) <= freeze or (turbochipram xor turbokick);
-				throttle_sel(1) <= freeze or (turbochipram and not turbokick);
-			end if;
---			sel_chip_d  <= sel_chip;
-			-- All contributing signals are valid 3 clocks after clkena, so valid after clkena+4
-			block_turbo <= aga and sel_chip and throttle_sel(0) and (cpu_read or (cpu_fetch and cpu_disablecache));
---			cache_inhibit <= sel_kickram and aga and (throttle_sel(1) or throttle_sel(0));
-		end if;
-	end process;
+	clkena <= '1' when
+			(ena7RDreg='1' and clkena_e='1') or
+			(ena7WRreg='1' and clkena_f='1') or
+			(clkena_in='1' and fast_rd='1' and slower(0)='0') or
+			(cpu_internal='1' and slower(0)='0') or
+			(sel_undecoded_d='1' and slower(0)='0') or
+			akiko_ack='1' or
+			host_ack_d='1' or
+			ramready='1' else '0';
 
 	cache_inhibit <= '0';
 
 	process (clk) begin
 		if rising_edge(clk) then
-			if (reset='0' or nResetOut='0' or usethrottle=0 or overclock_d='1') then
-				throttle <= "000";
-			elsif (clkena='1' or freeze='1') and cpu_write='0' and block_turbo='0' then
-				if throttle_sel(1)='1' or (sel_chip='1' and throttle_sel(0)='1') then
-					throttle <= "111";
-				end if;
-			elsif clkena_in='1' then
-				throttle <= '0'&throttle(throttle'high downto 1);
-			end if;
-		end if;
-	end process;
-
-	process (clk) begin
-		if rising_edge(clk) then
 			if (reset='0') then
 				slower <= (others => '1');
-			elsif clkena='1' then
-				if overclock_d='1' then
-					slower <= "0011";
-				else
-					slower <= throttle_sel(0)&"111"; -- AMR - in Turbo Chip and Kick modes allow one extra cycle for block_turbo etc to propagate
-				end if;
+			elsif (clkena='1') then
+				slower <= "0111";
 			else
-				slower <= (aga and throttle(0))&slower(slower'high downto 1); -- enaWRreg&slower(3 downto 1);
+				slower <= '0' & slower(slower'high downto 1);
 			end if;
 		end if;
 	end process;
 
-	-- Block_turbo is only valid on the 4th cycle after clkena, but is only high when throttling is enabled, at which point
-	-- slower(0) is guaranteed to be high for more than 4 cycles.
-	-- When throttling chip-only cycles, block_turbo and sel_nmi_vector will prevent ram_csn going low, so their being late here shouldn't matter.
 	chipset_cycle <= '1' when chipset_req='1' and slower(0)='0' and skipfetch='0' and clkena_in='1' else '0';
 
 	process (clk) begin
@@ -654,7 +615,6 @@ begin
 			end if;
 
 			-- Regular chipset path
-
 			if ena7WRreg='1' then
 				case S_state is
 					when "00" =>
