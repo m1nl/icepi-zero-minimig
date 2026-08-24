@@ -47,9 +47,10 @@ module hdmi
     // synchronous reset back to 0,0
     input logic reset,
 
-    input logic pal_mode,    // 1 for pal timing
-    input logic long_frame,  // 1 if short frame has been detected
-    input logic interlace,   // 1 if interlace has been detected
+    input logic       pal_mode,    // 1 for pal timing
+    input logic       long_frame,  // 1 if short frame has been detected
+    input logic       interlace,   // 1 if interlace has been detected
+    input logic [1:0] screen_mode, // 1 for overscan, 2 for wide, other default
 
     input [7:0] offset_x,
     input [6:0] offset_y,
@@ -104,15 +105,8 @@ logic [6:0] offset_y_r;
 
 logic sync_done;
 
-always_comb begin
-    frame_width = 11'd908;
-    screen_width = 11'd720;
-    hsync_pulse_start = 11'd24;
-    hsync_pulse_size = 11'd72;
-
-    vsync_pulse_start = 10'd5;
-    vsync_pulse_size = 10'd5;
-end
+logic [2:0] video_mode = {pal_mode, long_frame || interlace, interlace};
+logic [2:0] video_mode_d;
 
 always_comb begin
     hsync <= invert[0] ^ (cx >= screen_width + hsync_pulse_start && cx < screen_width + hsync_pulse_start + hsync_pulse_size);
@@ -126,14 +120,52 @@ always_comb begin
         vsync <= invert[1] ^ (cy >= screen_height + vsync_pulse_start && cy < screen_height + vsync_pulse_start + vsync_pulse_size);
 end
 
+always_comb begin
+    frame_width = 11'd908;
+
+    hsync_pulse_start = 11'd24;
+
+    vsync_pulse_start = 10'd5;
+    vsync_pulse_size = 10'd5;
+end
+
+always_ff @(posedge clk_pixel, posedge reset) begin
+    if (reset)
+    begin
+        screen_width <= 11'd720;
+        hsync_pulse_size <= 11'd72;
+    end
+    else if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
+    begin
+        case (screen_mode)
+            default: begin
+                screen_width <= 11'd720;
+                hsync_pulse_size <= 11'd72;
+            end
+            2'b01: begin
+                screen_width <= 11'd768;
+                hsync_pulse_size <= 11'd72;
+            end
+            2'b10: begin
+                screen_width <= 11'd832;
+                hsync_pulse_size <= 11'd48;
+            end
+        endcase
+    end
+end
+
 always_ff @(posedge clk_pixel) begin
-    vsync_in_d <= vsync_in;
     hsync_in_d <= hsync_in;
+
+    if (!hsync_in && hsync_in_d)
+    begin
+        vsync_in_d <= vsync_in;
+    end
 end
 
 // See Section 5.2
 logic video_data_period = 0;
-always_ff @(posedge clk_pixel)
+always_ff @(posedge clk_pixel, posedge reset)
 begin
     if (reset)
         video_data_period <= 0;
@@ -164,17 +196,20 @@ always_ff @(posedge clk_pixel, posedge reset) begin
 
         offset_x_r <= offset_x_r - 1;
 
-        if (!hsync_in && hsync_in_d) begin
+        if (!hsync_in && hsync_in_d)
+        begin
             offset_x_r <= offset_x;
             offset_y_r <= offset_y_r - 1;
+
+            if (!vsync_in && vsync_in_d)
+            begin
+                offset_y_r <= offset_y;
+                sync_done <= 0;
+            end
         end
 
-        if (!vsync_in && vsync_in_d) begin
-            offset_y_r <= {offset_y[6:1], interlace ? 1'b0 : offset_y[0]};
-            sync_done <= 0;
-        end
-
-        if (offset_x_r == 0 && offset_y_r == 0 && !sync_done) begin
+        if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
+        begin
             cx <= 11'd0;
             cy <= 10'd0;
 
@@ -182,37 +217,39 @@ always_ff @(posedge clk_pixel, posedge reset) begin
 
             // timing here is based on video_analyzer.v from MiSTle project
             casez ({pal_mode, long_frame, interlace})
-                3'b1z0: begin
+                3'b110: begin
                     frame_height <= 10'd626;
                     screen_height <= 10'd576;
                     video_id_code <= cea_pal;
                 end
-                3'b111: begin
+                3'b100: begin
+                    frame_height <= 10'd624;
+                    screen_height <= 10'd576;
+                    video_id_code <= cea_pal;
+                end
+                3'b1z1: begin
                     frame_height <= 10'd625;
                     screen_height <= 10'd576;
                     video_id_code <= cea_pal_i;
                 end
-                3'b101: begin
-                    frame_height <= 10'd624;
-                    screen_height <= 10'd576;
-                    video_id_code <= cea_pal_i;
-                end
-                3'b0z0: begin
+                3'b010: begin
                     frame_height <= 10'd526;
                     screen_height <= 10'd480;
                     video_id_code <= cea_ntsc;
                 end
-                3'b011: begin
+                3'b000: begin
+                    frame_height <= 10'd524;
+                    screen_height <= 10'd480;
+                    video_id_code <= cea_ntsc;
+                end
+                3'b0z1: begin
                     frame_height <= 10'd525;
                     screen_height <= 10'd480;
                     video_id_code <= cea_ntsc_i;
                 end
-                3'b001: begin
-                    frame_height <= 10'd524;
-                    screen_height <= 10'd480;
-                    video_id_code <= cea_ntsc_i;
-                end
             endcase
+
+            video_mode_d <= {pal_mode, long_frame || interlace, interlace};
         end
     end
 end
@@ -227,9 +264,9 @@ generate
     begin: true_hdmi_output
         logic video_guard = 1;
         logic video_preamble = 0;
-        always_ff @(posedge clk_pixel)
+        always_ff @(posedge clk_pixel, posedge reset)
         begin
-            if (reset)
+            if (reset || video_mode_d != video_mode)
             begin
                 video_guard <= 1;
                 video_preamble <= 0;
@@ -261,7 +298,7 @@ generate
         logic data_island_guard = 0;
         logic data_island_preamble = 0;
         logic data_island_period = 0;
-        always_ff @(posedge clk_pixel)
+        always_ff @(posedge clk_pixel, posedge reset)
         begin
             if (reset)
             begin
@@ -325,7 +362,7 @@ generate
             .counter(packet_pixel_counter)
         );
 
-        always_ff @(posedge clk_pixel)
+        always_ff @(posedge clk_pixel, posedge reset)
         begin
             if (reset)
             begin
@@ -352,10 +389,13 @@ generate
 
         assign audio_sample_en = audio_clock_counter >= VIDEO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0];
 
-        always @(posedge clk_pixel) begin
-            if (reset) begin
+        always @(posedge clk_pixel, posedge reset) begin
+            if (reset)
+            begin
                 audio_clock_counter <= 0;
-            end else begin
+            end
+            else
+            begin
                 audio_clock_counter <= audio_clock_counter + AUDIO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0];
 
                 if (audio_sample_en)
@@ -366,7 +406,7 @@ generate
     end
     else // DVI_OUTPUT = 1
     begin
-        always_ff @(posedge clk_pixel)
+        always_ff @(posedge clk_pixel, posedge reset)
         begin
             if (reset)
             begin

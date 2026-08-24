@@ -279,6 +279,7 @@ begin
 			pal_mode    : in  std_logic;
 			long_frame  : in  std_logic;
 			interlace   : in  std_logic;
+			screen_mode : in  std_logic_vector(1 downto 0);
 
 			vsync_in : in  std_logic;
 			hsync_in : in  std_logic;
@@ -332,6 +333,7 @@ begin
 			pal_mode => display_pal,
 			long_frame => long_frame,
 			interlace => interlace,
+			screen_mode => "00",
 
 			vsync_in => dvi_vsync,
 			hsync_in => dvi_hsync,
