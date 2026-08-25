@@ -41,7 +41,7 @@ module minimig_mist_top (
   output reg  [ VGA_WIDTH-1:0] VGA_R,      // VGA Red
   output reg  [ VGA_WIDTH-1:0] VGA_G,      // VGA Green
   output reg  [ VGA_WIDTH-1:0] VGA_B,      // VGA Blue
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
   output                HDMI_RST,
   output reg      [7:0] HDMI_R,
   output reg      [7:0] HDMI_G,
@@ -281,7 +281,7 @@ wire           uart_out;
 wire           midi_in;
 wire           midi_out;
 
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
 wire        i2c_start;
 wire        i2c_read;
 wire  [6:0] i2c_addr;
@@ -723,7 +723,7 @@ user_io user_io(
      .KMS_LEVEL(kms_level),
      .CORE_TYPE(8'ha5),    // minimig core id (a1 - old minimig id, a5 - new aga minimig id)
      .CONF(core_config),
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
      .i2c_start      (i2c_start      ),
      .i2c_read       (i2c_read       ),
      .i2c_addr       (i2c_addr       ),
@@ -1073,7 +1073,7 @@ always @(posedge clk_vid) begin
 	VGA_B[VGA_WIDTH-1:0] <= dithered_blue[7:8-VGA_WIDTH];
 end
 
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
 
 i2c_master #(28_000_000) i2c_master (
 	.CLK         (clk_28),

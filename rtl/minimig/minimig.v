@@ -282,6 +282,7 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output  interlace_out,
 	output  [7:0] xoffset_out,
 	output  [7:0] yoffset_out,
+	output  [2:0] vmode_out,
 	output	osd_blank_out,		// Let the toplevel dither module handle drawing the OSD.
 	output	osd_pixel_out,
 	output	rtg_ena,
@@ -438,7 +439,7 @@ wire	usrrst;					//user reset from osd interface
 wire	[1:0] lr_filter;		//lowres interpolation filter mode: bit 0 - horizontal, bit 1 - vertical
 wire	[1:0] hr_filter;		//hires interpolation filter mode: bit 0 - horizontal, bit 1 - vertical
 wire	[1:0] scanline;			//scanline effect configuration
-wire  [1:0] dither;   // video output dither
+wire	[1:0] dither;			//video output dither
 wire	[1:0] hires;			//hires signal from Denise for interpolation filter enable in Amber
 //wire	aron;					//Action Replay is enabled
 wire	cpu_speed;				//requests CPU to switch speed mode
@@ -492,6 +493,8 @@ wire           sys_reset;    //reset output from minimig_syscontrol.v
 assign reset = sys_reset | ~_cpu_reset_in; // both tg68k and minimig_syscontrol hold the reset signal for some clicks
 
 assign vblank_out = vbl_int;
+
+assign vmode_out = usevideofilter ? 2'b00 : lr_filter;  // repurpose lr_filter as generic video mode for platforms without filter
 
 wire track_vsync;
 
@@ -849,7 +852,7 @@ amber AMBER1
 	.dither(usevideofilter ? dither : 2'b00),
 	.htotal(htotal),
 	.hires(hires),
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
 	.long_frame(long_frame),	// AMR - keep blank aligned with VSync for scandoubled DVI / HDMI output in lace mode.
 	.track_vsync(track_vsync),	// GS - shift VSync instead for scandoubled lace mode.
 `else

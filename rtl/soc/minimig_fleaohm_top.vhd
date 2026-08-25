@@ -113,6 +113,7 @@ architecture rtl of minimig_fleaohm_top is
 
 	signal video_xoffset	:	std_logic_vector(7 downto 0);
 	signal video_yoffset	:	std_logic_vector(7 downto 0);
+	signal video_mode	:	std_logic_vector(1 downto 0);
 
 -- Audio
 	signal audio_l	:	std_logic_vector(15 downto 0);
@@ -171,7 +172,7 @@ usb_pull <= '0';
 n_led1 <= NOT led_power;
 
 auxpll : entity work.ecp5pll
-generic map(
+generic map (
 	in_hz => natural(base_frequency),
 	out0_hz => natural(60e6),
 	out0_tol_hz => 1e4
@@ -245,6 +246,7 @@ PORT map
 	INTERLACE => interlace,
 	VIDEO_XOFFSET => video_xoffset,
 	VIDEO_YOFFSET => video_yoffset,
+	VIDEO_MODE => video_mode,
 
 	SDRAM_DQ => sdram_dq,
 	SDRAM_A => sdram_a,
@@ -369,7 +371,7 @@ begin
 		pal_mode => display_pal,
 		long_frame => long_frame,
 		interlace => interlace,
-		screen_mode => "00",
+		screen_mode => video_mode,
 
 		vsync_in => dvi_vsync,
 		hsync_in => dvi_hsync,
@@ -390,4 +392,40 @@ begin
 	rgb <= dvi_red & dvi_green & dvi_blue;
 	lvds_dp <= tmds_clock & tmds;
 end block;
+
+genaudio : block
+	signal DAC_L : std_logic;
+	signal DAC_R : std_logic;
+
+	COMPONENT hybrid_pwm_sd
+		PORT
+		(
+			clk		:	 in std_logic;
+			terminate		:	in std_logic:='0';
+			d_l		:	 in std_logic_vector(15 downto 0);
+			q_l		:	 out std_logic;
+			d_r		:	 in std_logic_vector(15 downto 0);
+			q_r		:	 out std_logic
+		);
+	END COMPONENT;
+
+begin
+	-- Audio output mapped to GPIO header
+	GPIO_13 <= DAC_R;
+	GPIO_19 <= DAC_L;
+
+	audiosd : COMPONENT hybrid_pwm_sd
+	PORT map
+	(
+		clk => clk_sys,
+		terminate => '0',
+		d_l(15) => not audio_l(15),
+		d_l(14 downto 0) => audio_l(14 downto 0),
+		q_l => DAC_L,
+		d_r(15) => not audio_r(15),
+		d_r(14 downto 0) => audio_r(14 downto 0),
+		q_r => DAC_R
+	);
+end block;
+
 end architecture;

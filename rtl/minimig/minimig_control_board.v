@@ -91,7 +91,7 @@ wire have_serialmidi=1'b1;
 wire have_serialmidi=1'b0;
 `endif
 
-`ifdef MINIMIG_USE_HDMI
+`ifdef MINIMIG_SIDI128_EXPANSION
 wire have_track_vsync=1'b1;
 `else
 wire have_track_vsync=1'b0;

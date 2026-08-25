@@ -84,8 +84,9 @@ const char *config_memory_fast_msg[] = {"none  ", "2.0 MB", "4.0 MB", "Maximum"}
 const char *config_cpu_msg[] = {"68000 ", "68010", "68EC020","68020"};
 const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4"};
 const char *config_chipset_msg[] = {"OCS-A500", "OCS-A1000", "ECS", "---", "---", "---", "AGA", "---"};
-const char *config_turbo_msg[] = {"\004\005\005\005\005\006", "\007\007\005\005\005\006", "\007\007\007\007\005\006", "\007\007\007\007\007\007"};
+const char *config_turbo_msg[] = {"none", "chip", "kick", "both"};
 const char *config_mouse_speed_msg[] = {"x1.00", "x0.75", "x0.50", "x0.25"};
+const char *config_video_mode_msg[] = {"normal", "overscan", "wide"};
 
 char *config_autofire_msg[] = {"        AUTOFIRE OFF", "        AUTOFIRE FAST", "        AUTOFIRE MEDIUM", "        AUTOFIRE SLOW"};
 
@@ -191,6 +192,7 @@ void HandleUI(void)
 	static const char *helptext;
 	static char helpstate=0;
 	static char osd_item;
+	static char video_mode;
 	char s[40];
 
     // get user control codes
@@ -1845,25 +1847,30 @@ void HandleUI(void)
             OsdWrite(7, STD_BACK, menusub == 6,0);
 
         } else {
+            menumask = 0xf;
+            strcpy(s, "   Mode          : ");
+            strcat(s, config_video_mode_msg[config.filter.lores & 0x03]);
+            OsdWrite(osd_item++, s, menusub == 2,0);
             for (; osd_item < 7; osd_item++)
                 OsdWrite(osd_item, "", 0,0);
-            OsdWrite(7, STD_BACK, menusub == 2,0);
+            OsdWrite(7, STD_BACK, menusub == 3,0);
         }
         menustate = MENU_SETTINGS_VIDEO2;
         break;
 
     case MENU_SETTINGS_VIDEO2 :
+        video_mode = (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) ? 0 : config.filter.lores;
         if (select)
         {
             if (menusub == 0) {
                 config.x_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             }
             if (menusub == 1) {
                 config.y_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             }
             if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
                 if (menusub == 2)
@@ -1879,7 +1886,6 @@ void HandleUI(void)
                     config.filter.hires &= 0x03;
                     menustate = MENU_SETTINGS_VIDEO1;
                     ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                    ConfigFilter(config.filter.lores, config.filter.hires);
                 }
                 else if (menusub == 4)
                 {
@@ -1888,7 +1894,6 @@ void HandleUI(void)
                     config.scanlines=(config.scanlines&0xfc)|(tmp&3);
                     menustate = MENU_SETTINGS_VIDEO1;
                     ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                    ConfigScanlines(config.scanlines);
                 }
                 else if (menusub == 5)
                 {
@@ -1897,7 +1902,6 @@ void HandleUI(void)
                     config.scanlines=(config.scanlines&0xf3)|(tmp&0xc);
                     menustate = MENU_SETTINGS_VIDEO1;
                     ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-//                    ConfigScanlines(config.scanlines);
                 }
                 else if (menusub == 6)
                 {
@@ -1905,10 +1909,24 @@ void HandleUI(void)
                     menusub = 4;
                 }
             }
-            else if (menusub == 2)
+            else
             {
-                menustate = MENU_MAIN2_1;
-                menusub = 4;
+                if (menusub == 2)
+                {
+                    config.filter.lores++;
+                    if (config.filter.lores == 0x03)
+                        config.filter.lores = 0;
+                    video_mode = config.filter.lores;
+                    menustate = MENU_SETTINGS_VIDEO1;
+                    ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                    SPIN; SPIN; SPIN; SPIN;
+                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+                }
+                else if (menusub == 3)
+                {
+                    menustate = MENU_MAIN2_1;
+                    menusub = 4;
+                }
             }
         }
         if (menu)
@@ -1921,12 +1939,12 @@ void HandleUI(void)
             if (menusub == 0) {
                 config.x_offset++;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             } else if (menusub == 1) {
                 if (config.y_offset < 127)
                     config.y_offset++;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             } else {
                 menustate = MENU_SETTINGS_INPUT1;
                 menusub = 0;
@@ -1938,12 +1956,12 @@ void HandleUI(void)
                 if (config.x_offset > 0)
                     config.x_offset--;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             } else if (menusub == 1) {
                 if (config.y_offset > 0)
                     config.y_offset--;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset);
+                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
             } else {
                 menustate = MENU_SETTINGS_MEMORY1;
                 menusub = 0;

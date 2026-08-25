@@ -875,8 +875,12 @@ void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlin
     DisableOsd();
 }
 
-void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset)
+void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset, unsigned char mode)
 {
+    switch (mode) {
+        case 0x01: if (xoffset < 24) xoffset = 24 else xoffset -= 24; break;
+        case 0x02: if (xoffset < 56) xoffset = 56 else xoffset -= 56; break;
+    }
     EnableOsd();
     SPI(OSD_CMD_VID_XOFF);
     SPI(xoffset);

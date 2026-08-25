@@ -432,7 +432,6 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 
 set_global_assignment -name VERILOG_MACRO "MINIMIG_NO_DIRECT_UPLOAD=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_VGA_8BIT=1"
-set_global_assignment -name VERILOG_MACRO "MINIMIG_USE_HDMI=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_DUAL_SDRAM=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_QSPI=1"
 set_global_assignment -name VERILOG_MACRO "MINIMIG_I2S_AUDIO=1"

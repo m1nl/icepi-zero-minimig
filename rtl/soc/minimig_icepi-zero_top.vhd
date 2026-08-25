@@ -83,6 +83,7 @@ architecture rtl of minimig_icepizero_top is
 
 	signal video_xoffset : std_logic_vector(7 downto 0);
 	signal video_yoffset : std_logic_vector(7 downto 0);
+	signal video_mode : std_logic_vector(1 downto 0);
 
 	signal joya_i : std_logic_vector(6 downto 0);
 	signal joyb_i : std_logic_vector(6 downto 0);
@@ -92,7 +93,7 @@ architecture rtl of minimig_icepizero_top is
 	signal auxclks : std_logic_vector(3 downto 0);
 
 	signal led_i : std_logic_vector(4 downto 0);
-	signal led_counter : std_logic_vector(2 downto 0);
+	signal led_counter : std_logic_vector(1 downto 0);
 
 	component ODDRX1F
 	port (
@@ -164,8 +165,8 @@ begin
 			RESET_N => reset_n,
 			LED_POWER => led_i(4),
 			LED_DISK => led_i(3),
-			LED_USB => led_i(1 downto 0),
 			LED_AUX => led_i(2),
+			LED_USB => led_i(1 downto 0),
 
 			MENU_BUTTON => button(1),
 
@@ -188,6 +189,7 @@ begin
 			INTERLACE => interlace,
 			VIDEO_XOFFSET => video_xoffset,
 			VIDEO_YOFFSET => video_yoffset,
+			VIDEO_MODE => video_mode,
 
 			SDRAM_DQ => sdram_dq,
 			SDRAM_A => sdram_a,
@@ -242,17 +244,27 @@ begin
 
 	led_r <= led_i(4);
 	led_g <= led_i(3);
-	led_y <= '0';
+	led_y <= led_i(2);
+
+	-- power and audio indicator are quite dark already
+	led(4) <= led_i(4);
+	led(2) <= led_i(2);
 
 	process (clk_pixel)
 	begin
 		if rising_edge(clk_pixel) then
 			if audio_tick = '1' then
-				led <= (others => '0');
+				led(3) <= '0'
+				led(0) <= '0'
+				led(1) <= '0'
+
 				led_counter <= std_logic_vector(unsigned(led_counter) + 1);
 
+				-- dim remaining leds
 				if unsigned(led_counter) = 0 then
-					led <= led_i;
+					led(3) <= led_i(3);
+					led(1) <= led_i(1);
+					led(0) <= led_i(0);
 				end if;
 			end if;
 		end if;
@@ -265,7 +277,7 @@ begin
 			IT_CONTENT : std_logic := '1';
 			DVI_OUTPUT : std_logic := '0';
 			VIDEO_RATE : integer := 28571400;
-			AUDIO_RATE : integer := 44100;
+			AUDIO_RATE : integer := 48000;
 			AUDIO_BIT_WIDTH : integer := 16;
 			VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
 			PRODUCT_DESCRIPTION : std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "FPGA" + padding
@@ -333,7 +345,7 @@ begin
 			pal_mode => display_pal,
 			long_frame => long_frame,
 			interlace => interlace,
-			screen_mode => "00",
+			screen_mode => video_mode,
 
 			vsync_in => dvi_vsync,
 			hsync_in => dvi_hsync,

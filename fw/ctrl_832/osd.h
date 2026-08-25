@@ -119,7 +119,7 @@ void OsdReconfig(); // Reset to Chameleon core.
 void MM1_ConfigFilter(unsigned char lores, unsigned char hires);
 void MM1_ConfigScanlines(unsigned char scanlines);
 void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlines);
-void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset);
+void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset, unsigned char mode);
 void ConfigMemory(unsigned char memory);
 void ConfigCPU(unsigned char cpu);
 void ConfigChipset(unsigned char chipset);

@@ -29,7 +29,7 @@ module minimig_virtual_top #(
 	parameter hostonly = 0,
 	parameter debug = 0,
 	parameter spimux = 0,
-	parameter ram_64meg = 0,
+	parameter ram_64meg = 1,
 	parameter vga_width = 6,
 	parameter usethrottle = 1,
 	parameter haveiec = 0,
@@ -100,6 +100,7 @@ module minimig_virtual_top #(
 	output wire           INTERLACE,
 	output wire [  8-1:0] VIDEO_XOFFSET,
 	output wire [  8-1:0] VIDEO_YOFFSET,
+	output wire [  2-1:0] VIDEO_MODE,
 
 	// SDRAM
 	inout  wire [ 16-1:0] SDRAM_DQ,   // SDRAM Data bus 16 Bits
@@ -115,10 +116,10 @@ module minimig_virtual_top #(
 	output wire           SDRAM_CKE,  // SDRAM Clock Enable
 
 	// MINIMIG specific
-	output wire[23:0]     AUDIO_MIX_L,    // sigma-delta DAC output left
-	output wire[23:0]     AUDIO_MIX_R,    // sigma-delta DAC output right
-	output wire[15:0]     AUDIO_PAULA_L,  // sigma-delta DAC output left
-	output wire[15:0]     AUDIO_PAULA_R,  // sigma-delta DAC output right
+	output wire [ 24-1:0] AUDIO_MIX_L,   // sigma-delta DAC output left
+	output wire [ 24-1:0] AUDIO_MIX_R,   // sigma-delta DAC output right
+	output wire [ 16-1:0] AUDIO_PAULA_L, // sigma-delta DAC output left
+	output wire [ 16-1:0] AUDIO_PAULA_R, // sigma-delta DAC output right
 	output wire           AUDIO_TICK,
 
 	// Keyboard / Mouse
@@ -866,9 +867,9 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.ldata_paula  (AUDIO_PAULA_L    ),  // left DAC data
 	.rdata_paula  (AUDIO_PAULA_R    ),  // right DAC data
 
-		.aux_left_2   (aud_left         ),  // Auxiliary audio channels
-		.aux_right_2  (aud_right        ),  // Auxiliary audio channels
-		.cen_44100    (AUDIO_TICK       ),
+	.aux_left_2   (aud_left         ),  // Auxiliary audio channels
+	.aux_right_2  (aud_right        ),  // Auxiliary audio channels
+	.cen_44100    (AUDIO_TICK       ),
 	//user i/o
 	.cpu_config   (cpu_config       ), // CPU config
 	.overclock    (overclock        ), // overclock
@@ -895,6 +896,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.interlace_out(INTERLACE        ),
 	.xoffset_out  (VIDEO_XOFFSET    ),
 	.yoffset_out  (VIDEO_YOFFSET    ),
+	.vmode_out    (VIDEO_MODE       ),
 	.osd_blank_out(osd_window       ),  // Let the toplevel dither module handle drawing the OSD.
 	.osd_pixel_out(osd_pixel        ),
 	.rtg_ena      (rtg_ena_mm       ),
@@ -1000,7 +1002,27 @@ cfide #(
 assign joysticka = {5'b11111, JOYA} & extjoya;
 assign joystickb = {5'b11111, JOYB} & extjoyb;
 
-assign LED_AUX = 1'b0;
+wire pwm_out;
+
+reg [9:0] pwm_counter;
+
+always @(posedge CLK_28)
+	if (AUDIO_TICK)
+		pwm_counter <= 0;
+	else
+		pwm_counter <= pwm_counter + 1;
+
+wire [10:0] abs_l = AUDIO_PAULA_L[15]
+                  ? ~AUDIO_PAULA_L[15:5]
+                  :  AUDIO_PAULA_L[15:5];
+
+wire [10:0] abs_r = AUDIO_PAULA_R[15]
+                  ? ~AUDIO_PAULA_R[15:5]
+                  :  AUDIO_PAULA_R[15:5];
+
+assign pwm_out = ({1'b0, pwm_counter} < abs_l || {1'b0, pwm_counter} < abs_r);
+
+assign LED_AUX = pwm_out;
 
 wire [  8-1:0] dithered_red;
 wire [  8-1:0] dithered_green;
