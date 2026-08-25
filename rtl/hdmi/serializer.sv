@@ -16,7 +16,7 @@ module serializer
     // Modulo-5 counter in the 5x domain drives load vs shift
     logic [2:0] bit_cnt;
 
-    always_ff @(posedge clk_pixel_x5) begin
+    always_ff @(posedge clk_pixel_x5, posedge reset) begin
         if (reset)
             bit_cnt <= 3'd0;
         else

@@ -97,7 +97,7 @@ logic [3:0] audio_sample_word_present_packet;
 
 logic [7:0] frame_counter = 8'd0;
 int k;
-always_ff @(posedge clk_pixel)
+always_ff @(posedge clk_pixel, posedge reset)
 begin
     if (reset)
     begin

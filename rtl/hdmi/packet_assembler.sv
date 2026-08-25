@@ -15,12 +15,14 @@ module packet_assembler (
 );
 
 // 32 pixel wrap-around counter. See Section 5.2.3.4 for further information.
-always_ff @(posedge clk_pixel)
+always_ff @(posedge clk_pixel, posedge reset)
 begin
     if (reset)
         counter <= 5'd0;
     else if (data_island_period)
         counter <= counter + 5'd1;
+    else
+        counter <= 5'd0;
 end
 // Convert sub into SystemVerilog array
 wire [55:0] sub [3:0];
@@ -81,7 +83,7 @@ generate
     end
 endgenerate
 
-always_ff @(posedge clk_pixel)
+always_ff @(posedge clk_pixel, posedge reset)
 begin
     if (reset) begin
         parity[0] <= 0;

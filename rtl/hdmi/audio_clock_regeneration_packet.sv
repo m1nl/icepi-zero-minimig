@@ -38,7 +38,7 @@ localparam int CYCLE_TIME_STAMP_COUNTER_WIDTH = 20;
 logic [19:0] cycle_time_stamp;
 logic [CYCLE_TIME_STAMP_COUNTER_WIDTH-1:0] cycle_time_stamp_counter;
 
-always_ff @(posedge clk_pixel)
+always_ff @(posedge clk_pixel, posedge reset)
 begin
     if (reset)
     begin
