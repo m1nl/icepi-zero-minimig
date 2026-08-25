@@ -67,7 +67,8 @@ entity cfide is
 
 		debugTxD : out std_logic;
 		debugRxD : in std_logic;
-		menu_button	: in std_logic:='1';
+
+		menu_button	: in std_logic := '1';
 		scandoubler	: out std_logic;
 		invertsync : out std_logic;
 
@@ -78,7 +79,7 @@ entity cfide is
 
 		vbl_int	: in std_logic;
 		interrupt	: out std_logic;
-		c64_keys	: in std_logic_vector(63 downto 0) :=X"FFFFFFFFFFFFFFFF";
+		c64_keys	: in std_logic_vector(63 downto 0) := X"FFFFFFFFFFFFFFFF";
 		c64_present : in std_logic := '0';
 		amiga_key	: out std_logic_vector(15 downto 0);
 		amiga_key_stb	: out std_logic;
@@ -133,13 +134,11 @@ signal aux_spi_csn_r : std_Logic;
 signal aux_spi_mosi_r : std_Logic;
 signal aux_spi_status : std_logic_vector(1 downto 0);
 
---signal IO_select : std_logic;
 signal platform_select: std_logic;
 signal timer_select: std_logic;
-signal SPI_select: std_logic;
+signal spi_select: std_logic;
 signal platformdata: std_logic_vector(15 downto 0);
-signal IOdata: std_logic_vector(15 downto 0);
-signal IOcpuena: std_logic;
+signal io_data: std_logic_vector(15 downto 0);
 
 signal sd_out	: std_logic_vector(15 downto 0);
 signal sd_in	: std_logic_vector(15 downto 0);
@@ -149,7 +148,7 @@ signal shiftcnt	: unsigned(13 downto 0);
 signal sck		: std_logic;
 signal scs		: std_logic_vector(7 downto 0);
 --signal dscs		: std_logic;
-signal SD_busy		: std_logic;
+signal sd_busy		: std_logic;
 signal spi_div: unsigned(8 downto 0);
 signal spi_speed: unsigned(7 downto 0);
 signal spi_wait : std_logic;
@@ -226,7 +225,7 @@ reset <= not reset_n;
 -- Peripheral registers, which are only 16-bits wide.
 
 q(15 downto 0) <=
-	IOdata WHEN rs232_select='1' or SPI_select='1' ELSE
+	io_data WHEN rs232_select='1' or spi_select='1' ELSE
 	std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
 	audio_q when audio_select='1' else
 	keyboard_q when input_select='1' else
@@ -258,15 +257,15 @@ uartpresent <= '1' when haveuart=1 else '0';
 
 platformdata <= "00" & uartpresent & auxspipresent & usbhidpresent & amigahostpresent & audiopresent & videofilterpresent & cartpresent & c64_present & clockportpresent & iecpresent & reconfigpresent & spirtcpresent & "1" & menu_button;
 
-IOdata <= sd_in;
+io_data <= sd_in;
 
 process (sysclk)
 begin
 	if rising_edge(sysclk) then
 		ack <= '0';
 		if req='1' then
-			if SPI_select='1' then
-				if SD_busy='0' then
+			if spi_select='1' then
+				if sd_busy='0' then
 					ack <= '1';
 				end if;
 			elsif rs232_select='1' or input_select='1' or audio_select='1' or platform_select='1' or rtc_select='1' then
@@ -299,7 +298,7 @@ sd_in(7 downto 0) <= sd_in_shift(7 downto 0);
 
 audio_q <= X"000" & "00" & audio_amiga & audio_buf;
 
-SPI_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" ELSE '0';
+spi_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" ELSE '0';
 rs232_select <= uartpresent when addr(27)='1' and addr(7 downto 4)=X"F" ELSE '0';
 timer_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"D" ELSE '0';
 platform_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"C" ELSE '0';
@@ -560,7 +559,7 @@ end process;
 sd_cs <= NOT scs;
 sd_clk <= NOT sck;
 sd_do <= sd_out(15);
-SD_busy <= shiftcnt(13);
+sd_busy <= shiftcnt(13);
 
 PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 	IF scs(1)='0' and scs(7)='0' THEN
@@ -587,7 +586,7 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 			spi_wait<='0';
 		end if;
 
-		IF SPI_select='1' AND req='1' and ack='0' and wr='1' AND SD_busy='0' THEN	 --SD write
+		IF spi_select='1' AND req='1' and ack='0' and wr='1' AND sd_busy='0' THEN	 --SD write
 			case addr(3 downto 2) is
 				when "10" => -- 8
 					spi_speed <= unsigned(d(7 downto 0));
@@ -649,7 +648,7 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 				else
 					spi_div(8 downto 1) <= spi_speed;
 				end if;
-				IF SD_busy='1' THEN
+				IF sd_busy='1' THEN
 					IF sck='0' THEN
 						IF shiftcnt(12 downto 0)/="0000000000000" THEN
 							sck <='1';
