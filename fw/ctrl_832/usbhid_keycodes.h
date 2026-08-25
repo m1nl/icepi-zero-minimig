@@ -74,8 +74,8 @@ const unsigned short usb2ami[256] = {
   0x59,  // 43: F10
   0x5f,  // 44: F11
   KEY_MENU,  // 45: F12 (OSD)
-  KEY_MENU,  // 46: Print Screen (OSD)
-  MISS,  // 47: Scroll Lock (OSD)
+  0x5d,  // 46: Print Screen (OSD)
+  KEY_MENU,  // 47: Scroll Lock (OSD)
   0x6f,  // 48: Pause
   0x0d,  // 49: backslash to avoid panic in Germany ;)
   0x6a,  // 4a: Home
