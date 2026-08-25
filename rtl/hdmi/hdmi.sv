@@ -107,6 +107,7 @@ logic sync_done;
 
 logic [2:0] video_mode = {pal_mode, long_frame || interlace, interlace};
 logic [2:0] video_mode_d;
+logic       video_mode_changed;
 
 always_comb begin
     hsync <= invert[0] ^ (cx >= screen_width + hsync_pulse_start && cx < screen_width + hsync_pulse_start + hsync_pulse_size);
@@ -188,6 +189,8 @@ always_ff @(posedge clk_pixel, posedge reset) begin
         frame_height <= 10'd626;
         screen_height <= 10'd576;
         video_id_code <= cea_pal;
+
+        video_mode_changed <= 0;
     end
     else
     begin
@@ -249,7 +252,8 @@ always_ff @(posedge clk_pixel, posedge reset) begin
                 end
             endcase
 
-            video_mode_d <= {pal_mode, long_frame || interlace, interlace};
+            video_mode_d       <= {pal_mode, long_frame || interlace, interlace};
+            video_mode_changed <= video_mode != video_mode_d;
         end
     end
 end
@@ -266,7 +270,7 @@ generate
         logic video_preamble = 0;
         always_ff @(posedge clk_pixel, posedge reset)
         begin
-            if (reset || video_mode_d != video_mode)
+            if (reset)
             begin
                 video_guard <= 1;
                 video_preamble <= 0;
@@ -362,9 +366,9 @@ generate
             .counter(packet_pixel_counter)
         );
 
-        always_ff @(posedge clk_pixel, posedge reset)
+        always_ff @(posedge clk_pixel, posedge reset, posedge video_mode_changed)
         begin
-            if (reset)
+            if (reset || video_mode_changed)
             begin
                 mode <= 3'd2;
                 video_data <= 24'd0;
