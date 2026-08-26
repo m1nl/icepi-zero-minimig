@@ -78,12 +78,7 @@
 //   Bit 1 -> 32meg supported
 //   Bit 8 -> Reconfig supportred
 
-#define _PLATFORM (*(volatile unsigned short *)0x0fffffc2)
-#ifdef PLATFORM_CACHE_ADDRESS
-#define PLATFORM (*(volatile unsigned short *)PLATFORM_CACHE_ADDRESS)
-#else
-#define PLATFORM _PLATFORM
-#endif
+#define PLATFORM (*(volatile unsigned short *)0x0fffffc2)
 
 #define PLATFORM_MENUBUTTON 0
 #define PLATFORM_32MEG 1

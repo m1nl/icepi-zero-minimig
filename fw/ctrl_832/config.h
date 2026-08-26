@@ -75,6 +75,7 @@ typedef struct
     unsigned char mouse_speed;
     unsigned char x_offset;
     unsigned char y_offset;
+    unsigned char video_mode;
 } configTYPE;
 
 extern fileTYPE file;	// Temporary file available for use by other modules, to avoid repeated memory usage.

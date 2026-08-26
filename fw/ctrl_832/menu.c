@@ -79,7 +79,7 @@ const char *config_filter_msg[] =  {"none", "HORIZONTAL", "VERTICAL", "H+V"};
 const char *config_memory_chip_msg[] = {"0.5 MB", "1.0 MB", "1.5 MB", "2.0 MB"};
 const char *config_memory_slow_msg[] = {"none  ", "0.5 MB", "1.0 MB", "1.5 MB"};
 const char *config_on_off_msg[] = {"off", "on "};
-const char *config_scanlines_msg[] = {"off", "dim", "black"};
+const char *config_scanlines_msg[] = {"off", "dim", "balanced"};
 const char *config_memory_fast_msg[] = {"none  ", "2.0 MB", "4.0 MB", "Maximum"};
 const char *config_cpu_msg[] = {"68000 ", "68010", "68EC020","68020"};
 const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4"};
@@ -192,7 +192,6 @@ void HandleUI(void)
 	static const char *helptext;
 	static char helpstate=0;
 	static char osd_item;
-	static char video_mode;
 	char s[40];
 
     // get user control codes
@@ -1621,7 +1620,6 @@ void HandleUI(void)
 			        menustate = MENU_SETTINGS_HARDFILE1;
 					break;
 			}
-			
         }
 
         if (menusub == 4) // slave drive selected
@@ -1828,80 +1826,77 @@ void HandleUI(void)
         OsdWrite(osd_item++, s, menusub == 0,0);
         snprintf(s, 32, "   Y Offset      : %d", config.y_offset);
         OsdWrite(osd_item++, s, menusub == 1,0);
+        strcpy(s, "   Mode          : ");
+        strcat(s, config_video_mode_msg[config.video_mode & 0x03]);
+        OsdWrite(osd_item++, s, menusub == 2,0);
+        strcpy(s, "   Scanlines     : ");
+        strcat(s, config_scanlines_msg[config.scanlines & 0x03]);
+        OsdWrite(osd_item++, s, menusub == 3,0);
         if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
             menumask = 0x7f;
             strcpy(s, "   Lores Filter  : ");
             strcat(s, config_filter_msg[config.filter.lores & 0x03]);
-            OsdWrite(osd_item++, s, menusub == 2,0);
+            OsdWrite(osd_item++, s, menusub == 4,0);
             strcpy(s, "   Hires Filter  : ");
             strcat(s, config_filter_msg[config.filter.hires & 0x03]);
-            OsdWrite(osd_item++, s, menusub == 3,0);
-            strcpy(s, "   SL Normal     : ");
-            strcat(s, config_scanlines_msg[config.scanlines & 3]);
-            OsdWrite(osd_item++, s, menusub == 4,0);
-            strcpy(s, "   SL Interlaced : ");
-            strcat(s, config_scanlines_msg[(config.scanlines & 0xc)>>2]);
             OsdWrite(osd_item++, s, menusub == 5,0);
             for (; osd_item < 7; osd_item++)
                 OsdWrite(osd_item, "", 0,0);
             OsdWrite(7, STD_BACK, menusub == 6,0);
-
         } else {
-            menumask = 0xf;
-            strcpy(s, "   Mode          : ");
-            strcat(s, config_video_mode_msg[config.filter.lores & 0x03]);
-            OsdWrite(osd_item++, s, menusub == 2,0);
+            menumask = 0x1f;
             for (; osd_item < 7; osd_item++)
                 OsdWrite(osd_item, "", 0,0);
-            OsdWrite(7, STD_BACK, menusub == 3,0);
+            OsdWrite(7, STD_BACK, menusub == 4,0);
         }
         menustate = MENU_SETTINGS_VIDEO2;
         break;
 
     case MENU_SETTINGS_VIDEO2 :
-        video_mode = (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) ? 0 : config.filter.lores;
         if (select)
         {
             if (menusub == 0) {
                 config.x_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
             }
             if (menusub == 1) {
                 config.y_offset = 0;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
+            }
+            if (menusub == 2)
+            {
+                config.video_mode++;
+                if (config.video_mode == 0x03)
+                    config.video_mode = 0;
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
+                SPIN; SPIN; SPIN; SPIN;
+                ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, config.video_mode);
+            }
+            else if (menusub == 3)
+            {
+                short tmp=config.scanlines+1;
+                if((tmp&3)==3) tmp=0;
+                config.scanlines=(config.scanlines&0xfc)|(tmp&3);
+                menustate = MENU_SETTINGS_VIDEO1;
+                ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, config.video_mode);
             }
             if (PLATFORM & (1 << PLATFORM_VIDEO_FILTER)) {
-                if (menusub == 2)
+                if (menusub == 4)
                 {
                     config.filter.lores++;
                     config.filter.lores &= 0x03;
                     menustate = MENU_SETTINGS_VIDEO1;
-                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+                    ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, config.video_mode);
                 }
-                else if (menusub == 3)
+                else if (menusub == 5)
                 {
                     config.filter.hires++;
                     config.filter.hires &= 0x03;
                     menustate = MENU_SETTINGS_VIDEO1;
-                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-                }
-                else if (menusub == 4)
-                {
-                    short tmp=config.scanlines+1;
-                    if((tmp&3)==3) tmp=0;
-                    config.scanlines=(config.scanlines&0xfc)|(tmp&3);
-                    menustate = MENU_SETTINGS_VIDEO1;
-                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-                }
-                else if (menusub == 5)
-                {
-                    short tmp=config.scanlines+4;
-                    if((tmp&0xc)==0xc) tmp=0;
-                    config.scanlines=(config.scanlines&0xf3)|(tmp&0xc);
-                    menustate = MENU_SETTINGS_VIDEO1;
-                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
+                    ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, config.video_mode);
                 }
                 else if (menusub == 6)
                 {
@@ -1911,18 +1906,7 @@ void HandleUI(void)
             }
             else
             {
-                if (menusub == 2)
-                {
-                    config.filter.lores++;
-                    if (config.filter.lores == 0x03)
-                        config.filter.lores = 0;
-                    video_mode = config.filter.lores;
-                    menustate = MENU_SETTINGS_VIDEO1;
-                    ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
-                    SPIN; SPIN; SPIN; SPIN;
-                    ConfigVideo(config.filter.hires, config.filter.lores,config.scanlines);
-                }
-                else if (menusub == 3)
+                if (menusub == 4)
                 {
                     menustate = MENU_MAIN2_1;
                     menusub = 4;
@@ -1939,12 +1923,12 @@ void HandleUI(void)
             if (menusub == 0) {
                 config.x_offset++;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
             } else if (menusub == 1) {
                 if (config.y_offset < 127)
                     config.y_offset++;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
             } else {
                 menustate = MENU_SETTINGS_INPUT1;
                 menusub = 0;
@@ -1956,12 +1940,12 @@ void HandleUI(void)
                 if (config.x_offset > 0)
                     config.x_offset--;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
             } else if (menusub == 1) {
                 if (config.y_offset > 0)
                     config.y_offset--;
                 menustate = MENU_SETTINGS_VIDEO1;
-                ConfigVideoOffset(config.x_offset, config.y_offset, video_mode);
+                ConfigVideoOffset(config.x_offset, config.y_offset, config.video_mode);
             } else {
                 menustate = MENU_SETTINGS_MEMORY1;
                 menusub = 0;

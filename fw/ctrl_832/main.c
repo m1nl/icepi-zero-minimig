@@ -198,18 +198,13 @@ struct cdimage cd;
 
 void setstack();
 
-__constructor(100.platform) void platform_init(void) { PLATFORM = _PLATFORM; printf("Platform init: %x\n", PLATFORM); }
-
 int main(void) {
 	setstack();
 	int c=0;
 
-	PLATFORM = _PLATFORM;
 	int rtc=PLATFORM & (1<<PLATFORM_SPIRTC);
 	int clockport=PLATFORM & (1<<PLATFORM_CLOCKPORT);
 	int cartridge=PLATFORM & (1<<PLATFORM_C64CARTRIDGE);
-
-	printf("PLATFORM %x\n", PLATFORM);
 
 	ClearError(ERROR_ALL);
 

@@ -118,7 +118,7 @@ void OsdReconfig(); // Reset to Chameleon core.
 // deprecated functions from Minimig 1
 void MM1_ConfigFilter(unsigned char lores, unsigned char hires);
 void MM1_ConfigScanlines(unsigned char scanlines);
-void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlines);
+void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlines, unsigned char mode);
 void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset, unsigned char mode);
 void ConfigMemory(unsigned char memory);
 void ConfigCPU(unsigned char cpu);
