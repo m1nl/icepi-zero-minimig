@@ -217,11 +217,11 @@ PORT map
 	RESET_N => '1',
 
 	LED_POWER => led_power,
-	LED_DISK => open,
+	LED_FLOPPY => open,
+    LED_HDD => open,
 	LED_USB => open,
-	LED_AUX => open,
 
-	MENU_BUTTON => GPIO_2,
+	MENU_BUTTON => '1',
 
 	CTRL_TX => slave_tx_o,
 	CTRL_RX => slave_rx_i,

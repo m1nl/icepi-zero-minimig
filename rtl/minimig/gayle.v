@@ -67,7 +67,8 @@ module gayle
 	input	hdd_data_rd,
 	output hd_fwr,
 	output hd_frd,
-	output hdd_step
+	output hdd_step,
+	output disk_led
 );
 
 localparam VCC = 1'b1;
@@ -224,11 +225,15 @@ assign data_out = ide_out
 //===============================================================================================//
 
 wire intreq_ack = sel_intreq && hwr && !data_in[15];
+wire drq;
+
+assign disk_led = drq;
 
 ide ide (
 	.clk(clk),
 	.clk_en(1'b1/*clk7_en*/),
 	.reset(reset),
+	.drq(drq),
 	.sel_ide(sel_tfr),
 	.sel_secondary(address_in[12]),
 	.address_in(address_in[4:2]),

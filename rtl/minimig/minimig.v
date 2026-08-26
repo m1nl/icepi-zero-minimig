@@ -216,7 +216,8 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	input	_15khz,			//scandoubler disable
 	input [63:0] rtc,
 	output pwr_led,			//power led
-	output disk_led,		//fdd led
+	output floppy_led,		//fdd led
+	output hdd_led,			//hdd led
 	input	msdat_i,		//PS2 mouse data
 	input	msclk_i,		//PS2 mouse clk
 	input	kbddat_i,		//PS2 keyboard data
@@ -473,7 +474,6 @@ wire	hdd_cdda_wr;
 wire	[7:0] bank;				//memory bank select
 
 wire	keyboard_disabled;		//disables Amiga keyboard while OSD is active
-//wire	disk_led;				//floppy disk activity LED
 
 wire  [5:0] mou_emu;
 
@@ -494,9 +494,10 @@ assign reset = sys_reset | ~_cpu_reset_in; // both tg68k and minimig_syscontrol 
 
 assign vblank_out = vbl_int;
 
-assign vmode_out = usevideofilter ? 2'b00 : lr_filter;  // repurpose lr_filter as generic video mode for platforms without filter
-
 wire track_vsync;
+
+// repurpose unused dither parameter as generic video mode parameter
+assign vmode_out = dither;
 
 //--------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------
@@ -655,7 +656,7 @@ paula PAULA1
 	._ready(_ready),
 	._wprot(_wprot),
 	.index(index),
-	.disk_led(disk_led),
+	.disk_led(floppy_led),
 	._scs(_scs[0]),
 	.sdi(sdi),
 	.sdo(paula_sdo),
@@ -848,17 +849,12 @@ amber AMBER1
 	.varbeamen(varbeamen),
 	.lr_filter(usevideofilter ? lr_filter : 2'b00),
 	.hr_filter(usevideofilter ? hr_filter : 2'b00),
-	.scanline(usevideofilter ? scanline : 2'b00),
-	.dither(usevideofilter ? dither : 2'b00),
+	.dither(dither),
+	.scanline(scanline),
 	.htotal(htotal),
 	.hires(hires),
-`ifdef MINIMIG_SIDI128_EXPANSION
 	.long_frame(long_frame),	// AMR - keep blank aligned with VSync for scandoubled DVI / HDMI output in lace mode.
 	.track_vsync(track_vsync),	// GS - shift VSync instead for scandoubled lace mode.
-`else
-	.long_frame(1'b0),
-	.track_vsync(1'b0),
-`endif
 	.osd_blank(osd_blank),
 	.osd_pixel(osd_pixel),
 	.red_in(red_i),
@@ -907,7 +903,7 @@ amiga_keyboard kbd
 	._joy2     ( kb_joy2 ),
 	.aflock    ( aflock ),
 	.freeze    ( freeze ),
-	.disk_led  ( disk_led ),
+	.disk_led  ( floppy_led || hdd_led ),
 	._f_led    ( _led ),
 	.mou_emu   ( mou_emu ),
 	.hrtmon_en ( memory_config[6] ),
@@ -1173,6 +1169,7 @@ gayle GAYLE1
 	.clk(clk),
 	.clk7_en(clk7_en),
 	.reset(reset),
+	.disk_led(hdd_led),
 	.address_in(cpu_address_out),
 	.data_in(cpu_data_out),
 	.data_out(gayle_data_out),

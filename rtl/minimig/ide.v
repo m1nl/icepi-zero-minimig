@@ -39,6 +39,7 @@ module ide
 	input          clk,
 	input          clk_en,
 	input          reset,
+	output         drq,        // data request
 	input    [2:0] address_in,
 	input          sel_secondary,
 	input   [15:0] data_in,
@@ -115,7 +116,6 @@ reg		read_mult_ready;
 reg   [1:0] dev;  // drive select (Primary/Secondary, Master/Slave)
 wire 	bsy;        // busy
 wire 	drdy;       // drive ready
-wire 	drq;        // data request
 reg  	drq_d;      // data request
 wire 	err;        // error
 wire 	[7:0] status;	// HDD status

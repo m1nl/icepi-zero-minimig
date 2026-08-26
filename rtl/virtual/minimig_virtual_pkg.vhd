@@ -46,10 +46,12 @@ package minimig_virtual_pkg is
 		PLL_LOCKED  :   out std_logic;
 
 		MENU_BUTTON :   IN STD_LOGIC;
+
 		LED_POWER	:	 OUT STD_LOGIC;
-		LED_DISK		:	 OUT STD_LOGIC;
+		LED_FLOPPY		:	 OUT STD_LOGIC;
+		LED_HDD		:	OUT STD_LOGIC;
 		LED_USB         :    OUT STD_LOGIC_VECTOR(1 downto 0);
-		LED_AUX		:	 OUT STD_LOGIC;
+
 		CTRL_TX		:	 OUT STD_LOGIC;
 		CTRL_RX		:	 IN STD_LOGIC;
 		AMIGA_TX		:	 OUT STD_LOGIC;

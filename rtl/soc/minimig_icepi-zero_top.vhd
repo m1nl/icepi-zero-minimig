@@ -164,8 +164,8 @@ begin
 
 			RESET_N => reset_n,
 			LED_POWER => led_i(4),
-			LED_DISK => led_i(3),
-			LED_AUX => led_i(2),
+			LED_FLOPPY => led_i(3),
+			LED_HDD => led_i(2),
 			LED_USB => led_i(1 downto 0),
 
 			MENU_BUTTON => button(1),
@@ -242,29 +242,24 @@ begin
 			AUX_SPI_MOSI => aux_spi_mosi
 		);
 
-	led_r <= led_i(4);
-	led_g <= led_i(3);
-	led_y <= led_i(2);
+	led_g <= led_i(4);
+	led_y <= led_i(3);
+	led_r <= led_i(2);
 
-	-- power and audio indicator are quite dark already
+	-- power indicator is quite dark already
 	led(4) <= led_i(4);
-	led(2) <= led_i(2);
 
 	process (clk_pixel)
 	begin
 		if rising_edge(clk_pixel) then
 			if audio_tick = '1' then
-				led(3) <= '0'
-				led(0) <= '0'
-				led(1) <= '0'
+				led(3 downto 0) <= "0000";
 
 				led_counter <= std_logic_vector(unsigned(led_counter) + 1);
 
 				-- dim remaining leds
 				if unsigned(led_counter) = 0 then
-					led(3) <= led_i(3);
-					led(1) <= led_i(1);
-					led(0) <= led_i(0);
+					led(3 downto 0) <= led_i(3 downto 0);
 				end if;
 			end if;
 		end if;

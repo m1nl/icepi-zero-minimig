@@ -65,10 +65,10 @@ module minimig_virtual_top #(
 	input						MENU_BUTTON,
 
 	// LED outputs
-	output wire           LED_POWER,  // LED green
-	output wire           LED_DISK,   // LED red
+	output wire           LED_POWER,   // LED green
+	output wire           LED_FLOPPY,  // LED yellow
+	output wire           LED_HDD,     // LED red
 	output wire [1:0]     LED_USB,
-	output wire           LED_AUX,
 
 	// UART
 	output wire           CTRL_TX,    // UART Transmitter
@@ -834,7 +834,8 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	._15khz       (_15khz           ), // scandoubler disable
 	.rtc          (rtc              ), // real-time clock
 	.pwr_led      (LED_POWER        ), // power led
-	.disk_led     (LED_DISK         ), // disk led
+	.floppy_led   (LED_FLOPPY       ), // floppy led
+	.hdd_led      (LED_HDD          ), // hdd led
 	.msdat_i      (PS2_MDAT_I       ), // PS2 mouse data
 	.msclk_i      (PS2_MCLK_I       ), // PS2 mouse clk
 	.kbddat_i     (PS2_DAT_I        ), // PS2 keyboard data
@@ -1001,28 +1002,6 @@ cfide #(
 
 assign joysticka = {5'b11111, JOYA} & extjoya;
 assign joystickb = {5'b11111, JOYB} & extjoyb;
-
-wire pwm_out;
-
-reg [9:0] pwm_counter;
-
-always @(posedge CLK_28)
-	if (AUDIO_TICK)
-		pwm_counter <= 0;
-	else
-		pwm_counter <= pwm_counter + 1;
-
-wire [10:0] abs_l = AUDIO_PAULA_L[15]
-                  ? ~AUDIO_PAULA_L[15:5]
-                  :  AUDIO_PAULA_L[15:5];
-
-wire [10:0] abs_r = AUDIO_PAULA_R[15]
-                  ? ~AUDIO_PAULA_R[15:5]
-                  :  AUDIO_PAULA_R[15:5];
-
-assign pwm_out = ({1'b0, pwm_counter} < abs_l || {1'b0, pwm_counter} < abs_r);
-
-assign LED_AUX = pwm_out;
 
 wire [  8-1:0] dithered_red;
 wire [  8-1:0] dithered_green;

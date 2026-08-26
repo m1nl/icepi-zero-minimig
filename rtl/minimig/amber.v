@@ -51,7 +51,6 @@
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////
 
-
 module amber #(parameter FRAMING_BITS=11)
 (
   input  wire           clk,            // 28MHz clock
@@ -101,6 +100,7 @@ localparam [  8-1:0] OSD_B = 8'b11110000;
 //// control ////
 reg            _hsync_in_del=0;         // delayed horizontal synchronisation input
 reg            hss=0;                   // horizontal sync start
+reg            hse=0;                   // horizontal sync end
 reg            _vsync_in_del=0;         // delayed vertical synchronisation input
 reg            vss=0;                   // vertical sync start
 reg            vse=0;                   // vertical sync end
@@ -109,20 +109,20 @@ reg            vse=0;                   // vertical sync end
 always @ (posedge clk) begin
   _hsync_in_del <= #1 _hsync_in;
   hss           <= #1 ~_hsync_in & _hsync_in_del;
+  hse           <= #1 _hsync_in & ~_hsync_in_del;
   _vsync_in_del <= #1 _vsync_in;
   vss           <= #1 ~_vsync_in & _vsync_in_del;
   vse           <= #1 _vsync_in & ~_vsync_in_del;
 end
 
+// Interlace long frame
 
-// Interlace long frame detection
-// reg long_frame;
+reg long_frame_d;
 
-// always @(posedge clk) begin
-//	if(vss)
-//		long_frame <= ~_hsync_in;
-// end
-
+always @(posedge clk) begin
+  if (vse)
+    long_frame_d <= #1 long_frame;
+end
 
 //// horizontal interpolation ////
 reg            hi_en=0;                 // horizontal interpolation enable
@@ -429,7 +429,6 @@ always @ (posedge clk) begin
   end
 end
 
-
 wire [30-1:0] vi_rgb = sd_lbuf_o;
 
 //// vertical interpolation ////
@@ -461,9 +460,9 @@ always @ (posedge clk) begin
 end
 
 // interpolate & mux
-assign vi_r_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[26:18]} + {1'b0, vi_rgb[26:18]}) : {sd_lbuf_o_d[26:18], 1'b0};
-assign vi_g_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[17:09]} + {1'b0, vi_rgb[17:09]}) : {sd_lbuf_o_d[17:09], 1'b0};
-assign vi_b_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[ 8: 0]} + {1'b0, vi_rgb[ 8: 0]}) : {sd_lbuf_o_d[ 8: 0], 1'b0};
+assign vi_r_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[26:18]} + {1'b0, vi_rgb[26:18]}) : {vi_rgb[26:18], 1'b0};
+assign vi_g_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[17:09]} + {1'b0, vi_rgb[17:09]}) : {vi_rgb[17:09], 1'b0};
+assign vi_b_tmp = vi_en ? ({1'b0, sd_lbuf_o_d[ 8: 0]} + {1'b0, vi_rgb[ 8: 0]}) : {vi_rgb[ 8: 0], 1'b0};
 
 // cut unneeded bits
 assign vi_r = vi_r_tmp[8+2-1:2];
@@ -471,7 +470,6 @@ assign vi_g = vi_g_tmp[8+2-1:2];
 assign vi_b = vi_b_tmp[8+2-1:2];
 
 `ifdef MINIMIG_TOPLEVEL_DITHER
-
 wire [ 8-1:0] dither_r;
 wire [ 8-1:0] dither_g;
 wire [ 8-1:0] dither_b;
@@ -570,6 +568,8 @@ assign dither_b = b_dither_rnd;
 
 //// scanlines ////
 reg            sl_en=0;                 // scanline enable
+reg            sl_en_d=0;               // scanline enable (delayed)
+reg            sl_en_d2=0;              // scanline enable (delayed+1)
 reg  [  8-1:0] sl_r=0;                  // scanline data output
 reg  [  8-1:0] sl_g=0;                  // scanline data output
 reg  [  8-1:0] sl_b=0;                  // scanline data output
@@ -580,31 +580,115 @@ reg            ns_csync;
 reg            ns_osd_blank;
 reg            ns_osd_pixel;
 
+// "balanced" scanlines average the bright/dark line back to the original
+// value exactly (bright=min(2v,255), dark=max(0,2v-255)), but that also
+// means bright and dark converge to the same value as v approaches 0 or
+// 255 - full saturated colors end up with no visible scanline at all.
+// SL_GAP floors the bright/dark difference at full brightness, at the
+// cost of a slight (SL_GAP/2 at most) dimming of near-white highlights.
+localparam [  8-1:0] SL_GAP = 8'd32;
+
+function [  8-1:0] sl_bright;
+  input [  8-1:0] v;
+  begin
+    sl_bright = {v[6:0], 1'b0} | {8{v[7]}};
+  end
+endfunction
+
+function [  8-1:0] sl_dark;
+  input [  8-1:0] v;
+  reg  [  8-1:0] raw;
+  begin
+    raw = {v[6:0], 1'b1} & {8{v[7]}};
+    sl_dark = (raw > (8'd255 - SL_GAP)) ? (8'd255 - SL_GAP) : raw;
+  end
+endfunction
+
 // scanline enable
+reg sl_en_next;
+
 always @ (posedge clk) begin
-  if (hss) // reset at horizontal sync start
-    sl_en <= #1 1'b0;
-  else if (sd_lbuf_rd == {1'b0,htotal[8:1],2'b11}) // set at end of scandoubled line
-    sl_en <= #1 1'b1;
+  if (hss) // reset at horizontal sync end
+    sl_en_next <= #1 1'b0;
+  else if (sd_lbuf_rd == {1'b0,htotal[8:1],2'b11})
+    sl_en_next <= #1 1'b1;
+
+  if (sd_lbuf_rd_reset)
+    sl_en <= sl_en_next;
 end
 
 // scanlines for scandoubled lines
 always @ (posedge clk) begin
-  sl_r <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_r[7:1]} : dither_r));
-  sl_g <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_g[7:1]} : dither_g));
-  sl_b <= #1 ((sl_en && scanline[1]) ? 8'h00 : ((sl_en && scanline[0]) ? {1'b0, dither_b[7:1]} : dither_b));
+  sl_en_d  <= sl_en;
+  sl_en_d2 <= sl_en_d;
+
+  case (scanline)
+    default: begin
+      sl_r <= dither_r;
+      sl_g <= dither_g;
+      sl_b <= dither_b;
+    end
+    2'b01: begin  // dim
+      if (sl_en_d2 ^ long_frame_d) begin
+        sl_r <= {1'b0, dither_r[7:1]};
+        sl_g <= {1'b0, dither_g[7:1]};
+        sl_b <= {1'b0, dither_b[7:1]};
+      end else begin
+        sl_r <= dither_r;
+        sl_g <= dither_g;
+        sl_b <= dither_b;
+      end
+    end
+    2'b10: begin  // balanced, https://www.buffee.ca/scanlines/
+      if (sl_en_d2 ^ long_frame_d) begin
+        sl_r <= sl_dark(dither_r);
+        sl_g <= sl_dark(dither_g);
+        sl_b <= sl_dark(dither_b);
+      end else begin
+        sl_r <= sl_bright(dither_r);
+        sl_g <= sl_bright(dither_g);
+        sl_b <= sl_bright(dither_b);
+      end
+    end
+  endcase
 end
 
 // scanlines for non-scandoubled lines
 always @ (posedge clk) begin
-  ns_r          <= #1 ((!dblscan && f_cnt && scanline[1]) ? 8'h00 : ((!dblscan && f_cnt && scanline[0]) ? {1'b0, red_in[7:1]}   : red_in));
-  ns_g          <= #1 ((!dblscan && f_cnt && scanline[1]) ? 8'h00 : ((!dblscan && f_cnt && scanline[0]) ? {1'b0, green_in[7:1]} : green_in));
-  ns_b          <= #1 ((!dblscan && f_cnt && scanline[1]) ? 8'h00 : ((!dblscan && f_cnt && scanline[0]) ? {1'b0, blue_in[7:1]}  : blue_in));
+  case (scanline)
+    default: begin
+      ns_r <= red_in;
+      ns_g <= green_in;
+      ns_b <= blue_in;
+    end
+    2'b01: begin  // dim
+      if (f_cnt) begin
+        ns_r <= {1'b0,   red_in[7:1]};
+        ns_g <= {1'b0, green_in[7:1]};
+        ns_b <= {1'b0,  blue_in[7:1]};
+      end else begin
+        ns_r <= red_in;
+        ns_g <= green_in;
+        ns_b <= blue_in;
+      end
+    end
+    2'b10: begin  // balanced, https://www.buffee.ca/scanlines/
+      if (f_cnt) begin
+        ns_r <= sl_dark(red_in);
+        ns_g <= sl_dark(green_in);
+        ns_b <= sl_dark(blue_in);
+      end else begin
+        ns_r <= sl_bright(red_in);
+        ns_g <= sl_bright(green_in);
+        ns_b <= sl_bright(blue_in);
+      end
+    end
+  endcase
+
   ns_csync      <= #1 _csync_in;
   ns_osd_blank  <= #1 osd_blank;
   ns_osd_pixel  <= #1 osd_pixel;
 end
-
 
 //// bypass mux ////
 wire           bm_hsync;
@@ -628,12 +712,22 @@ assign osd_pixel_out = dblscan ? sd_lbuf_o_d[27] : osd_pixel;
 
 `ifdef MINIMIG_ASPECT_CORRECTION
 
+`ifdef MINIMIG_SIDI128_EXPANSION
 assign bm_blank     = dblscan ? ( (long_frame & ~track_vsync) ? sd_bbuf_o : hb_gen_d ) : blank_in;
+`else
+assign bm_blank     = dblscan ? hb_gen_d : blank_in;
+`endif
+
 assign bm_hsync     = dblscan ? hs_gen : _hsync_in;
 
 `else
 
+`ifdef MINIMIG_SIDI128_EXPANSION
 assign bm_blank     = dblscan ? ( (long_frame & ~track_vsync) ? sd_bbuf_o : sd_lbuf_o_d[30] ) : blank_in;
+`else
+assign bm_blank     = dblscan ? sd_lbuf_o_d[30] : blank_in;
+`endif
+
 assign bm_hsync     = dblscan ? sd_lbuf_o_d[29] : _hsync_in;
 
 `endif
@@ -666,10 +760,12 @@ assign osd_b = (bm_osd_blank ? (bm_osd_pixel ? OSD_B : {2'b10, bm_b[7:2]}) : bm_
 `endif
 
 //// output registers ////
+
 always @ (posedge clk) begin
   _hsync_out <= #1 bm_hsync;
   _vsync_out <= #1 bm_vsync;
   _csync_out <= #1 dblscan ? ~(~bm_hsync ^ ~bm_vsync) : _csync_in;
+
   blank_out  <= #1 bm_blank;
   red_out    <= #1 osd_r;
   green_out  <= #1 osd_g;
