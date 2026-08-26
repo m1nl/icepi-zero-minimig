@@ -61,6 +61,8 @@ set_false_path -from [get_cells {virtual_top.minimig.cpu_config*}]
 set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.xoffset*}]
 set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.yoffset*}]
 set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.lr_filter*}]
+set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.hr_filter*}]
+set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.dither*}]
 
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.beamcon0*}]
 
