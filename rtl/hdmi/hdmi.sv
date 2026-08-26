@@ -301,7 +301,20 @@ generate
         logic [4:0] num_packets_alongside;
         always_comb
         begin
-	    max_num_packets_alongside = (frame_width - screen_width  /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+            // quantize values for max_num_packets_alongside based on the template:
+            // max_num_packets_alongside = (frame_width - screen_width  /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+            case (screen_mode)
+                default: begin
+	                max_num_packets_alongside = (frame_width - 720 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+                end
+                2'b01: begin
+	                max_num_packets_alongside = (frame_width - 768 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+                end
+                2'b10: begin
+	                max_num_packets_alongside = (frame_width - 832 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+                end
+            endcase
+
             if (max_num_packets_alongside > 18)
                 num_packets_alongside = 5'd18;
             else
