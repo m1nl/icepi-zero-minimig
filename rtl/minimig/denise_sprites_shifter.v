@@ -109,13 +109,10 @@ always @(posedge clk) begin
     if (aen) begin
       // initiate data transfer and continue for the next 4 cycles
       case (address)
-        DATA: begin ram_wea <= 1; bankwr_reg <= 0; end
-        DATB: begin ram_wea <= 1; bankwr_reg <= 1; end
+        DATA: begin ram_wea <= 1; bankwr_reg <= 0; bankwr_buf <= ~bankrd_buf; end
+        DATB: begin ram_wea <= 1; bankwr_reg <= 1; bankwr_buf <= ~bankrd_buf; end
         default: ;
       endcase
-
-      // ensure we won't overwrite currently read data
-      bankwr_buf <= ~bankrd_buf;
     end
   end
 end
