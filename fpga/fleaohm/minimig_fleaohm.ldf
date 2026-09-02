@@ -321,9 +321,6 @@
         <Source name="../../rtl/sdram/dpram_inf_generic.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
-        <Source name="../../rtl/lattice/dp_1024x32/dp_1024x32.v" type="Verilog" type_short="Verilog">
-            <Options/>
-        </Source>
         <Source name="../../rtl/audio/i2s.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
