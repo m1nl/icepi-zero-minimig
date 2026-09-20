@@ -105,7 +105,7 @@ diamond/3.14/bin/lin64/ddtcmd -oft -fullvme -if fpga/fleaohm/Minimig_FleaOhm/Min
 
 ### Wiring diagram for IcePi Zero
 
-![GPIO IcePi Minimig](doc/GPIO-IcePi-Minimig.png)
+![GPIO IcePi Minimig](doc/icepi/GPIO-IcePi-Minimig.png)
 
 ### Wiring diagram for FleaFPGA Ohm
 
