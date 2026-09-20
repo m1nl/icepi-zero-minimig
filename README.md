@@ -103,6 +103,14 @@ diamond/3.14/bin/lin64/ddtcmd -oft -fullvme -if fpga/fleaohm/Minimig_FleaOhm/Min
 * optionally place minimig.bal, minimig.art & minimig.cop files on the root of your SD card for a nice bootup animation
 * enjoy minimig! :)
 
+### Wiring diagram for IcePi Zero
+
+![GPIO IcePi Minimig](doc/GPIO-IcePi-Minimig.png)
+
+### Wiring diagram for FleaFPGA Ohm
+
+Please refer to documentation hosted in [FleaFPGA - Minimig repository](https://github.com/Basman74/Minimig_ECS).
+
 ### Additional remarks
 
 You will also need a Kickstart ROM image file, which you can obtain by copying Kickstart ROM IC from your actual Amiga, or by buying an [Amiga Forever](http://www.amigaforever.com/) software pack. The Kickstart image should be placed on the root of the SD card with the name KICK.ROM. Minimig also supports the [AROS](http://aros.sourceforge.net/) Kickstart ROM replacement.
