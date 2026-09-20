@@ -218,7 +218,7 @@ PORT map
 
 	LED_POWER => led_power,
 	LED_FLOPPY => open,
-    LED_HDD => open,
+	LED_HDD => open,
 	LED_USB => open,
 
 	MENU_BUTTON => '1',

@@ -192,7 +192,7 @@
         <Source name="../../rtl/minimig/minimig_autoconfig.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
-        <Source name="../../rtl/minimig/minimig_autoconfig_rom.v" type="Verilog" type_short="Verilog" excluded="TRUE">
+        <Source name="../../rtl/minimig/minimig_autoconfig_rom.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
         <Source name="../../rtl/minimig/minimig_bankmapper.v" type="Verilog" type_short="Verilog">
@@ -334,9 +334,6 @@
             <Options/>
         </Source>
         <Source name="../../rtl/sdram/cpu_cache_new.v" type="Verilog" type_short="Verilog" excluded="TRUE">
-            <Options/>
-        </Source>
-        <Source name="../../rtl/lattice/minimig_autoconfig_rom.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
         <Source name="../../rtl/audio/i2s_dac.vhd" type="VHDL" type_short="VHDL">
