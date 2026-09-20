@@ -283,9 +283,9 @@ void FireworksUpdate()
 	OsdWriteFramebuffer(2,supporter);
 }
 
-// time delay after which file/dir name starts to scroll
-#define SCROLL_DELAY 300
-#define SCROLL_DELAY2 3
+// time delay in ms after which file/dir name starts to scroll
+#define SCROLL_DELAY 1500
+#define SCROLL_DELAY2 15
 
 static unsigned long scroll_offset=0; // file/dir name scrolling position
 static unsigned long scroll_timer=0;  // file/dir name scrolling timer
@@ -954,9 +954,12 @@ void ConfigJoystick(unsigned char joystick)
 unsigned char OsdGetCtrl(void)
 {
     static unsigned char c2;
-    static unsigned long delay=0;
+    static unsigned long press=0;
+    static unsigned long hold=0;
+    static unsigned long debounce=0;
     static unsigned long repeat=0;
     static unsigned char repeat2=0;
+
     unsigned char c1,c;
 
     // send command and get current ctrl status
@@ -966,12 +969,32 @@ unsigned char OsdGetCtrl(void)
     DisableOsd();
 
     // add front menu button
-    if (!CheckButton())
-        delay = GetTimer(BUTTONDELAY);
-    else if (CheckTimer(delay))
+    if (CheckButton() && (CheckTimer(debounce) || debounce == 0)) {
+        if (hold != 0 && CheckTimer(hold))
+        {
+            SendKeypress(0x59, 20); // F10
+            SendKeypress(0x5d, 20); // PrntScrn
+            hold = 0;
+        }
+        if (press == 0) {
+            press = GetTimer(BUTTONPRESSDELAY);
+        }
+    }
+    else
     {
-        c1 = KEY_MENU;
-        delay = GetTimer(-1);
+        if (press != 0)
+        {
+            debounce = GetTimer(BUTTONPRESSDELAY);
+            if (hold != 0 && CheckTimer(press)) {
+                c1 = KEY_MENU;
+            }
+        }
+        if (CheckTimer(debounce))
+        {
+            debounce = 0;
+        }
+        hold = GetTimer(BUTTONHOLDDELAY);
+        press = 0;
     }
 
     // generate normal "key-pressed" event

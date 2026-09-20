@@ -231,11 +231,10 @@ begin
 
 reset <= not reset_n;
 
--- Peripheral registers, which are only 16-bits wide.
-
+-- Peripheral registers (LSB)
 q(15 downto 0) <=
-	io_data WHEN rs232_select='1' or spi_select='1' ELSE
-	std_logic_vector(timecnt(23 downto 8)) when timer_select='1' ELSE
+	io_data when rs232_select='1' or spi_select='1' else
+	std_logic_vector(timecnt(15 downto 0)) when timer_select='1' else
 	audio_q when audio_select='1' else
 	keyboard_q when input_select='1' else
 	amiga_buffer when amiga_select='1' else
@@ -244,9 +243,9 @@ q(15 downto 0) <=
 	usbtohost_1(15 downto 0) when usb_select_1='1' else
 	platformdata;
 
--- Peripheral registers, which are 32-bits wide.
-
+-- Peripheral registers (MSB)
 q(31 downto 16) <=
+	(x"00" & std_logic_vector(timecnt(23 downto 16))) when timer_select='1' else
 	(aux_spi_status & (13 downto 0 => '0')) when aux_spi_select='1' else
 	usbtohost_0(31 downto 16) when usb_select_0='1' else
 	usbtohost_1(31 downto 16) when usb_select_1='1' else

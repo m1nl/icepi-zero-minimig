@@ -618,9 +618,11 @@ wire rxd_i;
 wire txd_i;
 
 wire ser_midi;
+
 assign rxd_i = ser_midi ? midi_rx : rxd;
-assign midi_tx = txd_i | ~ser_midi;
 assign txd = txd_i | ser_midi;
+
+assign midi_tx = txd_i | ~ser_midi;
 
 //instantiate paula
 paula PAULA1
@@ -1349,12 +1351,13 @@ minimig_control_board myctrlboard (
 	.track_vsync(track_vsync)
 );
 `else
+assign aud_overflow=1'b0;
 assign paula_vol=8'd128;
 assign toccata_vol=8'd128;
 assign cdda_vol=8'd128;
 assign aux1_vol=8'd128;
 assign aux2_vol=8'd128;
-assign aud_overflow=1'b0;
+assign ser_midi=1'b0;
 assign drivesound_fdd=1'b0;
 assign drivesound_hdd=1'b0;
 assign swap_channels=1'b0;

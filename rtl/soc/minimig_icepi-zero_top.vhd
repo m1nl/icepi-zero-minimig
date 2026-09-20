@@ -13,7 +13,12 @@ port (
 	usb_tx : out std_logic;
 	usb_rx : in std_logic;
 
+	slave_tx : out std_logic;
+	slave_rx : in std_logic;
+
 	button : in std_logic_vector(1 downto 0);
+	slave_button : in std_logic_vector(1 downto 0);
+
 	led : out std_logic_vector(4 downto 0);
 
 	sdram_clk  : out std_logic;
@@ -68,6 +73,9 @@ architecture rtl of minimig_icepizero_top is
 	signal pll_locked : std_logic;
 	signal reset_n : std_logic;
 	signal amiga_reset_n : std_logic;
+	signal menu_button_n : std_logic;
+	signal serial_rx : std_logic;
+	signal serial_tx : std_logic;
 
 	signal dvi_red : std_logic_vector(7 downto 0);
 	signal dvi_green : std_logic_vector(7 downto 0);
@@ -92,6 +100,11 @@ architecture rtl of minimig_icepizero_top is
 
 	signal auxclks : std_logic_vector(3 downto 0);
 
+	signal led_floppy : std_logic;
+	signal led_hdd : std_logic;
+	signal led_power : std_logic;
+	signal led_usb : std_logic_vector(1 downto 0);
+
 	signal led_i : std_logic_vector(4 downto 0);
 	signal led_counter : std_logic_vector(1 downto 0);
 
@@ -102,23 +115,30 @@ architecture rtl of minimig_icepizero_top is
 		Q : out std_logic;
 		SCLK : in std_logic;
 		RST : in std_logic
-	); end component;
+	);
+	end component;
 begin
 	usb_pull_dp <= (others => '0');
 	usb_pull_dn <= (others => '0');
 
-	ddr_sdramclk: ODDRX1F port map (D0=>'0', D1=>'1', Q=>sdram_clk, SCLK=>clk_sys, RST=>'0');
+	ddr_sdramclk: ODDRX1F port map (D0 => '0', D1 => '1', Q => sdram_clk, SCLK => clk_sys, RST => '0');
 
 	reset_n <= '1';
-	amiga_reset_n <= button(0);
+
+	amiga_reset_n <= button(0) and slave_button(0);
+	menu_button_n <= button(1) and slave_button(1);
 
 	joya_i <= '1' & joya;
 	joyb_i <= '1' & joyb;
-	joyc_i <= (others=>'1');
-	joyd_i <= (others=>'1');
+	joyc_i <= (others => '1');
+	joyd_i <= (others => '1');
+
+	slave_tx  <= serial_tx;
+	usb_tx    <= serial_tx;
+	serial_rx <= usb_rx and slave_rx;
 
 	auxpll : entity work.ecp5pll
-	generic map(
+	generic map (
 		in_hz => natural(base_frequency),
 		out0_hz => natural(60e6),
 		out0_tol_hz => 1e4
@@ -130,121 +150,126 @@ begin
 
 	clk_usb <= auxclks(0);
 
-	virtual_top : COMPONENT minimig_virtual_top
-	generic map
-		(
-			hostonly => 0,
-			debug => 0,
-			spimux => 0,
-			haveiec => 0,
-			havereconfig => 0,
-			havertg => 0,
-			haveaudio => 0,
-			havec2p => 1,
-			haveamigahost => 0,
-			havespirtc => 0,
-			ram_64meg => 0,
-			vga_width => 8,
-			usethrottle => 0,
-			havecart => 0,
-			havevideofilter => 0,
-			haveaga => 1,
-			haveusbhid => 1,
-			haveauxspi => 1,
-			haveuart => 0
-		)
-	PORT map
-		(
-			CLK_IN => clk,
-			CLK_USB_IN => clk_usb,
-			CLK_114 => clk_sys,
-			CLK_28 => clk_pixel,
-			CLK_142 => clk_tmds,
-			PLL_LOCKED => pll_locked,
+	virtual_top : component minimig_virtual_top
+	generic map (
+		hostonly => 0,
+		debug => 0,
+		spimux => 0,
+		haveiec => 0,
+		havereconfig => 0,
+		havertg => 0,
+		haveaudio => 0,
+		havec2p => 1,
+		haveamigahost => 0,
+		havespirtc => 0,
+		ram_64meg => 0,
+		vga_width => 8,
+		usethrottle => 0,
+		havecart => 0,
+		havevideofilter => 0,
+		haveaga => 1,
+		haveusbhid => 1,
+		haveauxspi => 1,
+		haveuart => 0
+	)
+	port map (
+		CLK_IN => clk,
+		CLK_USB_IN => clk_usb,
+		CLK_114 => clk_sys,
+		CLK_28 => clk_pixel,
+		CLK_142 => clk_tmds,
+		PLL_LOCKED => pll_locked,
 
-			RESET_N => reset_n,
-			LED_POWER => led_i(4),
-			LED_FLOPPY => led_i(3),
-			LED_HDD => led_i(2),
-			LED_USB => led_i(1 downto 0),
+		RESET_N => reset_n,
+		LED_POWER => led_power,
+		LED_FLOPPY => led_floppy,
+		LED_HDD => led_hdd,
+		LED_USB => led_usb,
 
-			MENU_BUTTON => button(1),
+		MENU_BUTTON => menu_button_n,
 
-			CTRL_TX => open,
-			CTRL_RX => '0',
+		CTRL_TX => open,
+		CTRL_RX => '0',
 
-			AMIGA_TX => usb_tx,
-			AMIGA_RX => usb_rx,
+		AMIGA_TX => serial_tx,
+		AMIGA_RX => serial_rx,
 
-			DVI_HS => dvi_hsync,
-			DVI_VS => dvi_vsync,
-			DVI_R => dvi_red,
-			DVI_G => dvi_green,
-			DVI_B => dvi_blue,
-			DVI_STROBE => dvi_pixel,
-			DVI_DE => dvi_window,
+		DVI_HS => dvi_hsync,
+		DVI_VS => dvi_vsync,
+		DVI_R => dvi_red,
+		DVI_G => dvi_green,
+		DVI_B => dvi_blue,
+		DVI_STROBE => dvi_pixel,
+		DVI_DE => dvi_window,
 
-			LONG_FRAME => long_frame,
-			DISPLAY_PAL => display_pal,
-			INTERLACE => interlace,
-			VIDEO_XOFFSET => video_xoffset,
-			VIDEO_YOFFSET => video_yoffset,
-			VIDEO_MODE => video_mode,
+		LONG_FRAME => long_frame,
+		DISPLAY_PAL => display_pal,
+		INTERLACE => interlace,
+		VIDEO_XOFFSET => video_xoffset,
+		VIDEO_YOFFSET => video_yoffset,
+		VIDEO_MODE => video_mode,
 
-			SDRAM_DQ => sdram_dq,
-			SDRAM_A => sdram_a,
-			SDRAM_DQML => sdram_dqm(0),
-			SDRAM_DQMH => sdram_dqm(1),
-			SDRAM_nWE => sdram_wen,
-			SDRAM_nCAS => sdram_casn,
-			SDRAM_nRAS => sdram_rasn,
-			SDRAM_nCS => sdram_csn,
-			SDRAM_BA => sdram_ba,
---			SDRAM_CLK => sdram_clk,
-			SDRAM_CKE => sdram_cke,
+		SDRAM_DQ => sdram_dq,
+		SDRAM_A => sdram_a,
+		SDRAM_DQML => sdram_dqm(0),
+		SDRAM_DQMH => sdram_dqm(1),
+		SDRAM_nWE => sdram_wen,
+		SDRAM_nCAS => sdram_casn,
+		SDRAM_nRAS => sdram_rasn,
+		SDRAM_nCS => sdram_csn,
+		SDRAM_BA => sdram_ba,
+--		SDRAM_CLK => sdram_clk,
+		SDRAM_CKE => sdram_cke,
 
-			AUDIO_PAULA_L => audio_l,
-			AUDIO_PAULA_R => audio_r,
-			AUDIO_TICK => audio_tick,
+		AUDIO_PAULA_L => audio_l,
+		AUDIO_PAULA_R => audio_r,
+		AUDIO_TICK => audio_tick,
 
-			PS2_DAT_I => '1',
-			PS2_CLK_I => '1',
-			PS2_MDAT_I => '1',
-			PS2_MCLK_I => '1',
+		PS2_DAT_I => '1',
+		PS2_CLK_I => '1',
+		PS2_MDAT_I => '1',
+		PS2_MCLK_I => '1',
 
-			PS2_DAT_O => open,
-			PS2_CLK_O => open,
-			PS2_MDAT_O => open,
-			PS2_MCLK_O => open,
+		PS2_DAT_O => open,
+		PS2_CLK_O => open,
+		PS2_MDAT_O => open,
+		PS2_MCLK_O => open,
 
-			AMIGA_RESET_N => amiga_reset_n,
-			AMIGA_KEY => (others=>'-'),
-			AMIGA_KEY_STB => '0',
+		AMIGA_RESET_N => amiga_reset_n,
+		AMIGA_KEY => (others => '-'),
+		AMIGA_KEY_STB => '0',
 
-			C64_KEYS => (others => '1'),
+		C64_KEYS => (others => '1'),
 
-			JOYA => joya_i,
-			JOYB => joyb_i,
-			JOYC => joyc_i,
-			JOYD => joyd_i,
+		JOYA => joya_i,
+		JOYB => joyb_i,
+		JOYC => joyc_i,
+		JOYD => joyd_i,
 
-			SD_MISO => sd_miso,
-			SD_MOSI => sd_mosi,
-			SD_CLK => sd_clk,
-			SD_CS => sd_csn,
-			SD_ACK => '1',
+		SD_MISO => sd_miso,
+		SD_MOSI => sd_mosi,
+		SD_CLK => sd_clk,
+		SD_CS => sd_csn,
+		SD_ACK => '1',
 
-			USB_DP => usb_dp,
-			USB_DN => usb_dn,
+		USB_DP => usb_dp,
+		USB_DN => usb_dn,
 
-			AUX_SPI_CSN => aux_spi_csn,
-			AUX_SPI_CLK => aux_spi_clk,
-			AUX_SPI_MOSI => aux_spi_mosi
-		);
+		AUX_SPI_CSN => aux_spi_csn,
+		AUX_SPI_CLK => aux_spi_clk,
+		AUX_SPI_MOSI => aux_spi_mosi
+	);
 
-	led_g <= led_i(4);
-	led_y <= led_i(3);
-	led_r <= led_i(2);
+	led_g <= led_power;
+	led_i(4) <= led_power;
+
+	led_y <= led_floppy;
+	led_i(3) <= led_floppy;
+
+	led_r <= led_hdd;
+	led_i(2) <= led_hdd;
+
+	led_i(1 downto 0) <= led_usb;
 
 	-- power indicator is quite dark already
 	led(4) <= led_i(4);

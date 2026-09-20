@@ -29,8 +29,8 @@ void audio_clear()
 		p[i]=0;
 	}
 	AUDIO=AUDIOF_ENA;
-	i=TIMER;
-	while(TIMER==i)
+	i=HW_TIMER;
+	while(HW_TIMER==i)
 		;
 	AUDIO=AUDIOF_CLEAR;
 }

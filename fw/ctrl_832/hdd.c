@@ -846,10 +846,14 @@ unsigned char OpenHardfile(unsigned int unit)
 						INFO("CHS: %u.%u.%u", hdf[unit].cylinders, hdf[unit].heads, hdf[unit].sectors);
 						INFO(" (%lu MB)\n", ((((unsigned long) hdf[unit].cylinders) * hdf[unit].heads * hdf[unit].sectors) >> 11));
 
+#ifdef DEBUG
 						time = GetTimer(0);
+#endif
 						BuildHardfileIndex(&hdf[unit]);
+#ifdef DEBUG
 						time = GetTimer(0) - time;
-						INFO("Hardfile indexed in %lu ms\n", time >> 16);
+						DEBUG("Hardfile indexed in %lu ms\n", time >> 16);
+#endif
 
 						if(hf->enabled & HDF_SYNTHRDB)
 							hdf[unit].offset=-(hdf[unit].heads*hdf[unit].sectors);

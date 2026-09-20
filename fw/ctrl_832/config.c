@@ -457,8 +457,7 @@ int ApplyConfiguration(char reloadkickstart, char applydrives, char ignoreovercl
     ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, config.video_mode);
     ConfigMisc(config.misc);
 
-    if(reloadkickstart) {
-//		WaitTimer(100);
+    if (reloadkickstart) {
 		EnableOsd();
 		SPI(OSD_CMD_RST);
 		rstval |= (SPI_RST_CPU | SPI_CPU_HLT);

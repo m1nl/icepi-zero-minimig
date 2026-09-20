@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "hardware.h"
 #include "interrupts.h"
 #include "amiga_rawkey.h"
 #include "c64keys.h"

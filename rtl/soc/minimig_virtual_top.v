@@ -817,6 +817,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.cts          (1'b0             ),  // RS232 clear to send
 	.rts          (                 ),  // RS232 request to send
 	.midi_rx      (1'b1             ),
+	.midi_tx      (                 ),
 	//I/O
 	._joy1        (joysticka        ),  // joystick 1 [fire7:fire,up,down,left,right] (default mouse port)
 	._joy2        (joystickb        ),  // joystick 2 [fire7:fire,up,down,left,right] (default joystick port)

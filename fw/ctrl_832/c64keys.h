@@ -1,18 +1,6 @@
 #ifndef C64KEYS_H
 #define C64KEYS_H
 
-#define KEYBOARDBASE 0x0fffff90
-#define HW_KEYBOARD(x) *(volatile unsigned short *)(KEYBOARDBASE+x)
-
-#define REG_KEYBOARD_WORD0 2
-#define REG_KEYBOARD_WORD1 6
-#define REG_KEYBOARD_WORD2 0xa
-#define REG_KEYBOARD_WORD3 0xe
-
-#define REG_KEYBOARD_OUT 2
-#define REG_JOYSTICK_0_OUT 6
-#define REG_JOYSTICK_1_OUT 10
-
 #define C64KEY_RINGBUFFER_SIZE 16
 
 struct c64keyboard

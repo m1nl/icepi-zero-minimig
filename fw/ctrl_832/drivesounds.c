@@ -65,7 +65,7 @@ void drivesounds_queueevent(enum DriveSound_Type type)
 		if(!drivesounds.active)
 			drivesounds_start();
 		drivesounds.events[drivesounds.in].type=type;
-		drivesounds.events[drivesounds.in].timestamp=TIMER; /* Add some jitter */
+		drivesounds.events[drivesounds.in].timestamp=HW_TIMER; /* Add some jitter */
 		drivesounds.in=(drivesounds.in+1)&(DSEVENTBUFFER_SIZE-1);
 	}
 }
@@ -85,7 +85,7 @@ void drivesounds_start()
 	{
 		drivesounds.active=1;
 		drivesounds.silence=0;
-		drivesounds.timestamp=TIMER;
+		drivesounds.timestamp=HW_TIMER;
 		drivesounds.cursor=0;
 		drivesounds.playing=0;
 	}
@@ -336,7 +336,7 @@ int pickstep(int maxactive,enum DriveSound_Type type)
 		}
 	}
 	while(count>maxactive);
-	step=TIMER&3;
+	step=HW_TIMER&3;
 	while(drivesounds.sounds[type+step].active)
 		step=(step+1)&3;
 	return(step);
@@ -405,7 +405,7 @@ int drivesounds_fill()
 			}
 		}
 		//	printf("Rendering remainder\n");
-		drivesounds_render(TIMER);
+		drivesounds_render(HW_TIMER);
 	}
 	return(drivesounds.active);
 }

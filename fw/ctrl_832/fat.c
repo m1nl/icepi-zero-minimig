@@ -91,9 +91,6 @@ char t_DirEntryLFN[MAXDIRENTRIES][261];
 DIRENTRY t_DirEntry[MAXDIRENTRIES];
 unsigned char t_sort_table[MAXDIRENTRIES];
 
-// external functions
-extern unsigned long GetTimer(unsigned long);
-
 void SwapPartitionBytes(int i)
 {
 	// We don't bother to byteswap the CHS geometry fields since we don't use them.

@@ -239,7 +239,7 @@ void fpga_init() {
 	BootPrintEx("Ported to IcePi Zero by Alastair M. Robinson and Mateusz Nalewajski");
 	BootPrintEx(" ");
 	BootPrintEx(" ");
-	WaitTimer(1000);
+	WaitTimer(2500);
 
     //eject all disk
     df[0].status = 0;

@@ -188,7 +188,7 @@ void HandleUI(void)
     static unsigned char ctrl = false;
     static unsigned char lalt = false;
 	char enable;
-	static long helptext_timer;
+	static unsigned long helptext_timer;
 	static const char *helptext;
 	static char helpstate=0;
 	static char osd_item;
