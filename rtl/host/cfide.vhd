@@ -21,6 +21,10 @@
 ------------------------------------------------------------------------------
 -- Modifications by Alastair M. Robinson to work with a cheap
 -- Ebay Cyclone III board.
+------------------------------------------------------------------------------
+-- Modifications by Mateusz Nalewajski to support USB HID softcore
+-- and AUX-SPI interface to handle external HID events.
+------------------------------------------------------------------------------
 
 library IEEE;
 use IEEE.std_logic_1164.all;
@@ -42,34 +46,34 @@ entity cfide is
 		haveuart : integer := 0
 	);
 	port (
-		sysclk	: in std_logic;
+		sysclk : in std_logic;
 		usbclk  : in std_logic;
 
-		reset_n	: in std_logic;
+		reset_n : in std_logic;
 
-		addr	: in std_logic_vector(31 downto 2);
-		d		: in std_logic_vector(31 downto 0);
-		q		: out std_logic_vector(31 downto 0);
-		req 	: in std_logic;
-		wr 	: in std_logic;
-		ack 	: buffer std_logic;
+		addr : in std_logic_vector(31 downto 2);
+		d : in std_logic_vector(31 downto 0);
+		q : out std_logic_vector(31 downto 0);
+		req  : in std_logic;
+		wr  : in std_logic;
+		ack  : buffer std_logic;
 
 		aux_spi_csn : in std_logic;
 		aux_spi_clk : in std_logic;
 		aux_spi_mosi : in std_logic;
 
-		sd_di		: in std_logic;
-		sd_cs 	: out std_logic_vector(7 downto 0);
-		sd_clk 	: out std_logic;
-		sd_do		: out std_logic;
-		sd_dimm	: in std_logic;	-- for sdcard
-		sd_ack 	: in std_logic; -- indicates that SPI signal has made it to the wire
+		sd_di : in std_logic;
+		sd_cs  : out std_logic_vector(7 downto 0);
+		sd_clk  : out std_logic;
+		sd_do : out std_logic;
+		sd_dimm : in std_logic;	-- for sdcard
+		sd_ack  : in std_logic; -- indicates that SPI signal has made it to the wire
 
 		debugTxD : out std_logic;
 		debugRxD : in std_logic;
 
-		menu_button	: in std_logic := '1';
-		scandoubler	: out std_logic;
+		menu_button : in std_logic := '1';
+		scandoubler : out std_logic;
 		invertsync : out std_logic;
 
 		audio_ena : out std_logic;
@@ -77,12 +81,12 @@ entity cfide is
 		audio_buf : in std_logic;
 		audio_amiga : in std_logic;
 
-		vbl_int	: in std_logic;
-		interrupt	: out std_logic;
-		c64_keys	: in std_logic_vector(63 downto 0) := X"FFFFFFFFFFFFFFFF";
+		vbl_int : in std_logic;
+		interrupt : out std_logic;
+		c64_keys : in std_logic_vector(63 downto 0) := X"FFFFFFFFFFFFFFFF";
 		c64_present : in std_logic := '0';
-		amiga_key	: out std_logic_vector(15 downto 0);
-		amiga_key_stb	: out std_logic;
+		amiga_key : out std_logic_vector(15 downto 0);
+		amiga_key_stb : out std_logic;
 
 		amiga_addr : in std_logic_vector(7 downto 0);
 		amiga_req : in std_logic;
@@ -104,7 +108,7 @@ entity cfide is
 		joyb : out std_logic_vector(11 downto 0);
 
 		-- 28Mhz signals
-		clk_28	: in std_logic;
+		clk_28 : in std_logic;
 		tick_in : in std_logic	-- 44.1KHz - makes it easy to keep timer in lockstep with audio.
 );
 
@@ -131,6 +135,7 @@ signal aux_spi_clk_r : std_logic_vector(3 downto 0);
 signal aux_spi_bit_cnt: integer range 0 to 7 := 0;
 signal aux_spi_select : std_logic;
 signal aux_spi_csn_r : std_Logic;
+signal aux_spi_csn_r_d : std_Logic;
 signal aux_spi_mosi_r : std_Logic;
 signal aux_spi_status : std_logic_vector(1 downto 0);
 
@@ -140,21 +145,22 @@ signal spi_select: std_logic;
 signal platformdata: std_logic_vector(15 downto 0);
 signal io_data: std_logic_vector(15 downto 0);
 
-signal sd_out	: std_logic_vector(15 downto 0);
-signal sd_in	: std_logic_vector(15 downto 0);
-signal sd_in_shift	: std_logic_vector(15 downto 0);
-signal sd_di_in	: std_logic;
-signal shiftcnt	: unsigned(13 downto 0);
-signal sck		: std_logic;
-signal scs		: std_logic_vector(7 downto 0);
---signal dscs		: std_logic;
-signal sd_busy		: std_logic;
-signal spi_div: unsigned(8 downto 0);
-signal spi_speed: unsigned(7 downto 0);
+signal sd_out : std_logic_vector(15 downto 0);
+signal sd_in : std_logic_vector(15 downto 0);
+signal sd_in_shift : std_logic_vector(15 downto 0);
+signal sd_di_in : std_logic;
+signal shiftcnt : unsigned(13 downto 0);
+signal sck : std_logic;
+signal scs : std_logic_vector(7 downto 0);
+signal sd_busy : std_logic;
+signal spi_div : unsigned(8 downto 0);
+signal spi_speed : unsigned(7 downto 0);
 signal spi_wait : std_logic;
 signal spi_wait_d : std_logic;
 
-signal timecnt: unsigned(23 downto 0);
+signal tick_in_t : std_logic;
+signal tick_in_r : std_logic;
+signal timecnt : unsigned(23 downto 0);
 
 signal rs232_select : std_logic;
 signal rs232data : std_logic_vector(15 downto 0);
@@ -169,6 +175,7 @@ signal interrupt_trigger : std_logic;
 signal input_select : std_logic;
 signal keyboard_q : std_logic_vector(15 downto 0);
 signal joystick_d : std_logic_vector(23 downto 0);
+
 signal amiga_buffer  : std_logic_vector(15 downto 0);
 signal amiga_select : std_logic;
 signal amiga_req_d : std_logic;
@@ -186,6 +193,8 @@ signal usb_joyb_en : std_logic;
 
 signal usb_joya : std_logic_vector(11 downto 0);
 signal usb_joyb : std_logic_vector(11 downto 0);
+
+signal usb_report_req : std_logic_vector(1 downto 0);
 
 signal ack_28m : std_logic;
 
@@ -268,6 +277,8 @@ begin
 				if sd_busy='0' then
 					ack <= '1';
 				end if;
+			elsif wr='0' then
+				ack <= '1';
 			elsif rs232_select='1' or input_select='1' or audio_select='1' or platform_select='1' or rtc_select='1' then
 				ack <= ack_28m;
 			else
@@ -298,10 +309,10 @@ sd_in(7 downto 0) <= sd_in_shift(7 downto 0);
 
 audio_q <= X"000" & "00" & audio_amiga & audio_buf;
 
-spi_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" ELSE '0';
-rs232_select <= uartpresent when addr(27)='1' and addr(7 downto 4)=X"F" ELSE '0';
-timer_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"D" ELSE '0';
-platform_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"C" ELSE '0';
+spi_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"E" else '0';
+rs232_select <= uartpresent when addr(27)='1' and addr(7 downto 4)=X"F" else '0';
+timer_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"D" else '0';
+platform_select <= '1' when addr(27)='1' and addr(7 downto 4)=X"C" else '0';
 interrupt_select <='1' when addr(27)='1' and addr(7 downto 4)=X"A" else '0';
 input_select <='1' when addr(27)='1' and addr(7 downto 4)=X"9" else '0';
 audio_select <= audiopresent when addr(27)='1' and addr(7 downto 4)=X"B" else '0';
@@ -381,58 +392,47 @@ begin
 	elsif rising_edge(clk_28) then
 		amiga_key_stb <= '0';
 
-		if input_select='1' and req='1' and ack_28m='0' then
-			if wr='1' then
-				case addr(3 downto 2) is
-					when "00" =>
-						amiga_key <= d(15 downto 0);
-						amiga_key_stb <= '1';
-					when "01" =>
-						joystick_d(11 downto 0) <= d(11 downto 0);
-					when "10" =>
-						joystick_d(23 downto 12) <= d(11 downto 0);
-					when others =>
-						null;
-				end case;
-			end if;
-
-			if c64_present='1' then
-				case addr(3 downto 2) is
-					when "00" =>
-						keyboard_q <= c64_keys(63 downto 48);
-					when "01" =>
-						keyboard_q <= c64_keys(47 downto 32);
-					when "10" =>
-						keyboard_q <= c64_keys(31 downto 16);
-					when "11" =>
-						keyboard_q <= c64_keys(15 downto 0);
-					when others =>
-						null;
-				end case;
-			end if;
+		if input_select='1' and req='1' and ack_28m='0' and wr='1' then
+			case addr(3 downto 2) is
+				when "00" =>
+					amiga_key <= d(15 downto 0);
+					amiga_key_stb <= '1';
+				when "01" =>
+					joystick_d(11 downto 0) <= d(11 downto 0);
+				when "10" =>
+					joystick_d(23 downto 12) <= d(11 downto 0);
+				when others =>
+					null;
+			end case;
 		end if;
 	end if;
 end process;
 
+keyboard_q <= X"FFFF" when c64_present='0' else
+	c64_keys(63 downto 48) when addr(3 downto 2)="00" else
+	c64_keys(47 downto 32) when addr(3 downto 2)="01" else
+	c64_keys(31 downto 16) when addr(3 downto 2)="10" else
+	c64_keys(15 downto  0) when addr(3 downto 2)="11";
+
 -- Interrupt handling at 0fffffa0
--- Any access to this range will clear the interrupt flag;
-
-interrupt <= '1' when interrupt_trigger='1' and interrupt_en='1' else '0';
-
+-- Read access to this range will clear the interrupt flag and disable interrupt
+-- Write access to this range will either enable or disable interrupt
 process (sysclk, reset_n)
 begin
 	if reset_n='0' then
 		amiga_req_d <= '0';
 		vbl_int_d <= '0';
+		aux_spi_csn_r_d <= '1';
 
-		interrupt_trigger <= '0';
 		interrupt_en <= '0';
+		interrupt_trigger <= '0';
 
 	elsif rising_edge(sysclk) then
 		if interrupt_select='1' and req='1' and ack='0' then
 			if wr='1' then
 				interrupt_en <= d(0);
 			else
+				interrupt_en <= '0';
 				interrupt_trigger <= '0';
 			end if;
 		end if;
@@ -452,13 +452,21 @@ begin
 		end if;
 
 		if auxspipresent='1' then
-			if aux_spi_csn_r='0' then
+			aux_spi_csn_r_d <= aux_spi_csn_r;
+			if aux_spi_csn_r='0' and aux_spi_csn_r_d='1' then
+				interrupt_trigger <= '1';
+			end if;
+		end if;
+
+		if usbhidpresent='1' then
+			if usb_report_req /= (usb_report_req'range => '0') then
 				interrupt_trigger <= '1';
 			end if;
 		end if;
 	end if;
 end process;
 
+interrupt <= '1' when interrupt_trigger='1' and interrupt_en='1' else '0';
 
 fifo_inst : circular_fifo
 generic map (
@@ -476,7 +484,6 @@ port map (
 );
 
 aux_spi_data_wr <= aux_spi_shift;
--- aux_spi_data_rd_ack <= '1' when aux_spi_select='1' and req='0' and ack='1' else '0';
 
 process (sysclk, reset_n)
 begin
@@ -522,7 +529,6 @@ end process;
 ---------------------------------
 -- Platform specific registers --
 ---------------------------------
-
 process (clk_28, reset_n)
 begin
 	if reset_n='0' then
@@ -574,7 +580,6 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 		scs <= (others => '0');
 		sck <= '0';
 		spi_speed <= "00000000";
---		dscs <= '0';
 		spi_wait <= '0';
 		sd_out<=(others=>'0');
 		sd_in_shift<=(others=>'0');
@@ -614,10 +619,10 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 						scs(1) <= not d(0);
 					end if;
 				when "00" => -- 0
-	--					ELSE							--DA4000
+--					ELSE							--DA4000
 					if scs(1)='1' THEN -- Wait for io component to propagate signals.
 						spi_wait<='1'; -- Only wait if SPI needs to go through the MUX
-						if spimux = 1 then
+						if spimux=1 then
 							spi_div(8 downto 1) <= spi_speed+4;
 						else
 							spi_div(8 downto 1) <= spi_speed;
@@ -671,7 +676,7 @@ END PROCESS;
 -- Simple UART only TxD
 -----------------------------------------------------------------
 debugTxD <= not uart_shiftout;
-uart_txbusy <= '0' when uart_shift = "0000000000" else '1';
+uart_txbusy <= '0' when uart_shift="0000000000" else '1';
 
 process(clk_28, reset_n)
 	constant CLKGEN_28_115 : unsigned(9 downto 0) := "0011110110";
@@ -703,12 +708,22 @@ end process;
 process(clk_28, reset_n)
 begin
 	if reset_n='0' then
-		timecnt <= to_unsigned(0, timecnt'length);
+		tick_in_t <= '0';
 
-	elsif rising_edge(clk_28) then
-		if tick_in='1' then
-			timecnt <= timecnt + 1;
-		end if;
+	elsif rising_edge(clk_28) and tick_in='1' then
+		tick_in_t <= not tick_in_t;
+	end if;
+end process;
+
+process(sysclk, reset_n)
+begin
+	if reset_n='0' then
+		timecnt   <= to_unsigned(0, timecnt'length);
+		tick_in_r <= '0';
+
+	elsif rising_edge(sysclk) and tick_in_r /= tick_in_t then
+		timecnt   <= timecnt + 1;
+		tick_in_r <= tick_in_t;
 	end if;
 end process;
 
@@ -758,6 +773,7 @@ begin
 
 		signal hid_report_ready_0 : std_logic;
 		signal hid_report_ready_1 : std_logic;
+
 		signal hid_report_ack_0 : std_logic;
 		signal hid_report_ack_1 : std_logic;
 
@@ -840,10 +856,10 @@ begin
 		end component;
 	begin
 		-- Drive outputs onto the bus
-		usb_dp(0) <= usb_dp_o(0) when usb_oe(0) = '1' else 'Z';
-		usb_dn(0) <= usb_dn_o(0) when usb_oe(0) = '1' else 'Z';
-		usb_dp(1) <= usb_dp_o(1) when usb_oe(1) = '1' else 'Z';
-		usb_dn(1) <= usb_dn_o(1) when usb_oe(1) = '1' else 'Z';
+		usb_dp(0) <= usb_dp_o(0) when usb_oe(0)='1' else 'Z';
+		usb_dn(0) <= usb_dn_o(0) when usb_oe(0)='1' else 'Z';
+		usb_dp(1) <= usb_dp_o(1) when usb_oe(1)='1' else 'Z';
+		usb_dn(1) <= usb_dn_o(1) when usb_oe(1)='1' else 'Z';
 
 		u_rom : usb_hid_host_dual_rom
 		generic map (
@@ -984,7 +1000,7 @@ begin
 
 		process (usbclk, reset_n)
 		begin
-			if reset_n = '0' then
+			if reset_n='0' then
 				usbreset_sync1 <= '1';
 				usbreset_sync2 <= '1';
 
@@ -997,57 +1013,61 @@ begin
 		-- Convert pulses to toggles in usbclk domain so they survive CDC regardless of pulse width
 		process (usbclk, reset_n)
 		begin
-			if reset_n = '0' then
+			if reset_n='0' then
 				full_report_toggle <= (others => '0');
 
 			elsif rising_edge(usbclk) then
-				if usb_full_report_0 = '1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
-				if usb_full_report_1 = '1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
+				if usb_full_report_0='1' then full_report_toggle(0) <= not full_report_toggle(0); end if;
+				if usb_full_report_1='1' then full_report_toggle(1) <= not full_report_toggle(1); end if;
 			end if;
 		end process;
 
 		-- 3-stage shift-register sync in sysclk domain; bit(1) xor bit(2) gives a one-cycle set pulse
-		process (sysclk)
+		process (sysclk, reset_n)
 		begin
-			if rising_edge(sysclk) then
-				if reset_n = '0' then
-					hid_sync <= (others => (others => '0'));
-				else
-					for i in 0 to 1 loop
-						hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
-					end loop;
-				end if;
+			if reset_n='0' then
+				hid_sync <= (others => (others => '0'));
+			elsif rising_edge(sysclk) then
+				for i in 0 to 1 loop
+					hid_sync(i) <= hid_sync(i)(1 downto 0) & full_report_toggle(i);
+				end loop;
 			end if;
 		end process;
 
-		process (sysclk) begin
-			if rising_edge(sysclk) then
-				if reset_n = '0' then
+		process (sysclk, reset_n) begin
+			if reset_n='0' then
+				hid_report_ready_0 <= '0';
+				usb_report_req(0) <= '0';
+
+			elsif rising_edge(sysclk) then
+				usb_report_req(0) <= '0';
+
+				if hid_sync(0)(1) /= hid_sync(0)(2) then
+					hid_report_ready_0 <= '1';
+					usb_report_req(0) <= '1';
+				end if;
+
+				if hid_report_ack_0='1' then
 					hid_report_ready_0 <= '0';
-				else
-					if hid_sync(0)(1) /= hid_sync(0)(2) then
-						hid_report_ready_0 <= '1';
-					end if;
-
-					if hid_report_ack_0 = '1' then
-						hid_report_ready_0 <= '0';
-					end if;
 				end if;
 			end if;
 		end process;
 
 		process (sysclk) begin
-			if rising_edge(sysclk) then
-				if reset_n = '0' then
-					hid_report_ready_1 <= '0';
-				else
-					if hid_sync(1)(1) /= hid_sync(1)(2) then
-						hid_report_ready_1 <= '1';
-					end if;
+			if reset_n='0' then
+				hid_report_ready_1 <= '0';
+				usb_report_req(1) <= '0';
 
-					if hid_report_ack_1 = '1' then
-						hid_report_ready_1 <= '0';
-					end if;
+			elsif rising_edge(sysclk) then
+				usb_report_req(1) <= '0';
+
+				if hid_sync(1)(1) /= hid_sync(1)(2) then
+					hid_report_ready_1 <= '1';
+					usb_report_req(1) <= '1';
+				end if;
+
+				if hid_report_ack_1='1' then
+					hid_report_ready_1 <= '0';
 				end if;
 			end if;
 		end process;
@@ -1056,11 +1076,11 @@ begin
 			if rising_edge(sysclk) then
 				hid_report_ack_0 <= '0';
 
-				if usb_select_0 = '1' and req = '1' and ack = '0' then
-					if wr = '1' then
+				if usb_select_0='1' and req='1' and ack='0' then
+					if wr='1' then
 						case addr(3 downto 2) is
 							when "00" =>
-								if d(2) = '1' then
+								if d(2)='1' then
 									hid_report_ack_0 <= '1';
 								end if;
 							when others =>
@@ -1088,11 +1108,11 @@ begin
 			if rising_edge(sysclk) then
 				hid_report_ack_1 <= '0';
 
-				if usb_select_1 = '1' and req = '1' and ack = '0' then
-					if wr = '1' then
+				if usb_select_1='1' and req='1' and ack='0' then
+					if wr='1' then
 						case addr(3 downto 2) is
 							when "00" =>
-								if d(2) = '1' then
+								if d(2)='1' then
 									hid_report_ack_1 <= '1';
 								end if;
 							when others =>
@@ -1146,11 +1166,11 @@ begin
 			 usb_game_1(1)
 		);
 
-		usb_joya_en <= '1' when usb_typ_0 = "11" else '0';
-		usb_joyb_en <= '1' when usb_typ_1 = "11" else '0';
+		usb_joya_en <= '1' when usb_typ_0="11" else '0';
+		usb_joyb_en <= '1' when usb_typ_1="11" else '0';
 
-		usb_game_0_combined <= '1' when usb_game_0(7 downto 4) = "1111" else '0';
-		usb_game_1_combined <= '1' when usb_game_1(7 downto 4) = "1111" else '0';
+		usb_game_0_combined <= '1' when usb_game_0(7 downto 4)="1111" else '0';
+		usb_game_1_combined <= '1' when usb_game_1(7 downto 4)="1111" else '0';
 
 		usb_connected(0) <= '1' when usb_typ_0 /= "00" else '0';
 		usb_connected(1) <= '1' when usb_typ_1 /= "00" else '0';

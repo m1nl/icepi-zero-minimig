@@ -158,3 +158,8 @@ void usbhid_handle(void) {
     for (int i = 0; i < USBHID_PORTS; i++)
         usbhid_handleport(i);
 }
+
+void usbhid_inthandler(void) {
+    for (int i = 0; i < USBHID_PORTS; i++)
+        usbhid_handleport(i);
+}

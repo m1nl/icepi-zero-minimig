@@ -9,5 +9,6 @@
 
 void aux_hid_init(void);
 void aux_hid_handle(void);
+void aux_hid_inthandler(void);
 
 #endif

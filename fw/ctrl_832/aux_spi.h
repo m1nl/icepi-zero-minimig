@@ -42,6 +42,8 @@ static inline void aux_spi_inthandler(void) {
     }
 }
 
+void aux_spi_read_raw(char *spi_buffer, unsigned int **spi_buffer_size);
+
 void aux_spi_read(char *dest, unsigned int *length);
 
 #endif

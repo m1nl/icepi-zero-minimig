@@ -41,5 +41,6 @@ static inline char usbhid_get_typ(unsigned int port) { return usbhid_typ[port % 
 
 void usbhid_init(void);
 void usbhid_handle(void);
+void usbhid_inthandler(void);
 
 #endif

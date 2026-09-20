@@ -91,6 +91,9 @@
 #define PLATFORM_VIDEO_FILTER 8
 #define PLATFORM_AUDIO 9
 #define PLATFORM_AMIGAHOST 10
+#define PLATFORM_USBHID 11
+#define PLATFORM_AUXSPI 12
+#define PLATFORM_UART 13
 
 // On write:
 //   Bit 0 -> Scandoubler enable

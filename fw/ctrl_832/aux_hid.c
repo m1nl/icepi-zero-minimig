@@ -145,3 +145,33 @@ void aux_hid_handle(void) {
             break;
     }
 }
+
+void aux_hid_inthandler(void) {
+    unsigned char buf[AUX_SPI_BUFFER_SIZE];
+    unsigned int len = AUX_SPI_BUFFER_SIZE;
+
+    while (1) {
+        aux_spi_read_raw((char *)buf, &len);
+
+        if (len < 2 || buf[0] != SPI_TARGET_HID)
+            break;
+
+        switch (buf[1]) {
+            case SPI_HID_KEYBOARD:
+                if (len >= 4)
+                    aux_hid_handlekb(&buf[2]);
+                break;
+            case SPI_HID_MOUSE:
+                if (len >= 5)
+                    aux_hid_handlemouse(&buf[2]);
+                break;
+            case SPI_HID_JOYSTICK:
+                if (len >= 7)
+                    aux_hid_handlejoy(&buf[2]);
+                break;
+            default:
+                DBG("AUX HID: ignoring type=%d\n", buf[1]);
+                break;
+        }
+    }
+}

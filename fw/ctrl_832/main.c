@@ -92,16 +92,17 @@ static inline void HandleFpga(void)
 
 void inthandler()
 {
-	DisableInterrupts();
+	AckInterrupt();
 
-	aux_spi_inthandler();
-
-	if (PLATFORM & (1 << PLATFORM_AMIGAHOST))
-		akiko_inthandler();
+	if (PLATFORM & (1 << PLATFORM_AUXSPI))
+		aux_hid_inthandler();
 	if (PLATFORM & (1 << PLATFORM_C64CARTRIDGE))
 		c64keys_inthandler();
+	if (PLATFORM & (1 << PLATFORM_USBHID))
+		usbhid_inthandler();
+	if (PLATFORM & (1 << PLATFORM_AMIGAHOST))
+		akiko_inthandler();
 
-	AckInterrupt();
 	EnableInterrupts();
 }
 
@@ -240,9 +241,6 @@ int main(void) {
 
 		if (!ErrorFatal)
 			HandleFpga(); /* Stop talking to the disk subsystems if a fatal error occurs */
-
-		usbhid_handle();
-		aux_hid_handle();
 
 		HandleUI();
 	}
