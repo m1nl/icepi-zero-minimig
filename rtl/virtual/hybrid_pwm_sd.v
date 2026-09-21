@@ -20,8 +20,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>
 //
 
-module hybrid_pwm_sd
-(
+module hybrid_pwm_sd #(
+	parameter ANTI_POP = 0
+) (
 	input clk,
 	input terminate,
 	input [15:0] d_l,
@@ -41,7 +42,7 @@ reg [4:0] pwmthreshold_r = 5'd30;
 
 always @(posedge clk) begin
 	pwmcounter<=pwmcounter+5'b1;
-	
+
 	if(pwmcounter==pwmthreshold_l)
 		q_l<=1'b0;
 
@@ -77,7 +78,7 @@ always @(posedge clk) begin
 	if(init && dump) begin
 		initctr_l<=initctr; // Lags one step behind to avoid wrapping from max -> 0 on terminate
 		if(terminate && term_ena)
-			initctr <= initctr+1'd1;	// Increase the counter on termination	
+			initctr <= initctr+1'd1;	// Increase the counter on termination
 		else
 			initctr <= initctr-1'd1;	// Decrease the counter on power-on
 	end
@@ -107,17 +108,27 @@ end
 // as shift-and-add due to the fixed factor) is multiplexed between the left
 // and right channels, switching between the two every time the counters are reloaded.
 
-reg [33:0] scaledin = 33'hF0000000;
+reg [33:0] scaledin = 34'hF0000000;
 reg [15:0] sigma_l = 16'hf000;
 reg [15:0] sigma_r = 16'hf000;
 
 reg muxtoggle;
+
 reg [15:0] mux_in;
 
+generate
+	if (ANTI_POP) begin
+		always @(posedge clk)
+		    mux_in <= (init | terminated) ? {initctr_l[13:0],2'b00} : ( muxtoggle ? d_r : d_l );
+	end else begin
+		always @(*)
+		    mux_in = terminated ? 16'b0 : ( muxtoggle ? d_r : d_l );
+	end
+endgenerate
+
 always @(posedge clk) begin
-	mux_in <= (init | terminated) ? {initctr_l[13:0],2'b00} : ( muxtoggle ? d_r : d_l );
 	if(pwmcounter==5'b11110) // Update thresholds just before PWM cycle ends
-	begin	
+	begin
 		scaledin<=33'h8000000 // (1<<(16-5))<<16     offset to keep centre aligned.
 			+({1'b0,mux_in}*16'hf000); // + d_l * 30<<(16-5);
 
