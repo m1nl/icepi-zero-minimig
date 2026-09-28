@@ -999,17 +999,14 @@ unsigned char OsdGetCtrl(void)
 
     // generate normal "key-pressed" event
     c = 0;
-    if (c1 != c2)
+    if (c1 != c2) {
        c = c1;
-
+       repeat = GetTimer(REPEATDELAY);
+    }
     c2 = c1;
 
     // generate repeat "key-pressed" events
-    if (c1 & KEY_UPSTROKE)
-    {
-        repeat = GetTimer(REPEATDELAY);
-    }
-    else if (CheckTimer(repeat))
+    if (CheckTimer(repeat))
     {
         repeat = GetTimer(REPEATRATE);
         if (c1 == KEY_UP || c1 == KEY_DOWN)
