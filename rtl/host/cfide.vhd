@@ -781,10 +781,12 @@ begin
 
 		component usb_hid_host
 			generic (
-				FULL_SPEED       : integer := 1;
-				KEYBOARD_SUPPORT : integer := 1;
-				MOUSE_SUPPORT    : integer := 1;
-				GAME_SUPPORT     : integer := 1
+				FULL_SPEED             : integer := 1;
+				KEYBOARD_SUPPORT       : integer := 1;
+				MOUSE_SUPPORT          : integer := 1;
+				GAME_SUPPORT           : integer := 1;
+				XINPUT_SWAP_AB_XY      : integer := 0;
+				FORCE_ARDUINO_KEYBOARD : integer := 1
 			);
 			port (
 				clk   : in  std_logic;
@@ -876,10 +878,12 @@ begin
 
 		u_usb_hid_host_0 : usb_hid_host
 		generic map (
-			FULL_SPEED       => 1,
-			KEYBOARD_SUPPORT => 1,
-			MOUSE_SUPPORT    => 1,
-			GAME_SUPPORT     => 1
+			FULL_SPEED             => 1,
+			KEYBOARD_SUPPORT       => 1,
+			MOUSE_SUPPORT          => 1,
+			GAME_SUPPORT           => 1,
+			XINPUT_SWAP_AB_XY      => 0,
+			FORCE_ARDUINO_KEYBOARD => 1
 		)
 		port map (
 			clk   => usbclk,
@@ -939,10 +943,12 @@ begin
 
 		u_usb_hid_host_1 : usb_hid_host
 		generic map (
-			FULL_SPEED       => 1,
-			KEYBOARD_SUPPORT => 1,
-			MOUSE_SUPPORT    => 1,
-			GAME_SUPPORT     => 1
+			FULL_SPEED             => 1,
+			KEYBOARD_SUPPORT       => 1,
+			MOUSE_SUPPORT          => 1,
+			GAME_SUPPORT           => 1,
+			XINPUT_SWAP_AB_XY      => 0,
+			FORCE_ARDUINO_KEYBOARD => 1
 		)
 		port map (
 			clk   => usbclk,
