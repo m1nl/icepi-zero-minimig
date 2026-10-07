@@ -46,15 +46,14 @@ module denise_bitplane_shifter
   input  wire           shres,        // super high resolution select (takes priority over hires)
   input  wire           aga,          // AGA enabled
   input  wire [  8-1:0] scroll,       // scrolling value
+  input  wire           scroller_out, // shared circular-history read
+  output wire           scroller_in,  // current bit entering history
   output wire           out           // shift register output
 );
 
 
 // local signals
 reg  [ 8-1:0] shifter;            // main shifter
-reg  [64-1:0] scroller;           // scroller shifter
-reg  [ 6-1:0] select;             // shifter pixel select
-wire          scroller_out;       // scroller output
 reg  [ 8-1:0] sh_scroller;        // superhires scroller
 reg  [ 3-1:0] sh_select;          // superhires scroller pixel select
 
@@ -102,19 +101,6 @@ always @(posedge clk)
   if (ld_start)
     ram_bufb <= ram_bufa;
 
-// shifter pixel select (scroll is per-plane, so this stays local)
-always @ (*) begin
-  if (shres)
-    // super hires mode
-    select[5:0] = scroll[5:0] & fmode_mask;
-  else if (hires)
-    // hires mode
-    select[5:0] = scroll[6:1] & fmode_mask;
-  else
-    // lowres mode
-    select[5:0] = scroll[7:2] & fmode_mask;
-end
-
 // main shifter
 always @ (posedge clk) begin
   if (shifter_load)
@@ -125,15 +111,7 @@ always @ (posedge clk) begin
     shifter[7:0] <= {shifter[6:0], 1'b0};
 end
 
-// main scroller
-always @ (posedge clk) begin
-  if (shift)
-    // shift scroller data
-    scroller[63:0] <= {scroller[62:0], shifter[7]};
-end
-
-// main scroller output
-assign scroller_out = scroller[select];
+assign scroller_in = shifter[7];
 
 // superhires scroller control
 always @ (*) begin

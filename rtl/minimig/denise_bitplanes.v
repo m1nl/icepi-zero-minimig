@@ -266,9 +266,25 @@ end
 
 //--------------------------------------------------------------------------------------
 
-//instantiate the 8 bitplane parallel to serial converters; odd planes scroll
-//with playfield 1, even planes with playfield 2. All shared control is wired
-//in identically; only aen, scroll and out differ per plane.
+// Shared scrolling history, split by playfield to give each RAM one read tap.
+wire [8:1] scroller_in;
+wire [8:1] scroller_out;
+
+wire [5:0] select1 = (shres ? pf1h_del[5:0] : hires ? pf1h_del[6:1] : pf1h_del[7:2]) & fmode_mask;
+wire [5:0] select2 = (shres ? pf2h_del[5:0] : hires ? pf2h_del[6:1] : pf2h_del[7:2]) & fmode_mask;
+
+denise_scroll_history history (
+  .clk(clk),
+  .shift(shift),
+  .pixel(scroller_in),
+  .select1(select1),
+  .select2(select2),
+  .out(scroller_out)
+);
+
+// instantiate the 8 bitplane parallel to serial converters; odd planes scroll
+// with playfield 1, even planes with playfield 2. All shared control is wired
+// in identically; only aen, scroll and out differ per plane.
 wire [8:1] selbpl = {selbpl8, selbpl7, selbpl6, selbpl5, selbpl4, selbpl3, selbpl2, selbpl1};
 
 genvar i;
@@ -291,6 +307,8 @@ generate
       .shres(shres),
       .aga(aga),
       .scroll((i % 2) ? pf1h_del : pf2h_del),  // odd plane -> pf1, even -> pf2
+      .scroller_in(scroller_in[i]),
+      .scroller_out(scroller_out[i]),
       .out(bpldata[i])
     );
   end
@@ -298,3 +316,41 @@ endgenerate
 
 endmodule
 
+module denise_scroll_history (
+  input        clk,
+  input        shift,
+  input  [7:0] pixel,
+  input  [5:0] select1,
+  input  [5:0] select2,
+  output [7:0] out
+);
+
+reg [5:0] wrptr = 0;
+
+reg [3:0] odd_mem[0:63] /* synthesis syn_ramstyle="distributed" */;
+reg [3:0] even_mem[0:63] /* synthesis syn_ramstyle="distributed" */;
+
+integer history_init;
+
+initial begin
+  for (history_init = 0; history_init < 64; history_init = history_init + 1) begin
+    odd_mem[history_init] = 0;
+    even_mem[history_init] = 0;
+  end
+end
+
+wire [5:0] rd1 = wrptr - 6'd1 - select1;
+wire [5:0] rd2 = wrptr - 6'd1 - select2;
+
+always @(posedge clk) begin
+  if(shift) begin
+    odd_mem[wrptr]  <= {pixel[6],pixel[4],pixel[2],pixel[0]};
+    even_mem[wrptr] <= {pixel[7],pixel[5],pixel[3],pixel[1]};
+    wrptr           <= wrptr + 1'b1;
+  end
+end
+
+assign {out[6],out[4],out[2],out[0]} = odd_mem[rd1];
+assign {out[7],out[5],out[3],out[1]} = even_mem[rd2];
+
+endmodule
