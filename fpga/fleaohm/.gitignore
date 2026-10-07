@@ -1,4 +1,8 @@
 *
+!build.sh
+!build.tcl
+!build_xl.sh
+!build_xl.tcl
 !*.sdc
 !*.lpf
 !*.ldf

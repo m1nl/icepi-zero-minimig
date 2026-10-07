@@ -18,8 +18,8 @@
 				<BScanVal>0</BScanVal>
 			</Bypass>
 			<File>/home/mnalewajski/dev/icepi-zero-minimig/fpga/fleaohm/Minimig_FleaOhm/minimig_fleaohm_Minimig_FleaOhm.bit</File>
-			<FileTime>08/11/26 12:18:27</FileTime>
-			<JedecChecksum>0x71B0</JedecChecksum>
+			<FileTime>10/07/26 20:32:28</FileTime>
+			<JedecChecksum>0x86D0</JedecChecksum>
 			<Operation>SPI Flash Erase,Program</Operation>
 			<Option>
 				<SVFVendor>JTAG STANDARD</SVFVendor>
@@ -65,7 +65,7 @@
 					<AddressBase>0x00000000</AddressBase>
 					<EndAddress>0x00090000</EndAddress>
 					<DeviceSize>8</DeviceSize>
-					<DataSize>598943</DataSize>
+					<DataSize>598942</DataSize>
 					<NumberOfDevices>1</NumberOfDevices>
 					<ReInitialize value="FALSE"/>
 				</Device>
