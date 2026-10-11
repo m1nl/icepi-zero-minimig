@@ -18,7 +18,6 @@ module denise_sprites_shifter
   input  shift,
   input  [15:0] spr_dat,
   input  [1:0] spr_bankwr_idx,
-  input  [1:0] spr_bankrd_num,
   input  [15:0] data_in,      // bus data in
   output [1:0] sprdata,       // serialized sprite data out
   output reg attach          // sprite is attached
@@ -133,8 +132,11 @@ end
 
 // shared control decodes (used by both the bank-index and the shift register)
 wire spr_hit  = armed & (hpos[7:0] == hstart[7:0]) & (fmode[15] | (hpos[8] == hstart[8]));
-wire idx_last = &shiftidx;                                         // shift registers drained
-wire reload   = shift & idx_last & (bankrd_idx != spr_bankrd_num); // fetch next bank
+wire idx_last = &shiftidx;  // shift registers drained
+
+// Read all four banks, including zero padding, then stop on pointer wrap.
+// A live FMODE width change cannot restart a drained sprite.
+wire reload = shift & idx_last & (bankrd_idx != 2'd0);
 
 // generate load signal and advance the BRAM read-bank pointer
 always @(posedge clk) begin

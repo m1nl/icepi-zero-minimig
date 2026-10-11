@@ -104,18 +104,16 @@ always @ (posedge clk) begin
 end
 
 wire [1:0] spr_bankwr_idx;
-reg  [1:0] spr_bankrd_num;
 
 assign spr_bankwr_idx = chip16_idx;
 
-// set number of banks to be read according to fmode
-always @(*) begin
-  case(fmode[3:2])
-    2'b00   : spr_bankrd_num = 1;
-    2'b11   : spr_bankrd_num = 0;
-    default : spr_bankrd_num = 2;
-  endcase
-end
+// Pad DATA and DATB captures to 64 bits using one shared write-data mask.
+// FMODE changes only on clk7_en; a transfer's final RAM write on that
+// edge still sees the old mode, so no capture-mode register is needed.
+wire spr_word_valid = (chip16_idx == 2'd0) ||
+                      (fmode[3:2] == 2'b11) ||
+                      ((fmode[3:2] != 2'b00) && (chip16_idx == 2'd1));
+wire [15:0] spr_write_data = chip16_r & {16{spr_word_valid}};
 
 // shift value
 reg shift;
@@ -138,9 +136,8 @@ denise_sprites_shifter sps0
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat0),
   .attach(attach0)
@@ -157,9 +154,8 @@ denise_sprites_shifter sps1
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat1),
   .attach(attach1)
@@ -176,9 +172,8 @@ denise_sprites_shifter sps2
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat2),
   .attach(attach2)
@@ -195,9 +190,8 @@ denise_sprites_shifter sps3
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat3),
   .attach(attach3)
@@ -214,9 +208,8 @@ denise_sprites_shifter sps4
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat4),
   .attach(attach4)
@@ -233,9 +226,8 @@ denise_sprites_shifter sps5
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat5),
   .attach(attach5)
@@ -252,9 +244,8 @@ denise_sprites_shifter sps6
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat6),
   .attach(attach6)
@@ -271,9 +262,8 @@ denise_sprites_shifter sps7
   .hpos(hpos),
   .fmode(fmode),
   .shift(shift),
-  .spr_dat(chip16_r),
+  .spr_dat(spr_write_data),
   .spr_bankwr_idx(spr_bankwr_idx),
-  .spr_bankrd_num(spr_bankrd_num),
   .data_in(data_in),
   .sprdata(sprdat7),
   .attach(attach7)

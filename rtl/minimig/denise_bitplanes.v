@@ -180,17 +180,25 @@ end
 // shared bitplane-shifter control
 //
 // The BRAM read pointer, shift index and shift/load timing are identical in
-// every plane (they depend only on load, c1, c3, fmode and the shared bank
-// count), so they are generated here ONCE instead of being replicated inside
+// every plane (they depend only on load, c1, c3 and the shared bank
+// pointer), so they are generated here ONCE instead of being replicated inside
 // each of the 8 denise_bitplane_shifter instances. Only the per-plane data
 // path (BRAM contents, shifter, scroller, output) lives in the shifter itself.
 //--------------------------------------------------------------------------------------
 
 wire [1:0] bpl_bankwr_idx;    // BRAM write bank index
 reg  [2:0] bpl_bankrd_idx;    // BRAM read bank index
-reg  [2:0] bpl_bankrd_num;    // BRAM max read bank index
 
 assign bpl_bankwr_idx = chip16_idx;
+
+// Pad each captured fetch to 64 bits, matching the register-based shifter.
+// FMODE changes only on clk7_en; the last RAM write on that edge still
+// uses its old value, so no separate capture-mode register is needed.
+wire write_word_valid = (chip16_idx == 2'd0) ||
+                        (fmode[1:0] == 2'b11) ||
+                        ((fmode[1:0] != 2'b00) && (chip16_idx == 2'd1));
+wire [15:0] bpl_write_data = chip16_r & {16{write_word_valid}};
+
 
 always @(posedge clk) begin
   if (clk7_en) begin
@@ -205,12 +213,15 @@ reg [2:0] shiftidx;      // current shift index
 
 // c1 is the 7MHz clock, c3 the same clock shifted 90deg; together they mark
 // the four phases of a 7MHz period within the 28MHz clk domain
-wire ld_start   = selbpl1 & clk7_en;       // fetch start
-wire ld_pix     = load & ~c1 & ~c3;        // load first byte (c1,c3 = 0,0)
-wire idx_last   = &shiftidx;               // current byte shifted out
-wire fetch_next = shift & idx_last;        // time to advance to next byte
-wire reload     = fetch_next & (bpl_bankrd_idx != bpl_bankrd_num);
+wire ld_start     = selbpl1 & clk7_en;     // fetch start
+wire ld_pix       = load & ~c1 & ~c3;      // load first byte (c1,c3 = 0,0)
+wire idx_last     = &shiftidx;             // current byte shifted out
+wire fetch_next   = shift & idx_last;      // time to advance to next byte
 wire shifter_load = ld_pix | reload;       // load strobe fed to every shifter
+
+// Consume all eight bytes, including zero padding. The read pointer wraps
+// to zero after the last byte, stopping reloads until the next initial load.
+wire reload = fetch_next & (bpl_bankrd_idx != 3'd0);
 
 // BRAM addresses shared by all planes (writes 16-bit, reads 8-bit)
 wire [1:0] ram_addra = bpl_bankwr_idx;
@@ -235,17 +246,6 @@ end
 
 // bank read/write address control
 always @ (posedge clk) begin
-  // one 7MHz cycle after bpldat1 write
-  if (load && clk7_en) begin
-    // set number of banks to be read according to fmode
-    case(fmode[1:0])
-      2'b11   : bpl_bankrd_num <= 0;
-      2'b10,
-      2'b01   : bpl_bankrd_num <= 4;
-      default : bpl_bankrd_num <= 2;
-    endcase
-  end
-
   if (ld_start) begin
     // reset read bank index
     bpl_bankrd_idx <= 3'd0;
@@ -301,7 +301,7 @@ generate
       .ld_start(ld_start),
       .ram_addra(ram_addra),
       .ram_addrb(ram_addrb),
-      .bpl_dat(chip16_r),
+      .bpl_dat(bpl_write_data),
       .fmode_mask(fmode_mask),
       .hires(hires),
       .shres(shres),
