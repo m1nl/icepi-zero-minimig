@@ -1,3 +1,5 @@
+`define LATTICE
+
 `define MINIMIG_VIRTUAL
 `define MINIMIG_STATIC_HDMI_TIMING
 `define MINIMIG_USB
