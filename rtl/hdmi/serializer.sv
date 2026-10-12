@@ -158,11 +158,22 @@ module serializer
 
         assign tmds_clock = clk_pixel;
     `elsif LATTICE
+        (* ASYNC_REG = "TRUE" *) reg [1:0] reset_x5_sync = 2'b11;
+
+        wire reset_x5 = reset_x5_sync[1];
+
+        always_ff @(posedge clk_pixel_x5, posedge reset) begin
+            if (reset)
+                reset_x5_sync <= 2'b11;
+            else
+                reset_x5_sync <= {reset_x5_sync[0], 1'b0};
+        end
+
         // Modulo-5 counter in the 5x domain drives load vs shift
         logic [2:0] bit_cnt = 3'd4;
 
-        always_ff @(posedge clk_pixel_x5) begin
-            if (reset)
+        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
+            if (reset_x5)
                 bit_cnt <= 3'd4;
             else
                 bit_cnt <= (bit_cnt == 3'd4) ? 3'd0 : bit_cnt + 3'd1;
@@ -177,8 +188,8 @@ module serializer
             logic [9:0] shift;
             logic [1:0] out;
 
-            always_ff @(posedge clk_pixel_x5) begin
-                if (reset)
+            always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
+                if (reset_x5)
                     shift <= 10'b0;
                 else if (bit_cnt == 3'd4)
                     shift <= tmds_internal[i];   // load at end of each pixel period
@@ -194,7 +205,7 @@ module serializer
                 .D0   (out[0]),     // bit on rising edge
                 .D1   (out[1]),     // bit on falling edge
                 .SCLK (clk_pixel_x5),
-                .RST  (reset)
+                .RST  (reset_x5)
             );
         end
         endgenerate
@@ -205,8 +216,8 @@ module serializer
         logic [9:0] clk_shift;
         logic [1:0] clk_out;
 
-        always_ff @(posedge clk_pixel_x5) begin
-            if (reset)
+        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
+            if (reset_x5)
                 clk_shift <= 10'b0;
             else if (bit_cnt == 3'd4)
                 clk_shift <= 10'b0000011111;
@@ -222,7 +233,7 @@ module serializer
             .D0   (clk_out[0]),
             .D1   (clk_out[1]),
             .SCLK (clk_pixel_x5),
-            .RST  (reset)
+            .RST  (reset_x5)
         );
     `else
         logic [9:0] tmds_reversed [NUM_CHANNELS-1:0];
