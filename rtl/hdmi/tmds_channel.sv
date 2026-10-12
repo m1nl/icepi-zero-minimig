@@ -1,5 +1,6 @@
 // Implementation of HDMI Spec v1.4a Section 5.4: Encoding, Section 5.2.2.1: Video Guard Band, Section 5.2.3.3: Data Island Guard Bands.
 // By Sameer Puri https://github.com/sameer
+// Timing refactor and explanatory comments by OpenAI Codex (GPT-6).
 
 module tmds_channel
 #(
@@ -17,7 +18,18 @@ module tmds_channel
 );
 
 // See Section 5.4.4.1
-// Below is a direct implementation of Figure 5-7, using the same variable names.
+// Implements Figure 5-7 with the following timing-oriented changes:
+// - Balanced, explicitly sized bit counts replace chained sums and the redundant
+//   count-to-value case decoder.
+// - Independent XOR reductions replace the seven-bit XOR/XNOR dependency chain.
+//   They can run in parallel with the input bit count; the XOR/XNOR selection
+//   then only needs to invert odd-numbered prefix bits.
+// - A single signed balance replaces separate ones/zeros counts and repeated
+//   subtraction. One shared inversion decision controls both the symbol and
+//   the accumulator correction, reducing duplicated branch logic.
+// This shortens the RGB-to-disparity-register combinational path without adding
+// pipeline registers: acc and tmds still update on the original pixel edge.
+// Formal equivalence was checked against the original encoder for CN=0,1,2.
 
 logic signed [4:0] acc = 5'sd0;
 
@@ -26,74 +38,59 @@ logic [9:0] q_out;
 logic [9:0] video_coding;
 assign video_coding = q_out;
 
-logic [3:0] N1D;
-logic signed [4:0] N1q_m07;
-logic signed [4:0] N0q_m07;
-always_comb
-begin
-    N1D = video_data[0] + video_data[1] + video_data[2] + video_data[3] + video_data[4] + video_data[5] + video_data[6] + video_data[7];
-    case(q_m[0] + q_m[1] + q_m[2] + q_m[3] + q_m[4] + q_m[5] + q_m[6] + q_m[7])
-        4'b0000: N1q_m07 = 5'sd0;
-        4'b0001: N1q_m07 = 5'sd1;
-        4'b0010: N1q_m07 = 5'sd2;
-        4'b0011: N1q_m07 = 5'sd3;
-        4'b0100: N1q_m07 = 5'sd4;
-        4'b0101: N1q_m07 = 5'sd5;
-        4'b0110: N1q_m07 = 5'sd6;
-        4'b0111: N1q_m07 = 5'sd7;
-        4'b1000: N1q_m07 = 5'sd8;
-        default: N1q_m07 = 5'sd0;
-    endcase
-    N0q_m07 = 5'sd8 - N1q_m07;
-end
+// Explicitly sized, balanced population count: pairs -> nibbles -> byte.
+function automatic [3:0] count_ones(input logic [7:0] value);
+    logic [1:0] pair0, pair1, pair2, pair3;
+    logic [2:0] low_count, high_count;
+    begin
+        pair0 = {1'b0, value[0]} + {1'b0, value[1]};
+        pair1 = {1'b0, value[2]} + {1'b0, value[3]};
+        pair2 = {1'b0, value[4]} + {1'b0, value[5]};
+        pair3 = {1'b0, value[6]} + {1'b0, value[7]};
+        low_count  = {1'b0, pair0} + {1'b0, pair1};
+        high_count = {1'b0, pair2} + {1'b0, pair3};
+        count_ones = {1'b0, low_count} + {1'b0, high_count};
+    end
+endfunction
 
-logic signed [4:0] acc_add;
+wire [3:0] input_ones = count_ones(video_data);
+wire use_xnor = input_ones > 4'd4 ||
+                (input_ones == 4'd4 && !video_data[0]);
+wire [7:0] xor_prefix;
 
-integer i;
+genvar bit_index;
+generate
+    for (bit_index = 0; bit_index < 8; bit_index = bit_index + 1) begin : gen_prefix
+        // A reduction lets synthesis balance each prefix independently.
+        assign xor_prefix[bit_index] = ^video_data[bit_index:0];
+    end
+endgenerate
 
-always_comb
-begin
-    if (N1D > 4'd4 || (N1D == 4'd4 && video_data[0] == 1'd0))
-    begin
-        q_m[0] = video_data[0];
-        for(i = 0; i < 7; i++)
-            q_m[i + 1] = q_m[i] ~^ video_data[i + 1];
-        q_m[8] = 1'b0;
-    end
-    else
-    begin
-        q_m[0] = video_data[0];
-        for(i = 0; i < 7; i++)
-            q_m[i + 1] = q_m[i] ^ video_data[i + 1];
-        q_m[8] = 1'b1;
-    end
-    if (acc == 5'sd0 || (N1q_m07 == N0q_m07))
-    begin
-        if (q_m[8])
-        begin
-            acc_add = N1q_m07 - N0q_m07;
-            q_out = {~q_m[8], q_m[8], q_m[7:0]};
-        end
-        else
-        begin
-            acc_add = N0q_m07 - N1q_m07;
-            q_out = {~q_m[8], q_m[8], ~q_m[7:0]};
-        end
-    end
-    else
-    begin
-        if ((acc > 5'sd0 && N1q_m07 > N0q_m07) || (acc < 5'sd0 && N1q_m07 < N0q_m07))
-        begin
-            q_out = {1'b1, q_m[8], ~q_m[7:0]};
-            acc_add = (N0q_m07 - N1q_m07) + (q_m[8] ? 5'sd2 : 5'sd0);
-        end
-        else
-        begin
-            q_out = {1'b0, q_m[8], q_m[7:0]};
-            acc_add = (N1q_m07 - N0q_m07) - (~q_m[8] ? 5'sd2 : 5'sd0);
-        end
-    end
-end
+// Repeated XNOR differs from XOR only at odd-numbered prefix bits.
+assign q_m = {!use_xnor, xor_prefix ^ ({8{use_xnor}} & 8'hAA)};
+
+wire [3:0] encoded_ones = count_ones(q_m[7:0]);
+// ones - zeros = 2*ones - 8, in the signed range -8..+8.
+// Compare the ones count directly with four instead of computing zeros first.
+
+wire signed [4:0] balance = {encoded_ones, 1'b0} - 5'd8;
+wire balanced = encoded_ones == 4'd4;
+wire same_sign = (acc[4] && encoded_ones < 4'd4) ||
+                 (!acc[4] && encoded_ones > 4'd4);
+wire neutral = acc == 5'sd0 || balanced;
+wire invert_output = neutral ? !q_m[8] : same_sign;
+
+assign q_out = {neutral ? !q_m[8] : invert_output,
+                q_m[8], q_m[7:0] ^ {8{invert_output}}};
+
+// Select the sign once, then apply the 0/+2/-2 correction contributed by the
+// two upper TMDS symbol bits. The neutral branch requires no correction.
+wire signed [4:0] signed_balance = invert_output ? -balance : balance;
+wire signed [4:0] correction = neutral ? 5'sd0 :
+    (invert_output ? (q_m[8] ? 5'sd2 : 5'sd0) :
+                     (q_m[8] ? 5'sd0 : -5'sd2));
+
+wire signed [4:0] acc_add = signed_balance + correction;
 
 always_ff @(posedge clk_pixel) acc <= mode != 3'd1 ? 5'sd0 : acc + acc_add;
 
