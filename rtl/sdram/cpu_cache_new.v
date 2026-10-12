@@ -34,6 +34,7 @@ module cpu_cache_new # (parameter addr_max_bits=26, parameter addr_prefix_bits=1
   input  wire [ 16-1:0] sdr_dat_r,      // sdram read data
   output reg            sdr_read_req,   // sdram read request from cache
   input  wire           sdr_read_ack,   // sdram read acknowledge to cache
+  input  wire           sdr_read_pre,   // sdram one cycle before it can accept a new request
   output reg  [ 26-1:1] sdr_adr,        // sdram address
   output reg  [ 32-1:0] sdr_dat_w,      // sdram write data
   output reg  [  4-1:0] sdr_dqm_w,      // sdram write byte selects (active low)
