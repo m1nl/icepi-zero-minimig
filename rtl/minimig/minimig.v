@@ -288,6 +288,11 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output	osd_pixel_out,
 	output	rtg_ena,
 	output	rtg_linecompare,
+    output osd_write_en,
+    output [10:0] osd_write_addr,
+    output [7:0] osd_write_data,
+    output osd_enabled,
+
 	output	ntscmode,		//PAL/NTSC video mode selection
 	input	 ext_int2,		// External interrupt for Akiko
 	input	 ext_int6,		// External interrupt for AHI audio
@@ -730,6 +735,10 @@ end
 //instantiate user IO
 userio USERIO1
 (
+    .osd_write_en(osd_write_en),
+    .osd_write_addr(osd_write_addr),
+    .osd_write_data(osd_write_data),
+    .osd_enabled(osd_enabled),
 	.clk(clk),
 	.clk7_en(clk7_en),
 	.clk7n_en(clk7n_en),

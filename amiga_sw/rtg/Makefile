@@ -6,6 +6,20 @@ INC_ASM ?= $(NDK_DIR)/Include/include_i
 P96_PRIVATE ?= $(CURDIR)/.deps/Picasso96Develop/PrivateInclude
 P96_PUBLIC ?= $(CURDIR)/.deps/Picasso96Develop/Include
 VASM_FLAGS := -quiet -nowarn=1012 -m68020 -Fhunkexe -kick1hunks -nosym -no-opt
+DEBUG ?= 0
+ifeq ($(DEBUG),1)
+DEBUG_FLAGS := -DRTG_DEBUG=1
+else ifneq ($(DEBUG),0)
+$(error DEBUG must be 0 or 1)
+endif
+DEBUG_CONFIG := .deps/driver-debug.cfg
+RTG_720P ?= 0
+ifeq ($(RTG_720P),1)
+RASTER_FLAGS := -DRTG_720P=1
+else ifneq ($(RTG_720P),0)
+$(error RTG_720P must be 0 or 1)
+endif
+RASTER_CONFIG := .deps/driver-raster.cfg
 
 TARGET := minimig.card
 SOURCE := minimig.card.asm
@@ -17,13 +31,29 @@ INCLUDES := $(P96_PRIVATE)/boardinfo.i $(P96_PRIVATE)/settings.i \
             $(P96_PUBLIC)/libraries/Picasso96.i \
             $(wildcard $(INC_ASM)/*/*.i) $(LVO_FILES)
 
-.PHONY: all adf deps clean
+.PHONY: all adf deps clean FORCE
 all: $(TARGET) $(DIAGNOSTIC) $(ADF)
 adf: $(ADF)
 
-$(TARGET): $(SOURCE) Makefile $(INCLUDES)
-	$(AS) $(SOURCE) -o $@ -L $(LISTFILE) $(VASM_FLAGS) \
+$(TARGET): $(SOURCE) Makefile $(INCLUDES) $(DEBUG_CONFIG) $(RASTER_CONFIG)
+	$(AS) $(SOURCE) -o $@ -L $(LISTFILE) $(VASM_FLAGS) $(DEBUG_FLAGS) $(RASTER_FLAGS) \
 		-I "$(INC_ASM)/" -I "$(P96_PRIVATE)/" -I "$(P96_PUBLIC)/" -I .deps/
+
+# Rebuild when DEBUG changes, retaining the timestamp for unchanged options.
+$(DEBUG_CONFIG): FORCE
+	@mkdir -p .deps
+	@if ! test -f "$@" || ! test "$$(cat "$@")" = "$(DEBUG)"; then \
+		printf '%s\n' "$(DEBUG)" > "$@"; \
+	fi
+
+# Changing the raster also rebuilds the driver and its floppy image.
+$(RASTER_CONFIG): FORCE
+	@mkdir -p .deps
+	@if ! test -f "$@" || ! test "$$(cat "$@")" = "$(RTG_720P)"; then \
+		printf '%s\n' "$(RTG_720P)" > "$@"; \
+	fi
+
+FORCE:
 
 $(DIAGNOSTIC): rtgcheck.asm Makefile $(INCLUDES)
 	$(AS) $< -o $@ $(VASM_FLAGS) \

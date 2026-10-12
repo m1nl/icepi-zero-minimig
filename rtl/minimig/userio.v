@@ -26,6 +26,11 @@
 
 
 module userio (
+    output osd_write_en,
+    output [10:0] osd_write_addr,
+    output [7:0] osd_write_data,
+    output osd_enabled,
+
   input  wire           clk,                // bus clock
   input  wire           reset,              // reset
   input  wire           clk7_en,
@@ -599,6 +604,10 @@ assign anajoy = 1'b0;
 //instantiate osd controller
 userio_osd osd1
 (
+    .osd_write_en(osd_write_en),
+    .osd_write_addr(osd_write_addr),
+    .osd_write_data(osd_write_data),
+    .osd_enabled(osd_enabled),
   .clk              (clk),
   .clk7_en          (clk7_en),
   .clk7n_en         (clk7n_en),

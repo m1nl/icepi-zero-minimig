@@ -529,6 +529,7 @@ sdram_ctrl sdram (
   .rtgce        (rtg_ramreq       ),
   .rtgack       (rtg_ack          ),
   .rtgpri       (rtg_rampri       ),
+  .rtg_extend_ok(1'b1             ),
   .rtgfill      (rtg_fill         ),
   .rtgRd        (rtg_fromram      ), 
   // Audio buffer
@@ -612,6 +613,7 @@ sdram_ctrl #(.addr_prefix_bits(1), .addr_prefix(0), .fast_write(1)) sdram (
   .rtgce        (rtg_ramreq       ),
   .rtgack       (rtg_ack          ),
   .rtgpri       (rtg_rampri       ),
+  .rtg_extend_ok(1'b1             ),
   .rtgfill      (rtg_fill         ),
   .rtgRd        (rtg_fromram      ), 
   // Audio buffer

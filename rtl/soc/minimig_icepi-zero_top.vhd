@@ -66,11 +66,32 @@ architecture rtl of minimig_icepizero_top is
 	signal audio_tick : std_logic;
 
 	signal clk_sys : std_logic;
+	signal clk_28m : std_logic;
+	signal clk_142m : std_logic;
+
+	signal clk_usb : std_logic;
+	signal clk_rtg_5x : std_logic;
+	signal clk_rtg : std_logic;
+
 	signal clk_pixel : std_logic;
 	signal clk_tmds : std_logic;
-	signal clk_usb : std_logic;
 
 	signal pll_locked : std_logic;
+	signal auxpll_locked : std_logic;
+
+	signal rtg_enable : std_logic;
+	signal rtg_active : std_logic := '0';
+	signal rtg_rgb : std_logic_vector(23 downto 0);
+
+	signal hdmi_frame_start : std_logic;
+	signal hdmi_vblank_start : std_logic;
+	signal hdmi_rtg_pixel_request : std_logic;
+	signal hdmi_rtg_frame_request : std_logic;
+	signal hdmi_rtg_line_prepare : std_logic;
+	signal hdmi_osd_pixel_request : std_logic;
+	signal hdmi_osd_frame_request : std_logic;
+	signal hdmi_reset : std_logic;
+
 	signal reset_n : std_logic;
 	signal amiga_reset_n : std_logic;
 	signal menu_button_n : std_logic;
@@ -117,6 +138,18 @@ architecture rtl of minimig_icepizero_top is
 		RST : in std_logic
 	);
 	end component;
+
+	component DCSC
+	generic (
+		DCSMODE : string := "NEG"
+	);
+	port (
+		CLK1, CLK0 : in std_logic;
+		SEL1, SEL0 : in std_logic;
+		MODESEL : in std_logic;
+		DCSOUT : out std_logic
+	);
+	end component;
 begin
 	usb_pull_dp <= (others => '0');
 	usb_pull_dn <= (others => '0');
@@ -140,15 +173,22 @@ begin
 	auxpll : entity work.ecp5pll
 	generic map (
 		in_hz => natural(base_frequency),
-		out0_hz => natural(60e6),
-		out0_tol_hz => 1e4
+		out0_hz => natural(330e6),
+		out0_tol_hz => 1e4,
+		out1_hz => natural(66e6),
+		out1_tol_hz => 1e4,
+		out2_hz => natural(60e6),
+		out2_tol_hz => 1e4
 	)
 	port map (
 		clk_i => clk,
-		clk_o => auxclks
+		clk_o => auxclks,
+		locked => auxpll_locked
 	);
 
-	clk_usb <= auxclks(0);
+	clk_rtg_5x <= auxclks(0);
+	clk_rtg <= auxclks(1);
+	clk_usb <= auxclks(2);
 
 	virtual_top : component minimig_virtual_top
 	generic map (
@@ -157,7 +197,7 @@ begin
 		spimux => 0,
 		haveiec => 0,
 		havereconfig => 0,
-		havertg => 0,
+		havertg => 1,
 		haveaudio => 0,
 		havec2p => 1,
 		haveamigahost => 0,
@@ -175,9 +215,24 @@ begin
 	port map (
 		CLK_IN => clk,
 		CLK_USB_IN => clk_usb,
+		CLK_RTG_IN => clk_rtg,
+
+		RTG_ENABLE => rtg_enable,
+		RTG_ACTIVE => rtg_active,
+		RTG_VIDEO_RESET => hdmi_reset,
+		RTG_RGB => rtg_rgb,
+
+		HDMI_FRAME_START => hdmi_frame_start,
+		HDMI_VBLANK_START => hdmi_vblank_start,
+		HDMI_RTG_PIXEL_REQUEST => hdmi_rtg_pixel_request,
+		HDMI_RTG_FRAME_REQUEST => hdmi_rtg_frame_request,
+		HDMI_RTG_LINE_PREPARE => hdmi_rtg_line_prepare,
+		HDMI_OSD_PIXEL_REQUEST => hdmi_osd_pixel_request,
+		HDMI_OSD_FRAME_REQUEST => hdmi_osd_frame_request,
+
 		CLK_114 => clk_sys,
-		CLK_28 => clk_pixel,
-		CLK_142 => clk_tmds,
+		CLK_28 => clk_28m,
+		CLK_142 => clk_142m,
 		PLL_LOCKED => pll_locked,
 
 		RESET_N => reset_n,
@@ -274,9 +329,9 @@ begin
 	-- power indicator is quite dark already
 	led(4) <= led_i(4);
 
-	process (clk_pixel)
+	process (clk_28m)
 	begin
-		if rising_edge(clk_pixel) then
+		if rising_edge(clk_28m) then
 			if audio_tick = '1' then
 				led(3 downto 0) <= "0000";
 
@@ -296,7 +351,9 @@ begin
 		generic (
 			IT_CONTENT : std_logic := '1';
 			DVI_OUTPUT : std_logic := '0';
+			RTG_REQUEST_LEAD : integer := 3;
 			VIDEO_RATE : integer := 28571400;
+			RTG_VIDEO_RATE : integer := 66000000;
 			AUDIO_RATE : integer := 48000;
 			AUDIO_BIT_WIDTH : integer := 16;
 			VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
@@ -307,6 +364,18 @@ begin
 			clk_pixel_x5 : in  std_logic;
 			clk_pixel    : in  std_logic;
 			reset        : in  std_logic;
+
+			rtg_en : in std_logic;
+
+			rtg_pixel_request : out std_logic;
+			rtg_frame_request : out std_logic;
+			rtg_line_prepare : out std_logic;
+
+			osd_pixel_request : out std_logic;
+			osd_frame_request : out std_logic;
+
+			frame_start_toggle : out std_logic;
+			vblank_start_toggle : out std_logic;
 
 			pal_mode    : in  std_logic;
 			long_frame  : in  std_logic;
@@ -330,7 +399,19 @@ begin
 		);
 		end component;
 
-		signal vreset : std_logic_vector(1 downto 0) := "11";
+		component audio_cdc
+		port (
+			clk : in std_logic;
+			clk_pixel : in std_logic;
+			audio_l : in std_logic_vector(15 downto 0);
+			audio_r : in std_logic_vector(15 downto 0);
+			sample_en : in std_logic;
+			sample : out std_logic_vector(31 downto 0)
+		);
+		end component;
+		signal hdmi_audio_sample : std_logic_vector(31 downto 0);
+		signal hdmi_audio_sample_en : std_logic;
+
 
 		signal tmds_clock : std_logic;
 		signal tmds : std_logic_vector(2 downto 0);
@@ -338,52 +419,127 @@ begin
 
 		signal offset_x : unsigned(7 downto 0);
 		signal offset_y : unsigned(6 downto 0);
+
+		signal hsync_in : std_logic := '0';
+		signal vsync_in : std_logic := '0';
+
+		signal clksel_n : std_logic;
+
+		component video_clock_control
+		port (
+			clk: in std_logic;
+			clk_pixel: in std_logic;
+			native_locked: in std_logic;
+			rtg_locked: in std_logic;
+			rtg_request: in std_logic;
+			rtg_active:  out std_logic;
+			video_reset: out std_logic
+		);
+		end component;
+
 	begin
-		process (clk_pixel, pll_locked)
-		begin
-			if pll_locked = '0' then
-				vreset <= "11";
-			elsif rising_edge(clk_pixel) then
-				vreset <= vreset(0) & '0';
-			end if;
-		end process;
+		clock_control : component video_clock_control
+		port map (
+			clk => clk,
+			clk_pixel => clk_pixel,
+			native_locked => pll_locked,
+			rtg_locked => auxpll_locked,
+			rtg_request => rtg_enable,
+			rtg_active => rtg_active,
+			video_reset => hdmi_reset
+		);
+
+		clksel_n <= not rtg_active;
+
+		clkmux_0 : component DCSC
+		generic map (
+			DCSMODE => "NEG"
+		)
+		port map (
+			CLK0 => clk_142m,
+			CLK1 => clk_rtg_5x,
+			SEL0 => clksel_n,
+			SEL1 => rtg_active,
+			MODESEL => '0',
+			DCSOUT => clk_tmds
+		);
+
+		clkmux_1 : component DCSC
+		generic map (
+			DCSMODE => "NEG"
+		)
+		port map (
+			CLK0 => clk_28m,
+			CLK1 => clk_rtg,
+			SEL0 => clksel_n,
+			SEL1 => rtg_active,
+			MODESEL => '0',
+			DCSOUT => clk_pixel
+		);
 
 		offset_x <= unsigned(video_xoffset(7 downto 0));
 		offset_y <= unsigned(video_yoffset(6 downto 0));
 
+		audio_sync : component audio_cdc
+		port map (
+			clk => clk_28m,
+			clk_pixel => clk_pixel,
+			audio_l => audio_l,
+			audio_r => audio_r,
+			sample_en => hdmi_audio_sample_en,
+			sample => hdmi_audio_sample
+		);
+
 		hdmi_inst : component hdmi
 		generic map (
 			VIDEO_RATE => 28571400,
+			RTG_VIDEO_RATE => 66000000,
+			RTG_REQUEST_LEAD => 2,
 			AUDIO_RATE => 48000,
 			AUDIO_BIT_WIDTH => 16
 		)
 		port map (
 			clk_pixel_x5 => clk_tmds,
 			clk_pixel => clk_pixel,
-			reset => vreset(1),
+			reset => hdmi_reset,
+
+			rtg_en => rtg_active,
+			rtg_pixel_request => hdmi_rtg_pixel_request,
+			rtg_frame_request => hdmi_rtg_frame_request,
+			rtg_line_prepare => hdmi_rtg_line_prepare,
+
+			osd_pixel_request => hdmi_osd_pixel_request,
+			osd_frame_request => hdmi_osd_frame_request,
+
+			frame_start_toggle => hdmi_frame_start,
+			vblank_start_toggle => hdmi_vblank_start,
 
 			pal_mode => display_pal,
 			long_frame => long_frame,
 			interlace => interlace,
 			screen_mode => video_mode,
 
-			vsync_in => dvi_vsync,
-			hsync_in => dvi_hsync,
+			vsync_in => vsync_in,
+			hsync_in => hsync_in,
 
 			offset_x => offset_x,
 			offset_y => offset_y,
 
 			rgb => rgb,
 
-			audio_sample_word_0 => audio_l,
-			audio_sample_word_1 => audio_r,
-			audio_sample_en => open,
+			audio_sample_word_0 => hdmi_audio_sample(15 downto 0),
+			audio_sample_word_1 => hdmi_audio_sample(31 downto 16),
+			audio_sample_en => hdmi_audio_sample_en,
 
 			tmds => tmds,
 			tmds_clock => tmds_clock
 		);
 
-		rgb <= dvi_red & dvi_green & dvi_blue;
+		rgb <= rtg_rgb when rtg_active = '1' else dvi_red & dvi_green & dvi_blue;
+
+		vsync_in <= dvi_vsync;
+		hsync_in <= dvi_hsync;
+
 		gpdi_dp <= tmds_clock & tmds;
 	end block;
 end architecture;

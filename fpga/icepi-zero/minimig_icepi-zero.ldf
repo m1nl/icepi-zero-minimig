@@ -426,6 +426,18 @@
         <Source name="../../rtl/fifo/circular_fifo.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
+        <Source name="../../rtl/rtg/rtg_async_fifo.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/rtg/rtg_osd.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/hdmi/audio_cdc.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/hdmi/video_clock_control.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
         <Source name="eightthirtytwo_multicycles.sdc" type="Synplify Design Constraints File" type_short="SDC">
             <Options/>
         </Source>

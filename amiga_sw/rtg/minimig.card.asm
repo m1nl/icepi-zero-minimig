@@ -15,8 +15,6 @@
 
 	machine 68020
 
-	include hardware/custom.i
-
 	include lvo/exec_lib.i
 	include lvo/intuition_lib.i
 	include lvo/expansion_lib.i
@@ -34,38 +32,54 @@
 
 ; CardData is a region of 16 longwords, so 64 bytes we can use as we please
 CardData_IntEnabled = gbi_CardData+24
+CardData_ModeValid = gbi_CardData+26
+CardData_VRepeat = gbi_CardData+28
 
 ; HDMI-timed RTG registers, relative to $B80100.
 RTG_STATUS = $0c       ; read: blank, pending, enabled, active (bits 0..3)
 RTG_IRQ_CONTROL = $0c  ; write: enable bit0, acknowledge bit1 (W1C)
-RTG_FRAME_SEQUENCE = $10
-RTG_DISPLAY_SWITCH = $12 ; read/write bit0: 0 native, 1 RTG
-RTG_SPLIT_ROW = $14    ; first secondary-framebuffer row, $7ff disables
+RTG_DISPLAY_SWITCH = $10 ; read/write bit0: 0 native, 1 RTG
+RTG_SPLIT_ROW = $12    ; first secondary-framebuffer row, $7ff disables
+RTG_REPEAT = $14       ; [1:0] horizontal, [3:2] vertical, encoded factor-1
+RTG_STRIDE = $16       ; source stride in 16-byte bursts, zero selects row size
 
 
-debug
-;debugbc
-;HasBlitter
-;blitterhistory
-;HasSprite
+; Build-time physical raster. Define RTG_720P for 1280x720; default is
+; 1024x768. HDMI, RTG scanout, the board PLL and constraints must match.
+; The driver describes these timings to P96; it cannot program the PLL.
+	IFD	RTG_720P
+RTG_WIDTH EQU 1280
+RTG_HEIGHT EQU 720
+RTG_HTOTAL EQU 1650
+RTG_VTOTAL EQU 750
+RTG_PIXEL_CLOCK EQU 74250000
+RTG_HSTART EQU 110
+RTG_HSIZE EQU 40
+RTG_VSTART EQU 5
+RTG_VSIZE EQU 5
+	ELSE
+RTG_WIDTH EQU 1024
+RTG_HEIGHT EQU 768
+RTG_HTOTAL EQU 1344
+RTG_VTOTAL EQU 806
+RTG_PIXEL_CLOCK EQU 66000000
+RTG_HSTART EQU 24
+RTG_HSIZE EQU 136
+RTG_VSTART EQU 3
+RTG_VSIZE EQU 6
+	ENDC
 
-beacon:
-	move.l	#8191,d0
-.loop
-	move.w	d0,$dff180
-	dbf	d0,.loop
-	rts
+RTG_HALF_WIDTH EQU RTG_WIDTH/2
+; Match RTL's burst-aligned 3x canvas: 320 or 416 source pixels.
+RTG_THIRD_WIDTH EQU (RTG_WIDTH/96)*32
+RTG_HALF_HEIGHT EQU RTG_HEIGHT/2
+RTG_THIRD_HEIGHT EQU RTG_HEIGHT/3
+RTG_THIRD_BORDER EQU (RTG_WIDTH-RTG_THIRD_WIDTH*3)/2
 
-	; Write to a register which we can observe with the 832 firmware
-BC MACRO
-    IFD debugbc
-    move.l  \2,$b80004+4*\1
-    ENDC
-    ENDM
-
+; Define RTG_DEBUG at assembly time to include serial logging.
 	; Write to serial console
 BUG MACRO
-	IFD	debug
+	IFD	RTG_DEBUG
 
 	ifnc	"","\9"
 	move.l	\9,-(sp)
@@ -102,12 +116,8 @@ BUG MACRO
 	ENDC
 	ENDM
 
-****************************************************************************
-;	section ReplayRTG,code
-****************************************************************************
-
 MEMORY_SIZE EQU (4<<20)
-MEMF_REPLAY EQU (1<<14)
+RTG_RGB_FORMATS EQU (RGBFF_CLUT|RGBFF_R5G6B5|RGBFF_R5G5B5)
 
 
 ;------------------------------------------------------------------------------
@@ -117,7 +127,7 @@ ProgStart:
 	moveq	#-1,d0
 	rts
 
-	IFD	debug
+	IFD	RTG_DEBUG
 	bra.b	_bugprintf_end
 bugprintf:
 		movem.l d0-d1/a0-a3/a6,-(sp)
@@ -125,7 +135,6 @@ bugprintf:
 		move.l	28(sp),a0
 		lea	32(sp),a1
 		lea	.putch(pc),a2
-;		 jsr	 beacon
 		move.l	a6,a3
 		jsr	-522(a6)                ; _LVORawDoFmt
 
@@ -168,7 +177,7 @@ MinimigCard:
 	dc.b	'minimig.card',0,0
 	dc.b	'$VER: '
 IDString:
-	dc.b	'minimig.card 1.8 (12.10.2026)',0
+	dc.b	'minimig.card 1.13 (14.10.2026)',0
 	dc.b	0
 expansionLibName:
 	dc.b	'expansion.library',0
@@ -193,7 +202,7 @@ DataTable:
 	INITLONG	LN_NAME,MinimigCard
 	INITBYTE	LIB_FLAGS,LIBF_SUMUSED|LIBF_CHANGED
 	INITWORD	LIB_VERSION,1
-	INITWORD	LIB_REVISION,8
+	INITWORD	LIB_REVISION,13
 	INITLONG	LIB_IDSTRING,IDString
 	INITLONG	card_Name,CardName
 	dc.w		0,0
@@ -202,7 +211,6 @@ DataTable:
 InitRoutine:
 ;------------------------------------------------------------------------------
 
-;	BUG "Minimig.card InitRoutine()"
 
 	movem.l a5,-(sp)
 	movea.l d0,a5
@@ -236,16 +244,6 @@ Open:
 
 
 
-	IFD blitterhistory
-	move.l	a0,-(sp)
-	lea	$80000,a0
-	moveq.l #16,d0
-.fill:
-	clr.l	(a0)+
-	dbra	d0,.fill
-
-	move.l	(sp)+,a0
-	ENDC
 
 	move.l	a6,d0
 	rts
@@ -331,7 +329,6 @@ FindCard:
 
 	move.l	#0,gbi_MemoryBase(a2)
 	move.l	#0,gbi_MemorySize(a2)
-;	 move.l  #MEMORY_SIZE/8,gbi_MemorySize(a2)
 	move.l	#$b80100,(gbi_RegisterBase,a2)
 
 	moveq	#0,d0
@@ -343,11 +340,11 @@ FindCard:
 	bne	.exit
 
 .compat
-    ; Earlier Minimig hardware returns its ID for every unused register.
-    ; Require the HDMI status register before using the new polling/IRQ path.
-    move.w  $b8010c,d1
-    and.w   #$fff0,d1
-    bne     .exit
+	; Earlier Minimig hardware returns its ID for every unused register.
+	; Require the HDMI status register before using the new polling/IRQ path.
+	move.w  $b8010c,d1
+	and.w   #$fff0,d1
+	bne     .exit
 	move.l	$4,a6	; Do we have any 24-bit Fast RAM?
 			; (This is the easiest way to ensure the FB's not in bank 0)
 	move.l	#MEMF_24BITDMA|MEMF_FAST,d1
@@ -357,37 +354,7 @@ FindCard:
 	moveq	#0,d0
 	bra .exit
 
-;	 move.l  $4.w,a6
-;	 move.l  #MEMORY_SIZE,d0
-;	 addi.l  #$00001FF,d0		 ; add 512 bytes-1
-;	 move.l  #MEMF_24BITDMA|MEMF_FAST|MEMF_REVERSE,d1	 ; Try $200000 RAM first
-;	 jsr	 _LVOAllocMem(a6)
-
-;	 tst.l	 d0
-;	 bne.b	 .ok
-
-;	 move.l  #MEMORY_SIZE,d0
-;	 addi.l  #$1ff,d0
-;	 move.l  #MEMF_FAST|MEMF_REVERSE,d1
-;	 jsr	 _LVOAllocMem(a6)
-;	 tst.l	 d0
-;	 bne.b	 .ok
-
-;	 ; If allocation failed, try a smaller chunk.
-;	 move.l  #MEMORY_SIZE/2,gbi_MemorySize(a2)
-;	 move.l  #MEMORY_SIZE/2,d0
-;	 addi.l  #$1ff,d0
-;	 move.l  #MEMF_24BITDMA|MEMF_FAST|MEMF_REVERSE,d1
-;	 jsr	 _LVOAllocMem(a6)
-;	 tst.l	 d0
-;	 beq.b	 .exit
-
-
 .ok
-;	 addi.l  #$000001FF,d0		 ; add 512-1
-;	 andi.l  #$FFFFFE00,d0		 ; and with ~(512-1) to align memory
-;	 move.l  d0,gbi_MemoryBase(a2)
-
 	moveq	#-1,d0
 .exit:
 	movem.l (sp)+,a2/a3/a6
@@ -396,52 +363,52 @@ FindCard:
 
 
 GetVideoMemory:
-    move.l  a0,-(a7)
-    move.l  #MEMORY_SIZE,d0
+	move.l  a0,-(a7)
+	move.l  #MEMORY_SIZE,d0
 
 .outerloop
-    move.l  (a1)+,d1
-    beq .done
-    BUG "Tooltype %s",d1
-    move.l  d1,a0
-    moveq   #0,d1
-    lea .tooltype,a2
+	move.l  (a1)+,d1
+	beq .done
+	BUG "Tooltype %s",d1
+	move.l  d1,a0
+	moveq   #0,d1
+	lea .tooltype,a2
 
 .innerloop
-    move.b  (a2)+,d2
-    beq .match
+	move.b  (a2)+,d2
+	beq .match
 .skipspaces
-    move.b  (a0)+,d1
-    cmp.b   #$20,d1
-    beq .skipspaces
-    and.b   #$df,d1
-    cmp.b d1,d2
-    beq .innerloop
-    bra .outerloop
+	move.b  (a0)+,d1
+	cmp.b   #$20,d1
+	beq .skipspaces
+	and.b   #$df,d1
+	cmp.b d1,d2
+	beq .innerloop
+	bra .outerloop
 
 .match
-    move.b  (a0)+,d1
-    cmp.b   #$20,d1
-    beq .match
+	move.b  (a0)+,d1
+	cmp.b   #$20,d1
+	beq .match
 
-    BUG "match %ld",d1
+	BUG "match %ld",d1
 
-    sub.b   #$30,d1
-    cmp.b #1,d1
-    blt .done
-    cmp.b #7,d1
-    bgt .done
-    move.l d1,d0
-    swap    d0
-    lsl.l   #4,d0
-    BUG "memory %ld",d0
+	sub.b   #$30,d1
+	cmp.b #1,d1
+	blt .done
+	cmp.b #7,d1
+	bgt .done
+	move.l d1,d0
+	swap    d0
+	lsl.l   #4,d0
+	BUG "memory %ld",d0
 .done
-    move.l  (a7)+,a0
-    rts
+	move.l  (a7)+,a0
+	rts
 .tooltype
-    dc.b   "VIDEOMEMORY",$1d,0
+	dc.b   "VIDEOMEMORY",$1d,0
 
-    even
+	even
 
 ;------------------------------------------------------------------------------
 InitCard:
@@ -482,10 +449,7 @@ InitCard:
 	move.l	#0,gbi_GraphicsControllerType(a2)
 	move.l	#0,gbi_PaletteChipType(a2)
 
-	moveq	#RGBFF_CLUT,d0
-	or.w	#RGBFF_R5G6B5,d0
-	or.w	#RGBFF_R5G5B5,d0
-	move.w	d0,gbi_RGBFormats(a2)
+	move.w	#RTG_RGB_FORMATS,gbi_RGBFormats(a2)
 
 	move.w	#8,gbi_BitsPerCannon(a2)
 	move.l	gbi_MemorySize(a2),d0
@@ -543,16 +507,12 @@ InitCard:
 	move.l	a1,gbi_SetSplitPosition(a2)
 
 
-;	 lea	 AllocCardMem(pc),a1
-;	 move.l  a1,gbi_AllocCardMem(a2)
-;	 lea	 FreeCardMem(pc),a1
-;	 move.l  a1,gbi_FreeCardMem(a2)
 
 	move.l	#113440000,gbi_MemoryClock(a2)
 
 	move.l	#0,(gbi_PixelClockCount+0,a2)
-	move.l	#1,(gbi_PixelClockCount+4,a2)
-	move.l	#1,(gbi_PixelClockCount+8,a2)
+	move.l	#9,(gbi_PixelClockCount+4,a2)
+	move.l	#9,(gbi_PixelClockCount+8,a2)
 	move.l	#0,(gbi_PixelClockCount+12,a2)
 	move.l	#0,(gbi_PixelClockCount+16,a2)
 ;- Planar
@@ -574,55 +534,41 @@ InitCard:
 
 	move.w	#0,(gbi_MaxHorResolution+0,a2)
 	move.w	#0,(gbi_MaxVerResolution+0,a2)
-	move.w	#1024,(gbi_MaxHorResolution+2,a2)
-	move.w	#768,(gbi_MaxVerResolution+2,a2)
-	move.w	#1024,(gbi_MaxHorResolution+4,a2)
-	move.w	#768,(gbi_MaxVerResolution+4,a2)
+; Resolution limits follow the selected build-time raster. Keep the
+; raster constants, RepeatClocks and FPGA timing consistent when adding profiles.
+	move.w	#RTG_WIDTH,(gbi_MaxHorResolution+2,a2)
+	move.w	#RTG_HEIGHT,(gbi_MaxVerResolution+2,a2)
+	move.w	#RTG_WIDTH,(gbi_MaxHorResolution+4,a2)
+	move.w	#RTG_HEIGHT,(gbi_MaxVerResolution+4,a2)
 	move.w	#0,(gbi_MaxHorResolution+6,a2)
 	move.w	#0,(gbi_MaxVerResolution+6,a2)
 	move.w	#0,(gbi_MaxHorResolution+8,a2)
 	move.w	#0,(gbi_MaxVerResolution+8,a2)
 
 	move.w	#0,(CardData_IntEnabled,a2)
-    movea.l gbi_RegisterBase(a2),a1
-    clr.w   gbi_MoniSwitch(a2)
-    clr.w   RTG_DISPLAY_SWITCH(a1) ; native until explicitly selected
-    move.w  #$7ff,RTG_SPLIT_ROW(a1)
-    move.w  #2,RTG_IRQ_CONTROL(a1) ; disable and clear stale IRQ
+	move.w  #1,CardData_ModeValid(a2)
+	move.w  #1,CardData_VRepeat(a2)
+	movea.l gbi_RegisterBase(a2),a1
+	clr.w   gbi_MoniSwitch(a2)
+	clr.w   RTG_DISPLAY_SWITCH(a1) ; native until explicitly selected
+	clr.w   RTG_REPEAT(a1)
+	clr.w   RTG_STRIDE(a1)
+	move.w  #$7ff,RTG_SPLIT_ROW(a1)
+	move.w  #2,RTG_IRQ_CONTROL(a1) ; disable and clear stale IRQ
 	lea	gbi_HardInterrupt(a2),a1
 	lea	VBL_ISR(pc),a0
 	move.l	a0,IS_CODE(a1)
-    move.l  a2,IS_DATA(a1)
+	move.l  a2,IS_DATA(a1)
 	moveq	#INTB_PORTS,d0
 	move.l	$4,a6
 	jsr	_LVOAddIntServer(a6)
 
-    ; Matching core supplies HDMI frame interrupts even while native is selected.
-    ori.l   #(1<<4),gbi_Flags(a2)    ; BIF_VBLANKINTERRUPT
+	; Matching core supplies HDMI frame interrupts even while native is selected.
+	ori.l   #(1<<4),gbi_Flags(a2)    ; BIF_VBLANKINTERRUPT
 	lea	SetInterrupt(pc),a1
 	move.l	a1,gbi_SetInterrupt(a2)
 
-	ifd	HasBlitter
-	ori.l	#(1<<15),gbi_Flags(a2)       ; BIF_BLITTER
-	lea	BlitRectNoMaskComplete(pc),a1
-	move.l	a1,gbi_BlitRectNoMaskComplete(a2)
-	lea	BlitRect(pc),a1
-	move.l	a1,gbi_BlitRect(a2)
-	lea	WaitBlitter(pc),a1
-	move.l	a1,gbi_WaitBlitter(a2)
-	ENDC
 
-	ifd	HasSprite
-	ori.l	#(1<<0),gbi_Flags(a2)        ; BIF_HARDWARESPRITE
-	lea	SetSprite(pc),a1
-	move.l	a1,gbi_SetSprite(a2)
-	lea	SetSpritePosition(pc),a1
-	move.l	a1,gbi_SetSpritePosition(a2)
-	lea	SetSpriteImage(pc),a1
-	move.l	a1,gbi_SetSpriteImage(a2)
-	lea	SetSpriteColor(pc),a1
-	move.l	a1,gbi_SetSpriteColor(a2)
-	ENDC
 
 	ori.l	#(1<<3),gbi_Flags(a2)        ; BIF_CACHEMODECHANGE
 	move.l	gbi_MemoryBase(a2),gbi_MemorySpaceBase(a2)
@@ -636,17 +582,21 @@ InitCard:
 ;------------------------------------------------------------------------------
 SetSwitch:
 ; a0: BoardInfo, d0.w: requested display. Return the previous switch state.
-    movem.l d1/a1,-(sp)
-    BUG "SetSwitch %ld",d0
-    move.w gbi_MoniSwitch(a0),d1
-    andi.w #1,d0
-    move.w d0,gbi_MoniSwitch(a0)
-    movea.l gbi_RegisterBase(a0),a1
-    move.w d0,RTG_DISPLAY_SWITCH(a1)
-    move.w d1,d0
-    andi.l #1,d0
-    movem.l (sp)+,d1/a1
-    rts
+	movem.l d1/a1,-(sp)
+	BUG "SetSwitch %ld",d0
+	move.w gbi_MoniSwitch(a0),d1
+	andi.w #1,d0
+	tst.w CardData_ModeValid(a0)
+	bne.s .valid_mode
+	moveq #0,d0
+.valid_mode:
+	move.w d0,gbi_MoniSwitch(a0)
+	movea.l gbi_RegisterBase(a0),a1
+	move.w d0,RTG_DISPLAY_SWITCH(a1)
+	move.w d1,d0
+	andi.l #1,d0
+	movem.l (sp)+,d1/a1
+	rts
 
 ;------------------------------------------------------------------------------
 SetDAC:
@@ -659,27 +609,90 @@ SetDAC:
 
 ; Indexed/16-bit format and RGB555/RGB565 selection; pixel clock is fixed.
 	moveq	#1,d0
-	cmp.l	#10,d7
+	cmp.l	#RGBFB_R5G6B5,d7
 	beq	.16bit
 	moveq	#2,d0
 .16bit
 	move.l	(gbi_RegisterBase,a0),a1
 	move.w	d0,(6,a1)
-    moveq #0,d0
-    cmp.l #1,d7
-    bne.s .store_format
-    move.w #$8000,d0
+	moveq #0,d0
+	cmp.l #RGBFB_CLUT,d7
+	bne.s .store_format
+	move.w #$8000,d0
 .store_format:
-    move.w d0,(4,a1)
+	move.w d0,(4,a1)
 .done
 	rts
 
 ;------------------------------------------------------------------------------
 SetGC:
-; a0: BoardInfo, a1: ModeInfo, d0: border. HDMI supplies fixed 1024x768 timing.
-    move.l a1,gbi_ModeInfo(a0)
-    move.w d0,gbi_Border(a0)
-    rts
+; a0: BoardInfo, a1: ModeInfo, d0: border. Physical HDMI timing stays fixed.
+	move.l a1,gbi_ModeInfo(a0)
+	move.w d0,gbi_Border(a0)
+	movem.l d1/a1,-(sp)
+	bsr ModeRepeat
+	movea.l gbi_RegisterBase(a0),a1
+	clr.w CardData_ModeValid(a0)
+	tst.l d0
+	bmi.s .invalid
+	move.w #1,CardData_ModeValid(a0)
+	move.w d0,RTG_REPEAT(a1)
+	lsr.w #2,d0
+	addq.w #1,d0
+	move.w d0,CardData_VRepeat(a0)
+	clr.w RTG_STRIDE(a1)
+	bra.s .done
+.invalid:
+	clr.w RTG_DISPLAY_SWITCH(a1)
+	clr.w gbi_MoniSwitch(a0)
+.done:
+	movem.l (sp)+,d1/a1
+	rts
+
+; a1: ModeInfo. Return d0=repeat encoding, d1=logical clock index, or d0=-1.
+; Choose the smallest hardware canvas that covers the requested dimensions.
+; Noncanonical modes may show adjacent framebuffer data outside their image.
+; P96 2.0 allocation callbacks cannot reserve missing rows automatically.
+ModeRepeat:
+; Exact canvases follow the build-time raster and burst-aligned 3x width.
+; Update the raster constants together with RepeatClocks and HDL timing.
+; Dimensions outside the physical raster are rejected for scanout.
+	moveq #0,d0
+	moveq #0,d1
+	tst.w gmi_Width(a1)
+	beq.s .invalid
+	tst.w gmi_Height(a1)
+	beq.s .invalid
+	cmpi.w #RTG_WIDTH,gmi_Width(a1)
+	bhi.s .invalid
+	cmpi.w #RTG_HEIGHT,gmi_Height(a1)
+	bhi.s .invalid
+	cmpi.w #RTG_HALF_WIDTH,gmi_Width(a1)
+	bhi.s .height
+	cmpi.w #RTG_THIRD_WIDTH,gmi_Width(a1)
+	bhi.s .double_x
+	moveq #2,d0
+	moveq #2,d1
+	bra.s .height
+.double_x:
+	moveq #1,d0
+	moveq #1,d1
+.height:
+	cmpi.w #RTG_HALF_HEIGHT,gmi_Height(a1)
+	bhi.s .done
+	cmpi.w #RTG_THIRD_HEIGHT,gmi_Height(a1)
+	bhi.s .double_y
+	ori.w #8,d0
+	addq.w #6,d1
+	rts
+.double_y:
+	ori.w #4,d0
+	addq.w #3,d1
+.done:
+	rts
+.invalid:
+	moveq #-1,d0
+	rts
 
 ;------------------------------------------------------------------------------
 SetPanning:
@@ -702,10 +715,18 @@ SetPanning:
 ;  On Minimig we simply set the start address.
 ;  and also set the card start address for screen dragging
 	BUG "SetPanning %ld, %ld, %ld, %ld, %ld\n",a1,d1,d2,d0,d7
+	tst.w CardData_ModeValid(a0)
+	beq .done
 	move.w	d1,(gbi_XOffset,a0)
 	move.w	d2,(gbi_YOffset,a0)
 
 	bsr	CalculateBytesPerRow	; Only trashes d0 and d1
+	move.l a2,-(sp)
+	movea.l gbi_RegisterBase(a0),a2
+	move.w d0,d1
+	lsr.w #4,d1
+	move.w d1,RTG_STRIDE(a2)
+	movea.l (sp)+,a2
 	mulu	d0,d2
 	add.l	d2,a1
 
@@ -728,7 +749,7 @@ SetPanning:
 	or.l	#$1000000,d1
 .skip2
 	move.l	d1,(8,a1)
-
+.done:
 	rts
 
 
@@ -741,52 +762,22 @@ CalculateBytesPerRow:
 ;  This function calculates the amount of bytes needed for a line of
 ;  "Width" pixels in the given RGBFormat.
 
-;	 BUG "BytesPerRow %ld,%ld\n",d0,d7
-
-	cmpi.l	#16,d7
-	bcc.b	.exit
-
-	move.w	.base(pc,d7.l*2),d1
-	jmp	.base(pc,d1.w)
-
-.base:
-	dc.w	.pp_1Bit-.base
-	dc.w	.pp_1Byte-.base
-	dc.w	.pp_3Bytes-.base
-	dc.w	.pp_3Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_4Bytes-.base
-	dc.w	.pp_4Bytes-.base
-	dc.w	.pp_4Bytes-.base
-	dc.w	.pp_4Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_2Bytes-.base
-	dc.w	.pp_1Byte-.base
-
-.pp_4Bytes:
+	; Offscreen bitmaps use their actual width, without expanding to a mode.
+	cmpi.l	#RGBFB_CLUT,d7
+	beq.s	.align
+	cmpi.l	#RGBFB_R5G6B5,d7
+	beq.s	.direct
+	cmpi.l	#RGBFB_R5G5B5,d7
+	bne.s	.unsupported
+.direct:
 	add.w	d0,d0
-.pp_2Bytes:
-	add.w	d0,d0
-	bra.b	.exit
-
-.pp_3Bytes:
-	move.w	d0,d1
-	add.w	d0,d1
-	add.w	d1,d0
-	bra.b	.exit
-
-.pp_1Bit:
-	lsr.w	#3,d0
-
-.pp_1Byte:
-
-.exit:
-;	 add.w	 #31,d0      ; Round up to multiple of 32 pixels
-;	 and.w	 #$ffe0,d0
+.align:
+	; Each source row starts on the SDRAM's 16-byte burst boundary.
+	addi.w	#15,d0
+	andi.w	#$fff0,d0
+	rts
+.unsupported:
+	moveq	#0,d0
 	rts
 
 ;------------------------------------------------------------------------------
@@ -809,7 +800,6 @@ SetColorArray:
 ;  per cannon your board has. So you might have to shift the colors
 ;  before writing them to the hardware.
 
-;	 BUG	 "SetColorArray ( %ld / %ld )",d0,d1
 
 	lea	gbi_CLUT(a0),a1
 	movea.l gbi_RegisterBase(a0),a0
@@ -884,166 +874,219 @@ SetClearMask:
 WaitVerticalSync:
 ; a0: BoardInfo, d0: FALSE waits for blank start, TRUE waits for blank end.
 ; Inactive scanout returns immediately, including during a clock switch.
-    movem.l d1/a1,-(sp)
-    movea.l gbi_RegisterBase(a0),a1
-    tst.w   d0
-    bne.s   .wait_end
+	movem.l d1/a1,-(sp)
+	movea.l gbi_RegisterBase(a0),a1
+	tst.w   d0
+	bne.s   .wait_end
 .wait_start:
-    move.w  RTG_STATUS(a1),d1
-    btst    #3,d1
-    beq.s   .done
-    btst    #0,d1
-    beq.s   .wait_start
-    bra.s   .done
+	move.w  RTG_STATUS(a1),d1
+	btst    #3,d1
+	beq.s   .done
+	btst    #0,d1
+	beq.s   .wait_start
+	bra.s   .done
 .wait_end:
-    move.w  RTG_STATUS(a1),d1
-    btst    #3,d1
-    beq.s   .done
-    btst    #0,d1
-    bne.s   .wait_end
+	move.w  RTG_STATUS(a1),d1
+	btst    #3,d1
+	beq.s   .done
+	btst    #0,d1
+	bne.s   .wait_end
 .done:
-    movem.l (sp)+,d1/a1
-    rts
+	movem.l (sp)+,d1/a1
+	rts
 
 ;------------------------------------------------------------------------------
 GetVSyncState:
 ; Report HDMI blanking rather than the independent Amiga beam position.
-    movea.l gbi_RegisterBase(a0),a1
-    move.w  RTG_STATUS(a1),d0
-    and.l   #1,d0
-    rts
+	movea.l gbi_RegisterBase(a0),a1
+	move.w  RTG_STATUS(a1),d0
+	and.l   #1,d0
+	rts
 
 ;------------------------------------------------------------------------------
 SetClock:
-;------------------------------------------------------------------------------
-
-;	For minimig this gets set at the same time as all the other parameters
-
-;	movea.l gbi_ModeInfo(a0),a1
-;	movea.l gbi_RegisterBase(a0),a0
-;	move.b	gmi_second_union(a1),d0
-;	lsl.w	#8,d0
-;	move.b	gmi_Clock(a1),d0
-;	move.w	d0,VDE_ClockDivider(a0)
-;	BUG	"VDE_ClockDivider = %lx",d0
+; The physical HDMI clock is fixed; this required callback has no work to do.
 	rts
 
 ;------------------------------------------------------------------------------
 ResolvePixelClock:
-; One fixed HDMI clock. No Agnus/PLL divider programming is required.
-; a1: ModeInfo; return d0=clock index 0.
-    move.l #66000000,gmi_PixelClock(a1)
-    clr.w gmi_Clock(a1)
-    moveq #0,d0
-    rts
+; Logical clocks describe scaled modes; the physical clock is fixed per build.
+; a1: ModeInfo. Always return a nonzero clock, including editor placeholders.
+	movem.l d1/d2,-(sp)
+	bsr ModeRepeat
+	tst.l d0
+	bmi .invalid
+	move.l RepeatClocks(pc,d1.l*4),gmi_PixelClock(a1)
+	clr.w gmi_Clock(a1)
+	move.b d1,gmi_Clock(a1)
+	andi.w #3,d0
+	move.w RepeatHTotal(pc,d0.w*2),d2
+	move.w d2,gmi_HorTotal(a1)
+	sub.w gmi_Width(a1),d2
+	move.w d2,gmi_HorBlankSize(a1)
+	move.w RepeatCanvasWidth(pc,d0.w*2),d2
+	sub.w gmi_Width(a1),d2
+	add.w RepeatHStart(pc,d0.w*2),d2
+	move.w d2,gmi_HorSyncStart(a1)
+	move.w RepeatHSize(pc,d0.w*2),gmi_HorSyncSize(a1)
+	move.w d1,d0
+	divu.w #3,d0
+	andi.l #$ffff,d0
+	move.w RepeatVTotal(pc,d0.w*2),d2
+	move.w d2,gmi_VerTotal(a1)
+	sub.w gmi_Height(a1),d2
+	move.w d2,gmi_VerBlankSize(a1)
+	move.w RepeatCanvasHeight(pc,d0.w*2),d2
+	sub.w gmi_Height(a1),d2
+	add.w RepeatVStart(pc,d0.w*2),d2
+	move.w d2,gmi_VerSyncStart(a1)
+	move.w RepeatVSize(pc,d0.w*2),gmi_VerSyncSize(a1)
+	move.l d1,d0
+	bra.s .done
+.invalid:
+	; Mode editing may temporarily pass zero or out-of-range dimensions.
+	; Keep its clock/timing arithmetic defined, while SetGC rejects scanout.
+	move.l #RTG_PIXEL_CLOCK,gmi_PixelClock(a1)
+	clr.w gmi_Clock(a1)
+	move.w #RTG_HTOTAL,gmi_HorTotal(a1)
+	move.w #(RTG_HTOTAL-RTG_WIDTH),gmi_HorBlankSize(a1)
+	move.w #RTG_HSTART,gmi_HorSyncStart(a1)
+	move.w #RTG_HSIZE,gmi_HorSyncSize(a1)
+	move.w #RTG_VTOTAL,gmi_VerTotal(a1)
+	move.w #(RTG_VTOTAL-RTG_HEIGHT),gmi_VerBlankSize(a1)
+	move.w #RTG_VSTART,gmi_VerSyncStart(a1)
+	move.w #RTG_VSIZE,gmi_VerSyncSize(a1)
+	moveq #0,d0
+.done:
+	movem.l (sp)+,d1/d2
+	rts
 
 ;------------------------------------------------------------------------------
 GetPixelClock:
-; d0: index, d7: RGB format. Return frequency in d0, bytes/pixel in d1.
-    moveq #0,d1
-    cmp.l #1,d7
-    beq.s .indexed
-    cmp.l #10,d7
-    beq.s .direct
-    cmp.l #11,d7
-    beq.s .direct
-    moveq #0,d0
-    rts
+; d0: index, d7: RGB format. Return logical frequency and bytes/source pixel.
+	moveq #0,d1
+	cmp.l #RGBFB_CLUT,d7
+	beq.s .indexed
+	cmp.l #RGBFB_R5G6B5,d7
+	beq.s .direct
+	cmp.l #RGBFB_R5G5B5,d7
+	beq.s .direct
+.invalid:
+	moveq #0,d0
+	rts
 .indexed:
-    moveq #1,d1
-    bra.s .clock
+	moveq #1,d1
+	bra.s .clock
 .direct:
-    moveq #2,d1
+	moveq #2,d1
 .clock:
-    move.l #66000000,d0
-    rts
+	cmpi.l #9,d0
+	bcc.s .invalid
+	move.l RepeatClocks(pc,d0.l*4),d0
+	rts
+
+; Clock = physical pixel clock * logical HTotal * logical VTotal /
+; (physical HTotal * physical VTotal), rounded to the nearest integer Hz.
+; Entries are grouped by vertical factor, then horizontal factor. The default
+; raster's 3x vertical total rounds to 269, so its clocks include that rounding.
+; PixelClockCount remains nine for either full 3-by-3 subset.
+RepeatClocks:
+	IFD RTG_720P
+	dc.l 74250000,37125000,24750000
+	dc.l 37125000,18562500,12375000
+	dc.l 24750000,12375000,8250000
+	ELSE
+	dc.l 66000000,33000000,22000000
+	dc.l 33000000,16500000,11000000
+	dc.l 22027295,11013648,7342432
+	ENDC
+RepeatCanvasWidth:
+	dc.w RTG_WIDTH,RTG_HALF_WIDTH,RTG_THIRD_WIDTH
+RepeatCanvasHeight:
+	dc.w RTG_HEIGHT,RTG_HALF_HEIGHT,RTG_THIRD_HEIGHT
+RepeatHTotal:
+	dc.w RTG_HTOTAL,(RTG_HTOTAL+1)/2,(RTG_HTOTAL+2)/3
+RepeatHStart:
+	dc.w RTG_HSTART,(RTG_HSTART+1)/2,(RTG_HSTART+RTG_THIRD_BORDER+2)/3
+RepeatHSize:
+	dc.w RTG_HSIZE,RTG_HSIZE/2,RTG_HSIZE/3
+RepeatVTotal:
+	dc.w RTG_VTOTAL,(RTG_VTOTAL+1)/2,(RTG_VTOTAL+2)/3
+RepeatVStart:
+	dc.w RTG_VSTART,(RTG_VSTART+1)/2,(RTG_VSTART+2)/3
+RepeatVSize:
+	dc.w RTG_VSIZE,(RTG_VSIZE+1)/2,(RTG_VSIZE+2)/3
 
 ;------------------------------------------------------------------------------
 SetInterrupt:
-    movem.l d1/a1,-(sp)
-    move.w  d0,CardData_IntEnabled(a0)
-    movea.l gbi_RegisterBase(a0),a1
-    moveq   #2,d1 ; acknowledge and disable
-    tst.w   d0
-    beq.s   .store
-    moveq   #3,d1 ; acknowledge and enable
+	movem.l d1/a1,-(sp)
+	move.w  d0,CardData_IntEnabled(a0)
+	movea.l gbi_RegisterBase(a0),a1
+	moveq   #2,d1 ; acknowledge and disable
+	tst.w   d0
+	beq.s   .store
+	moveq   #3,d1 ; acknowledge and enable
 .store:
-    move.w  d1,RTG_IRQ_CONTROL(a1)
-    movem.l (sp)+,d1/a1
-    rts
+	move.w  d1,RTG_IRQ_CONTROL(a1)
+	movem.l (sp)+,d1/a1
+	rts
 
 ;------------------------------------------------------------------------------
 VBL_ISR:
 ; Level-2 PORTS is shared with CIA/Gayle. Check our source before handling it.
-    movem.l d1/a0-a1/a6,-(sp)
-    movea.l gbi_RegisterBase(a1),a0
-    move.w  RTG_STATUS(a0),d1
-    btst    #1,d1
-    beq.s   .done
-    moveq   #2,d1
-    tst.w   CardData_IntEnabled(a1)
-    beq.s   .ack_only
-    moveq   #3,d1
+	movem.l d1/a0-a1/a6,-(sp)
+	movea.l gbi_RegisterBase(a1),a0
+	move.w  RTG_STATUS(a0),d1
+	btst    #1,d1
+	beq.s   .done
+	moveq   #2,d1
+	tst.w   CardData_IntEnabled(a1)
+	beq.s   .ack_only
+	moveq   #3,d1
 .ack_only:
-    move.w  d1,RTG_IRQ_CONTROL(a0)
-    move.w  RTG_STATUS(a0),d1 ; finish the hardware acknowledgement
-    tst.w   CardData_IntEnabled(a1)
-    beq.s   .done
-    movea.l gbi_ExecBase(a1),a6
-    lea     gbi_SoftInterrupt(a1),a1
-    jsr     _LVOCause(a6)
+	move.w  d1,RTG_IRQ_CONTROL(a0)
+	move.w  RTG_STATUS(a0),d1 ; finish the hardware acknowledgement
+	tst.w   CardData_IntEnabled(a1)
+	beq.s   .done
+	movea.l gbi_ExecBase(a1),a6
+	lea     gbi_SoftInterrupt(a1),a1
+	jsr     _LVOCause(a6)
 .done:
-    movem.l (sp)+,d1/a0-a1/a6
-    moveq   #0,d0 ; allow other servers on the shared interrupt to run
-    rts
+	movem.l (sp)+,d1/a0-a1/a6
+	moveq   #0,d0 ; allow other servers on the shared interrupt to run
+	rts
 
 ;------------------------------------------------------------------------------
 GetCompatibleFormats:
-;------------------------------------------------------------------------------
-;	 BUG "GCF %lx",d7
-	moveq	#-1,d0
+; Supported formats share the same linear memory aperture and may coexist.
+	moveq	#0,d0
+	cmpi.l	#RGBFB_CLUT,d7
+	beq.s	.supported
+	cmpi.l	#RGBFB_R5G6B5,d7
+	beq.s	.supported
+	cmpi.l	#RGBFB_R5G5B5,d7
+	bne.s	.done
+.supported:
+	move.l	#RTG_RGB_FORMATS,d0
+.done:
 	rts
-
-
-;------------------------------------------------------------------------------
-GetBytesPerPixel:
-;------------------------------------------------------------------------------
-;	 BUG "GBPP %lx",d7
-	move.b	.BytesPerPixel(pc,d7.l),d7
-	rts
-
-.BytesPerPixel:
-
-	dc.b	1	; RGBFB_NONE
-	dc.b	1	; RGBFB_CLUT,
-	dc.b	3	; RGBFB_R8G8B8
-	dc.b	3	; RGBFB_B8G8R8
-	dc.b	2	; RGBFB_R5G6B5PC
-	dc.b	2	; RGBFB_R5G5B5PC
-	dc.b	4	; RGBFB_A8R8G8B8
-	dc.b	4	; RGBFB_A8B8G8R8
-	dc.b	4	; RGBFB_R8G8B8A8
-	dc.b	4	; RGBFB_B8G8R8A8
-	dc.b	2	; RGBFB_R5G6B5
-	dc.b	2	; RGBFB_R5G5B5
-	dc.b	2	; RGBFB_B5G6R5PC
-	dc.b	2	; RGBFB_B5G5R5PC
-	dc.b	2	; RGBFB_Y4U2V2
-	dc.b	1	; RGBFB_Y4U1V1
-
 
 ;==============================================================================
 
 SetSplitPosition:
 ; a0: BoardInfo, d0: first secondary-framebuffer row; 0 disables dragging.
-    move.w d0,gbi_YSplit(a0)
-    movea.l gbi_RegisterBase(a0),a1
-    tst.w d0
-    bne.s .store
-    move.w #$7ff,d0
+	move.w d0,gbi_YSplit(a0)
+	movea.l gbi_RegisterBase(a0),a1
+	tst.w d0
+	beq.s .disable
+	mulu.w CardData_VRepeat(a0),d0
+	cmpi.l #RTG_HEIGHT,d0
+	bcs.s .store
+.disable:
+	move.w #$7ff,d0
 .store:
-    move.w d0,RTG_SPLIT_ROW(a1)
-    rts
+	move.w d0,RTG_SPLIT_ROW(a1)
+	rts
 
 ProgEnd:
 	end

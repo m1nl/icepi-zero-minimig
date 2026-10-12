@@ -94,8 +94,11 @@ port (
 	VBR_out       : buffer  std_logic_vector(31 downto 0);
 	-- RTG interface
 	rtg_reg_addr : out std_logic_vector(10 downto 0);
-	rtg_reg_d    : out std_logic_vector(15 downto 0);
+	rtg_reg_req  : out std_logic;
+	rtg_reg_ack  : in std_logic;
 	rtg_reg_wr   : out std_logic;
+	rtg_reg_d    : out std_logic_vector(15 downto 0);
+	rtg_reg_q    : in std_logic_vector(15 downto 0);
 	-- Audio interface
 	audio_buf    : in std_logic;
 	audio_ena    : out std_logic;
@@ -165,6 +168,8 @@ signal sel_undecoded    : std_logic;
 signal sel_undecoded_d  : std_logic;
 signal sel_akiko        : std_logic;
 signal sel_akiko_d      : std_logic;
+signal sel_rtg          : std_logic;
+signal sel_rtg_d        : std_logic;
 signal sel_host         : std_logic;
 signal sel_host_d       : std_logic;
 signal sel_audio        : std_logic;
@@ -183,6 +188,9 @@ signal akiko_q          : std_logic_vector(15 downto 0);
 signal akiko_wr         : std_logic;
 signal akiko_req        : std_logic;
 signal akiko_ack        : std_logic;
+
+-- RTG ACK delayed (because we register output)
+signal rtg_reg_ack_d       : std_logic;
 
 -- Host ACK delayed (because we register output)
 signal host_ack_d       : std_logic;
@@ -261,21 +269,25 @@ process(clk) begin
 	if rising_edge(clk) then
 		if (clkena='1') then
 			sel_akiko_d <= '0';
+			sel_rtg_d <= '0';
 			sel_host_d <= '0';
 			sel_undecoded_d <= '0';
 
 			ram_req <= '0';
 			chipset_req <= '0';
 
+			rtg_reg_ack_d <= '0';
 			host_ack_d <= '0';
 		else
 			sel_akiko_d <= sel_akiko and not cpu_internal;
+			sel_rtg_d <= sel_rtg and not cpu_internal;
 			sel_host_d <= sel_host and not cpu_internal;
 			sel_undecoded_d <= sel_32 and not sel_ram;
 
 			ram_req <= sel_ram and not sel_nmi_vector and not cpu_internal;
-			chipset_req <= (not sel_ram or sel_nmi_vector) and not cpu_internal and not sel_gayle_ide and not sel_akiko and not sel_host and not sel_32;
+			chipset_req <= (not sel_ram or sel_nmi_vector) and not cpu_internal and not sel_gayle_ide and not sel_akiko and not sel_rtg and not sel_host and not sel_32;
 
+			rtg_reg_ack_d <= rtg_reg_ack;
 			host_ack_d <= host_ack;
 		end if;
 	end if;
@@ -289,6 +301,8 @@ process(clk) begin
 	if rising_edge(clk) then
 		if sel_undecoded_d ='1' then
 			datatg68_c <= X"FFFF";
+		elsif sel_rtg_d='1' then
+			datatg68_c <= rtg_reg_q;
 		elsif sel_host_d='1' then
 			datatg68_c <= host_q;
 		elsif sel_eth='1' then
@@ -319,8 +333,9 @@ SINGLERAM_ZIII: if dualsdram=0 generate
 end generate;
 
 sel_gayle_ide <= '0'; -- '1' when state(1 downto 0)="10" and cpuaddr(31 downto 14)=X"00DA"&"00" else '0';
-sel_akiko <= '1' when (cpuaddr(31 downto 12)=X"00B80" and (havec2p=1)) else '0'; -- $B80xxx
-sel_host <= '1' when (cpuaddr(31 downto 12)=X"00B81" and (haveamigahost=1)) else '0'; -- $B81xxx
+sel_rtg <= '1' when cpuaddr(31 downto 12)=X"00B80" and havertg=1 and (cpuaddr(10)='1' or cpuaddr(9 downto 8)="01") else '0';
+sel_akiko <= '1' when cpuaddr(31 downto 12)=X"00B80" and havec2p=1 and sel_rtg='0' else '0';
+sel_host <= '1' when cpuaddr(31 downto 12)=X"00B81" and haveamigahost=1 else '0'; -- $B81xxx
 sel_32 <= '1' when cpu(1)='1' and cpuaddr(31 downto 24)/=X"00" and cpuaddr(31 downto 24)/=X"ff" else '0'; -- Decode 32-bit space, but exclude interrupt vectors
 sel_z2ram <= '1' when (cpuaddr(31 downto 24)=X"00") and
 	((cpuaddr(23 downto 21)="001") or
@@ -503,12 +518,17 @@ port map
 	q => akiko_q
 );
 
-akiko_req <= '1' when sel_akiko_d='1' and req_enable='1' else '0';
-akiko_wr <= '1' when cpu_write='1' else '0';
+akiko_req <= sel_akiko_d and req_enable;
+akiko_wr <= cpu_write;
 akiko_d <= w_datatg68;
 
-host_req <= '1' when sel_host_d='1' and req_enable='1' else '0';
-host_wr <= '1' when cpu_write='1' else '0';
+rtg_reg_req <= sel_rtg_d and req_enable;
+rtg_reg_wr <= cpu_write;
+rtg_reg_addr <= cpuaddr(10 downto 0);
+rtg_reg_d <= w_datatg68;
+
+host_req <= sel_host_d and req_enable;
+host_wr <= cpu_write;
 host_d <= w_datatg68;
 
 buslogic : block
@@ -532,6 +552,7 @@ begin
 			(cpu_internal='1' and slower(0)='0') or
 			(sel_undecoded_d='1' and slower(0)='0') or
 			akiko_ack='1' or
+			rtg_reg_ack_d='1' or
 			host_ack_d='1' or
 			ramready='1' else '0';
 

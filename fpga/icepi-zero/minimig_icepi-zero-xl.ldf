@@ -2,12 +2,15 @@
 <BaliProject version="3.2" title="minimig_icepi-zero" device="LFE5U-45F-6BG256C" default_implementation="Minimig_IcePi-Zero-XL">
     <Options/>
     <Implementation title="Minimig_IcePi-Zero-XL" dir="Minimig_IcePi-Zero-XL" description="Minimig_IcePi-Zero-XL" synthesis="synplify" default_strategy="Strategy1">
-        <Options def_top="minimig_icepizero_top" top="minimig_icepizero_top"/>
+        <Options def_top="jcapture" top="minimig_icepizero_top"/>
         <Source name="board_config.vhd" type="VHDL" type_short="VHDL">
             <Options/>
         </Source>
         <Source name="../../rtl/soc/minimig_virtual_top.v" type="Verilog" type_short="Verilog">
             <Options/>
+        </Source>
+        <Source name="../../rtl/soc/minimig_icepi-zero_top.vhd" type="VHDL" type_short="VHDL">
+            <Options top_module="minimig_icepizero_top"/>
         </Source>
         <Source name="../../rtl/tg68k/TG68K_ALU.vhd" type="VHDL" type_short="VHDL">
             <Options/>
@@ -19,6 +22,18 @@
             <Options/>
         </Source>
         <Source name="../../rtl/rtg/VideoStream.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/hdmi/video_clock_control.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/hdmi/audio_cdc.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/rtg/rtg_async_fifo.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
+        <Source name="../../rtl/rtg/rtg_osd.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
         <Source name="../../rtl/rtg/rtg_video.v" type="Verilog" type_short="Verilog">
@@ -353,9 +368,6 @@
         </Source>
         <Source name="../../rtl/jtag/vjtag_fifo.vhd" type="VHDL" type_short="VHDL">
             <Options/>
-        </Source>
-        <Source name="../../rtl/soc/minimig_icepi-zero_top.vhd" type="VHDL" type_short="VHDL">
-            <Options top_module="minimig_icepizero_top"/>
         </Source>
         <Source name="../../rtl/lattice/amiga_clk_lattice_pll.vhd" type="VHDL" type_short="VHDL">
             <Options/>

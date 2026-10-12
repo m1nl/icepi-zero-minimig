@@ -36,9 +36,24 @@ package minimig_virtual_pkg is
 		sys_tck : in std_logic := '1';
 		sys_tms : in std_logic := '1';
 
-		CLK_IN 		:   in std_logic;
+		CLK_IN		:   in std_logic;
 		CLK_USB_IN 	:   in std_logic;
-		RESET_N 	:   in STD_LOGIC;
+		CLK_RTG_IN	:   in std_logic;
+
+		RESET_N		:   in STD_LOGIC;
+
+		RTG_ENABLE	: out std_logic;
+		RTG_ACTIVE	: in std_logic;
+		RTG_VIDEO_RESET	: in std_logic;
+		RTG_RGB		: out std_logic_vector(23 downto 0);
+
+		HDMI_FRAME_START	: in std_logic;
+		HDMI_VBLANK_START	: in std_logic;
+		HDMI_RTG_PIXEL_REQUEST : in std_logic;
+		HDMI_RTG_FRAME_REQUEST : in std_logic;
+		HDMI_RTG_LINE_PREPARE : in std_logic;
+		HDMI_OSD_PIXEL_REQUEST : in std_logic;
+		HDMI_OSD_FRAME_REQUEST : in std_logic;
 
 		CLK_114		:	 out STD_LOGIC;
 		CLK_28		:	 out STD_LOGIC;

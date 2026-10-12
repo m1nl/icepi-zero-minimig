@@ -229,6 +229,7 @@ sdram_ctrl #(
   .rtgRd        (rtgRd            ),
   .rtgack       (rtgack           ),
   .rtgpri       (rtgpri           ),
+  .rtg_extend_ok(1'b1             ),
   // Audio
   .audAddr      (audAddr          ),
   .audce        (audce            ),
@@ -316,6 +317,7 @@ sdram_ctrl #(
   .rtgRd        (          ),
   .rtgack       (          ),
   .rtgpri       (          ),
+  .rtg_extend_ok(1'b0      ),
   // Audio
   .audAddr      (       ),
   .audce        (1'b0   ),

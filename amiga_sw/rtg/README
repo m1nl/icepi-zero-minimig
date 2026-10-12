@@ -16,6 +16,35 @@ Run from the repository root:
 
     make -C amiga_sw/rtg
 
+The default raster is 1024x768 at 66 MHz. To build the alternate driver:
+
+    make -C amiga_sw/rtg RTG_720P=1
+
+This defines RTG_720P for the assembler and selects 1280x720 at 74.25 MHz,
+with totals 1650x750, horizontal front porch/sync 110/40 and vertical front
+porch/sync 5/5. HDMI, RTG scanout, the board PLL and clock constraints must
+be configured for the same raster. The driver does not change FPGA timing.
+
+The alternate exact source widths are 1280 (1x), 640 (2x), and 416 (3x);
+heights are 720 (1x), 360 (2x), and 240 (3x). All nine combinations support
+CLUT, RGB565 and RGB555. The 416-wide modes occupy 1248 output pixels,
+leaving a 16-pixel black border on each side. Noncanonical fallback modes
+use the selected profile's canvas thresholds and retain the same limitations.
+The .card file still does not install a Picasso96Mode mode list.
+
+Use RTG_720P=0 (or omit it) to restore 1024x768. Changing the option rebuilds
+the driver and floppy image without make clean; output filenames are unchanged.
+For direct assembly, define RTG_720P only for the 720p build. The raster
+constants and RepeatClocks in minimig.card.asm are the place to add profiles.
+
+Serial debug logging is disabled by default. To include it in the driver:
+
+    make -C amiga_sw/rtg DEBUG=1
+
+Use DEBUG=0 (or omit DEBUG) to return to the normal build. Changing this
+option rebuilds the driver and floppy image without requiring make clean.
+The standalone rtgcheck diagnostic is available in both builds.
+
 Missing Amiga NDK and public/private P96 headers are downloaded into the
 ignored .deps directory by download_deps.sh. Subsequent builds reuse them.
 To download just the dependencies:
@@ -71,6 +100,62 @@ remains unavailable in RTG mode, however.)
 Installation
 ~~~~~~~~~~~~
 
+V1.13 adds the optional RTG_720P build profile. Default builds retain the
+1024x768 mode set and register layout. Use the matching FPGA raster and
+create the selected profile's exact source modes in Picasso96Mode.
+
+V1.12 keeps nonzero clock/timing values for unsupported resolutions, avoiding
+the previous zero-MHz rejection during mode editing. For nonzero dimensions
+within 1024x768, it selects repetition independently: widths up to 320 use
+3x, up to 512 use 2x, otherwise 1x; heights up to 256 use 3x, up to 384 use
+2x, otherwise 1x. Zero-sized or oversized modes cannot enable RTG scanout.
+No HDL or register-layout change is required.
+
+This is a best-effort display fallback, not additional exact hardware modes.
+Stride follows the actual bitmap pitch, but hardware still reads a complete
+1024/512/320 by 768/384/256 canvas. Outside a smaller image it may display
+data from later rows or beyond the bitmap allocation; those areas are not
+guaranteed black. For example, 320x240 uses 3x3 repetition and reads 16 extra
+source rows. Prefer the nine exact modes below, especially for Workbench.
+
+V1.11 removes bitmap canvas-width expansion, supports only the advertised
+CLUT, RGB565 and RGB555 formats, and disables serial debug logging by default.
+It uses the same register layout as V1.10 and requires no further core update.
+
+V1.10 removes the unused frame-sequence diagnostic and compacts the RTG
+control registers. Install the matching core and driver together; older
+versions use different control-register addresses. The legacy ID and status
+registers retain their addresses.
+
+V1.9 adds independent 1x, 2x and 3x pixel repetition with the matching core.
+The HDMI output remains 1024x768 at 66 MHz. Supported source widths are
+1024 (1x), 512 (2x), and 320 (3x); supported heights are 768 (1x), 384 (2x),
+and 256 (3x). Any width/height combination from those lists is supported.
+For example, 1024x384 uses 1x horizontally and 2x vertically. The 320-wide
+modes produce 960 output pixels with a 32-pixel black border on each side.
+
+P96 2.0 allocation callbacks do not provide the mode or bitmap height.
+The exact supported modes therefore use complete source canvases. V1.12
+also allows the imperfect fallback described above, without replacing the
+P96 memory allocator. For example, 960x384 uses 1x2 repetition, but hardware
+still reads 1024 source pixels per output row.
+CalculateBytesPerRow aligns the actual bitmap row size to 16 bytes, including
+small offscreen bitmaps. SetPanning programs the actual stride. A displayed
+screen bitmap must cover the full hardware canvas width and height for a
+correct image. Horizontal panning is not supported. Dragged screens must share
+format and repetition settings.
+
+Picasso96Mode settings supply the mode list; the .card driver does not
+install one. Create the supported combinations there. The logical clock
+and timing callbacks describe scaled modes; they do not reprogram HDMI.
+Vertical repetition rereads each output row from SDRAM, so it requires no
+additional row RAM and does not reduce SDRAM traffic by itself.
+
+New registers relative to $B80100:
+  $14: bits 1:0 horizontal, bits 3:2 vertical; 0=1x, 1=2x, 2=3x.
+  $16: source stride in 16-byte bursts; zero selects the visible row size.
+Changes take effect when the next frame is prepared.
+
 V1.8 restores BIF_VBLANKINTERRUPT and requires the matching FPGA update.
 The core now supplies frame interrupts from the selected HDMI pixel clock
 in both native and RTG modes, so P96 can receive its first interrupt before
@@ -86,8 +171,8 @@ at 66 MHz. It does not program Agnus timing or BEAMCON0. Native video is
 selected at reset and until P96 explicitly switches to RTG.
 
 The RTG-owned word registers are:
-  $B80112: display switch, bit 0 (0 native / 1 RTG), read/write.
-  $B80114: secondary framebuffer's first display row, read/write;
+  $B80110: display switch, bit 0 (0 native / 1 RTG), read/write.
+  $B80112: secondary framebuffer's first display row, read/write;
            $7ff disables the screen split. Rows are HDMI active-area rows.
 Framebuffer, pixel-format, palette and HDMI vblank registers retain their
 existing addresses. The clock controller resets HDMI during mode switching;

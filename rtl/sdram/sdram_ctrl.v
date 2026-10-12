@@ -68,6 +68,7 @@ module sdram_ctrl # (parameter addr_max_bits=26, parameter addr_prefix_bits=0, p
   input wire            rtgce,
   output wire           rtgack,
   input wire            rtgpri,
+  input wire            rtg_extend_ok,
   output wire           rtgfill,
   output wire    [15:0] rtgRd,
   // Audio
@@ -489,8 +490,10 @@ always @(posedge sysclk) begin
 	host_slot1ok <= (slot2_type==IDLE || slot2_bank!=hostAddr[24:23]);
 	aud_slot1ok <= slot1_type!=AUDIO && !hostatn && (slot2_type==IDLE || slot2_bank!=2'b00);
 
-	// Is the RTG subsystem requesting the last word of a column, or blocking the CPU?
-	rtg_extendable <= rtg_hungry && (!refresh_pending) && rtgAddr[9:4]!=6'b111111 ? 1'b1 : 1'b0;
+	// Urgency reserves service independently of open-row read extension.
+	// RTG withdraws extension permission before an address rewind or owner change.
+	rtg_extendable <= rtg_hungry && rtg_extend_ok && (!refresh_pending) &&
+	                  rtgAddr[9:4]!=6'b111111 ? 1'b1 : 1'b0;
 end
 
 //// sdram control ////

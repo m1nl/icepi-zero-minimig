@@ -5,6 +5,8 @@
 // This version synchronizes to an external sync signal which is expected to
 // have exactly half the horizontal refresh rate.
 
+// RTG mode instead generates free-running 1024x768 timing.
+
 module hdmi
 #(
     // The IT content bit indicates that image samples are generated in an ad-hoc
@@ -23,9 +25,14 @@ module hdmi
     // Enable this flag if the output should be a DVI signal. You might want to do this to reduce resource usage or if you're only outputting video.
     parameter bit DVI_OUTPUT = 1'b0,
 
+    // Pixel periods by which RTG/OSD requests lead HDMI coordinates (0..3).
+    // Use 3 for a rising-edge RGB output register, 2 for a falling-edge one.
+    parameter int RTG_REQUEST_LEAD = 3,
+
     // **All parameters below matter ONLY IF you plan on sending auxiliary data (DVI_OUTPUT == 1'b0)**
 
     parameter int VIDEO_RATE = 28571400,
+    parameter int RTG_VIDEO_RATE = 66000000,
 
     // As specified in Section 7.3, the minimal audio requirements are met: 16-bit or more L-PCM audio at 32 kHz, 44.1 kHz, or 48 kHz.
     // See Table 7-4 or README.md for an enumeration of sampling frequencies supported by HDMI.
@@ -39,7 +46,18 @@ module hdmi
     // If you care about this, change it below.
     parameter bit [8*8-1:0] VENDOR_NAME = {"Unknown", 8'd0}, // Must be 8 bytes null-padded 7-bit ASCII
     parameter bit [8*16-1:0] PRODUCT_DESCRIPTION = {"FPGA", 96'd0}, // Must be 16 bytes null-padded 7-bit ASCII
-    parameter bit [7:0] SOURCE_DEVICE_INFORMATION = 8'h00 // See README.md or CTA-861-G for the list of valid codes
+    parameter bit [7:0] SOURCE_DEVICE_INFORMATION = 8'h00, // See README.md or CTA-861-G for the list of valid codes
+
+    // RTG mode parameters
+    parameter bit [10:0] RTG_FRAME_WIDTH = 1344,
+    parameter bit [ 9:0] RTG_FRAME_HEIGHT = 806,
+    parameter bit [10:0] RTG_SCREEN_WIDTH = 1024,
+    parameter bit [ 9:0] RTG_SCREEN_HEIGHT = 768,
+    parameter bit [10:0] RTG_HSYNC_PULSE_START = 24,
+    parameter bit [10:0] RTG_HSYNC_PULSE_SIZE = 136,
+    parameter bit [ 9:0] RTG_VSYNC_PULSE_START = 3,
+    parameter bit [ 9:0] RTG_VSYNC_PULSE_SIZE = 6,
+    parameter bit [ 1:0] RTG_POLARITY_INVERT = 2'b11
 )
 (
     input logic clk_pixel_x5,
@@ -47,6 +65,17 @@ module hdmi
     // synchronous reset back to 0,0
     input logic reset,
 
+    output reg frame_start_toggle,
+    output reg vblank_start_toggle,
+
+    // Registered requests, consumed synchronously by the RTG PLL domain.
+    output reg rtg_pixel_request,
+    output reg rtg_frame_request,
+    output reg rtg_line_prepare,
+    output reg osd_pixel_request,
+    output reg osd_frame_request,
+
+    input logic       rtg_en,      // 1 for free-running 1024x768 timing
     input logic       pal_mode,    // 1 for pal timing
     input logic       long_frame,  // 1 if short frame has been detected
     input logic       interlace,   // 1 if interlace has been detected
@@ -80,6 +109,7 @@ logic [7:0] cea_pal    = 8'd17; // 720x576p @ 50Hz
 logic [7:0] cea_pal_i  = 8'd21; // 720(1440)x576i @ 50Hz
 logic [7:0] cea_ntsc   = 8'd02; // 720x480p @ 59.94/60Hz
 logic [7:0] cea_ntsc_i = 8'd06; // 720(1440)x480i @ 59.94/60Hz
+logic [7:0] cea_rtg    = 8'd0;  // 1024x768 (no CEA video identification code)
 
 logic [10:0] frame_width;
 logic [10:0] screen_width;
@@ -96,7 +126,68 @@ logic [7:0] video_id_code;
 logic [10:0] cx;
 logic  [9:0] cy;
 
-assign invert = 2'b11;
+// RTG-only request coordinates, RTG_REQUEST_LEAD pixels ahead.
+// Resolution maintenance: this request generator uses the fixed 1024x768
+// raster (1344x806 total). Another raster needs matching wrap/blank/window
+// constants here and matching RTG timing below, not just driver mode entries.
+localparam [10:0] REGISTERED_LEAD = RTG_REQUEST_LEAD + 1;
+
+localparam [10:0] SCAN_WRAP = RTG_FRAME_WIDTH - (RTG_REQUEST_LEAD + 1);
+localparam [10:0] SCAN_BLANK = RTG_SCREEN_WIDTH - (RTG_REQUEST_LEAD + 1);
+localparam [ 1:0] SCAN_WRAP_STEP = RTG_REQUEST_LEAD + 1;
+
+`ifndef SYNTHESIS
+initial begin
+    if (RTG_REQUEST_LEAD < 0 || RTG_REQUEST_LEAD > 3)
+        $fatal(1, "RTG_REQUEST_LEAD must be in 0..3");
+end
+`endif
+
+// Registering adds one cycle, so compute REQUEST_LEAD+1 pixels ahead.
+// The output then describes (cx,cy)+REQUEST_LEAD after this edge.
+// The low-two-bit wrap shortcut is taken only when horizontal total is divisible by
+// four; other branch is taken if it does not satisfy that condition.
+wire scan_next_line = cx >= SCAN_WRAP;
+
+wire [10:0] scan_x = scan_next_line ? ((RTG_FRAME_WIDTH % 4 == 0) ? {9'd0, (cx[1:0] + SCAN_WRAP_STEP)} : (cx - SCAN_WRAP)) : (cx + REGISTERED_LEAD);
+wire  [9:0] scan_y = scan_next_line ? (cy == (RTG_FRAME_HEIGHT - 1) ? 10'd0 : cy + 10'd1) : cy;
+
+// Aligned 256x128 window: no full-width range comparisons or subtraction.
+wire osd_window = (scan_x[10:7] == 4'd5 || scan_x[10:7] == 4'd6) && scan_y[9:7] == 3'd4;
+
+always @(posedge clk_pixel) begin
+    if (reset || !rtg_en) begin
+        rtg_pixel_request <= 0;
+        rtg_frame_request <= 0;
+        rtg_line_prepare  <= 0;
+
+        osd_pixel_request <= 0;
+        osd_frame_request <= 0;
+
+    end else begin
+        rtg_pixel_request <= (cx < SCAN_BLANK || scan_next_line) && scan_y < RTG_SCREEN_HEIGHT;
+        rtg_frame_request <= cx == SCAN_WRAP && cy == (RTG_FRAME_HEIGHT - 1);
+        // First horizontal-blank request: prepare the NEXT row while idle.
+        rtg_line_prepare <= cx == SCAN_BLANK;
+
+        // X=640..895, Y=512..639: 128 pixels from right and bottom.
+        osd_pixel_request <= osd_window;
+        osd_frame_request <= osd_window && scan_x[7:0] == 8'd128 && scan_y[6:0] == 0;
+    end
+end
+
+always @(posedge clk_pixel, posedge reset) begin
+    if (reset) begin
+        frame_start_toggle <= 1'b0;
+        vblank_start_toggle <= 1'b0;
+
+    end else begin
+        if (cx == 0 && cy == 0)
+            frame_start_toggle <= ~frame_start_toggle;
+        if (cx == 0 && cy == screen_height)
+            vblank_start_toggle <= ~vblank_start_toggle;
+    end
+end
 
 logic vsync_in_d;
 logic hsync_in_d;
@@ -106,7 +197,7 @@ logic [6:0] offset_y_r;
 
 logic sync_done;
 
-logic [2:0] video_mode = {pal_mode, long_frame || interlace, interlace};
+wire [2:0] video_mode = {pal_mode, long_frame || interlace, interlace};
 logic [2:0] video_mode_d;
 
 logic [1:0] screen_mode_d;
@@ -114,31 +205,40 @@ logic [1:0] screen_mode_d;
 logic video_mode_changed;
 
 always_comb begin
-    hsync <= invert[0] ^ (cx >= screen_width + hsync_pulse_start && cx < screen_width + hsync_pulse_start + hsync_pulse_size);
-    // vsync pulses should begin and end at the start of hsync, so special
-    // handling is required for the lines on which vsync starts and ends
+    hsync = invert[0] ^ (cx >= screen_width + hsync_pulse_start && cx < screen_width + hsync_pulse_start + hsync_pulse_size);
+    // Vsync pulses begin and end at the start of hsync in all modes.
     if (cy == screen_height + vsync_pulse_start - 1)
-        vsync <= invert[1] ^ (cx >= screen_width + hsync_pulse_start);
+        vsync = invert[1] ^ (cx >= screen_width + hsync_pulse_start);
     else if (cy == screen_height + vsync_pulse_start + vsync_pulse_size - 1)
-        vsync <= invert[1] ^ (cx < screen_width + hsync_pulse_start);
+        vsync = invert[1] ^ (cx < screen_width + hsync_pulse_start);
     else
-        vsync <= invert[1] ^ (cy >= screen_height + vsync_pulse_start && cy < screen_height + vsync_pulse_start + vsync_pulse_size);
+        vsync = invert[1] ^ (cy >= screen_height + vsync_pulse_start && cy < screen_height + vsync_pulse_start + vsync_pulse_size);
 end
 
 always_comb begin
-    frame_width = 11'd908;
+    invert = rtg_en ? RTG_POLARITY_INVERT : 2'b11;
 
-    hsync_pulse_start = 11'd24;
+    frame_width = rtg_en ? RTG_FRAME_WIDTH : 11'd908;
 
-    vsync_pulse_start = 10'd5;
-    vsync_pulse_size = 10'd5;
+    hsync_pulse_start = rtg_en ? RTG_HSYNC_PULSE_START : 11'd24;
+
+    vsync_pulse_start = rtg_en ? RTG_VSYNC_PULSE_START : 10'd5;
+    vsync_pulse_size = rtg_en ? RTG_VSYNC_PULSE_SIZE : 10'd5;
 end
 
-always_ff @(posedge clk_pixel, posedge reset) begin
+// Mode-dependent reset values are sampled synchronously. The clock controller
+// holds reset through switching and releases it on the selected pixel clock.
+always_ff @(posedge clk_pixel) begin
     if (reset)
     begin
-        screen_width <= 11'd720;
-        hsync_pulse_size <= 11'd72;
+        screen_width <= rtg_en ? RTG_SCREEN_WIDTH : 11'd720;
+        hsync_pulse_size <= rtg_en ? RTG_HSYNC_PULSE_SIZE : 11'd72;
+        screen_mode_d <= screen_mode;
+    end
+    else if (rtg_en)
+    begin
+        screen_width <= RTG_SCREEN_WIDTH;
+        hsync_pulse_size <= RTG_HSYNC_PULSE_SIZE;
     end
     else if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
     begin
@@ -171,7 +271,7 @@ always_ff @(posedge clk_pixel) begin
 end
 
 // Wrap-around pixel position counters indicating the pixel to be generated by the user in THIS clock and sent out in the NEXT clock.
-always_ff @(posedge clk_pixel, posedge reset) begin
+always_ff @(posedge clk_pixel) begin
     if (reset)
     begin
         cx <= 11'd0;
@@ -182,71 +282,85 @@ always_ff @(posedge clk_pixel, posedge reset) begin
         offset_x_r <= 0;
         offset_y_r <= 0;
 
-        frame_height <= 10'd626;
-        screen_height <= 10'd576;
-        video_id_code <= cea_pal;
+        frame_height <= rtg_en ? RTG_FRAME_HEIGHT : 10'd626;
+        screen_height <= rtg_en ? RTG_SCREEN_HEIGHT : 10'd576;
+        video_id_code <= rtg_en ? cea_rtg : cea_pal;
+
+        video_mode_d <= video_mode;
     end
     else
     begin
         cx <= cx == frame_width-1'b1 ? 11'd0 : cx + 1'b1;
         cy <= cx == frame_width-1'b1 ? cy == frame_height-1'b1 ? 10'd0 : cy + 1'b1 : cy;
 
-        offset_x_r <= offset_x_r - 1;
-
-        if (!hsync_in && hsync_in_d)
+        if (rtg_en)
         begin
-            offset_x_r <= offset_x;
-            offset_y_r <= offset_y_r - 1;
-
-            if (!vsync_in && vsync_in_d)
-            begin
-                offset_y_r <= offset_y;
-                sync_done <= 0;
-            end
+            frame_height <= RTG_FRAME_HEIGHT;
+            screen_height <= RTG_SCREEN_HEIGHT;
+            video_id_code <= cea_rtg;
+            offset_x_r <= 0;
+            offset_y_r <= 0;
+            sync_done <= 0;
         end
-
-        if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
+        else
         begin
-            cx <= 11'd0;
-            cy <= 10'd0;
+            offset_x_r <= offset_x_r - 1;
 
-            sync_done <= 1;
+            if (!hsync_in && hsync_in_d)
+            begin
+                offset_x_r <= offset_x;
+                offset_y_r <= offset_y_r - 1;
 
-            // timing here is based on video_analyzer.v from MiSTle project
-            casez ({pal_mode, long_frame, interlace})
-                3'b110: begin
-                    frame_height <= 10'd626;
-                    screen_height <= 10'd576;
-                    video_id_code <= cea_pal;
+                if (!vsync_in && vsync_in_d)
+                begin
+                    offset_y_r <= offset_y;
+                    sync_done <= 0;
                 end
-                3'b100: begin
-                    frame_height <= 10'd624;
-                    screen_height <= 10'd576;
-                    video_id_code <= cea_pal;
-                end
-                3'b1z1: begin
-                    frame_height <= 10'd625;
-                    screen_height <= 10'd576;
-                    video_id_code <= cea_pal_i;
-                end
-                3'b010: begin
-                    frame_height <= 10'd526;
-                    screen_height <= 10'd480;
-                    video_id_code <= cea_ntsc;
-                end
-                3'b000: begin
-                    frame_height <= 10'd524;
-                    screen_height <= 10'd480;
-                    video_id_code <= cea_ntsc;
-                end
-                3'b0z1: begin
-                    frame_height <= 10'd525;
-                    screen_height <= 10'd480;
-                    video_id_code <= cea_ntsc_i;
-                end
-            endcase
+            end
 
-            video_mode_d <= {pal_mode, long_frame || interlace, interlace};
+            if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
+            begin
+                cx <= 11'd0;
+                cy <= 10'd0;
+
+                sync_done <= 1;
+
+                // timing here is based on video_analyzer.v from MiSTle project
+                casez ({pal_mode, long_frame, interlace})
+                    3'b110: begin
+                        frame_height <= 10'd626;
+                        screen_height <= 10'd576;
+                        video_id_code <= cea_pal;
+                    end
+                    3'b100: begin
+                        frame_height <= 10'd624;
+                        screen_height <= 10'd576;
+                        video_id_code <= cea_pal;
+                    end
+                    3'b1z1: begin
+                        frame_height <= 10'd625;
+                        screen_height <= 10'd576;
+                        video_id_code <= cea_pal_i;
+                    end
+                    3'b010: begin
+                        frame_height <= 10'd526;
+                        screen_height <= 10'd480;
+                        video_id_code <= cea_ntsc;
+                    end
+                    3'b000: begin
+                        frame_height <= 10'd524;
+                        screen_height <= 10'd480;
+                        video_id_code <= cea_ntsc;
+                    end
+                    3'b0z1: begin
+                        frame_height <= 10'd525;
+                        screen_height <= 10'd480;
+                        video_id_code <= cea_ntsc_i;
+                    end
+                endcase
+
+                video_mode_d <= {pal_mode, long_frame || interlace, interlace};
+            end
         end
     end
 end
@@ -256,7 +370,7 @@ always_ff @(posedge clk_pixel, posedge reset) begin
     begin
         video_mode_changed <= 0;
     end
-    else if (offset_x_r == 0 && offset_y_r == 0 && !sync_done)
+    else if (!rtg_en && offset_x_r == 0 && offset_y_r == 0 && !sync_done)
     begin
         video_mode_changed <= (video_mode != video_mode_d) || (screen_mode != screen_mode_d);
     end
@@ -303,7 +417,9 @@ generate
         begin
             // quantize values for max_num_packets_alongside based on the template:
             // max_num_packets_alongside = (frame_width - screen_width  /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
-            case (screen_mode)
+            if (rtg_en)
+                max_num_packets_alongside = (RTG_FRAME_WIDTH - RTG_SCREEN_WIDTH - 2 - 8 - 4 - 2 - 2 - 8 - 4) / 32;
+            else case (screen_mode)
                 default: begin
 	                max_num_packets_alongside = (frame_width - 720 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
                 end
@@ -414,11 +530,12 @@ generate
             end
         end
 
-        localparam integer AUDIO_CLOCK_COUNTER_WIDTH = $clog2(VIDEO_RATE + AUDIO_RATE + 1);
+        localparam integer AUDIO_CLOCK_COUNTER_WIDTH = $clog2((RTG_VIDEO_RATE > VIDEO_RATE ? RTG_VIDEO_RATE : VIDEO_RATE) + AUDIO_RATE + 1);
+        wire [AUDIO_CLOCK_COUNTER_WIDTH-1:0] selected_video_rate = rtg_en ? RTG_VIDEO_RATE : VIDEO_RATE;
 
         reg [AUDIO_CLOCK_COUNTER_WIDTH-1:0] audio_clock_counter;
 
-        assign audio_sample_en = audio_clock_counter >= VIDEO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0];
+        assign audio_sample_en = audio_clock_counter >= selected_video_rate;
 
         always @(posedge clk_pixel, posedge reset) begin
             if (reset)
@@ -431,7 +548,7 @@ generate
 
                 if (audio_sample_en)
                     audio_clock_counter <= audio_clock_counter + AUDIO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0] -
-                        VIDEO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0];
+                        selected_video_rate;
             end
         end
     end
@@ -476,7 +593,8 @@ generate
 endgenerate
 
 serializer #(
-    .NUM_CHANNELS(NUM_CHANNELS)
+    .NUM_CHANNELS(NUM_CHANNELS),
+    .VIDEO_RATE(RTG_VIDEO_RATE / 1000000.0)
 ) serializer (
     .clk_pixel(clk_pixel),
     .clk_pixel_x5(clk_pixel_x5),

@@ -217,30 +217,44 @@ LOCATE COMP "usb_pull" SITE "N1" ;
 
 # Period Constraints
 FREQUENCY PORT "clk" 25.0 MHz;
-FREQUENCY NET "auxclks[0]" 60.0 MHz;
-FREQUENCY NET "clk_pixel" 28.6 MHz;
+FREQUENCY NET "auxclks[0]" 330.0 MHz;
+FREQUENCY NET "auxclks[1]" 66.0 MHz;
+FREQUENCY NET "auxclks[2]" 60.0 MHz;
+FREQUENCY NET "clk_28m" 28.6 MHz;
 FREQUENCY NET "clk_sys" 114.3 MHz;
-FREQUENCY NET "clk_tmds" 142.9 MHz;
+FREQUENCY NET "clk_142m" 142.9 MHz;
 FREQUENCY NET "virtual_top/sck" 28.6 MHz;
 
-# Block Path Constraints
-BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_pixel";
-BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_sys";
-BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_tmds";
-BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "virtual_top/sck";
-BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "auxclks[0]";
-BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "virtual_top/sck";
-BLOCK PATH FROM CLKNET "clk_pixel" TO CLKNET "auxclks[0]";
-BLOCK PATH FROM CLKNET "clk_pixel" TO CLKNET "virtual_top/sck";
-BLOCK PATH FROM CLKNET "clk_tmds" TO CLKNET "auxclks[0]";
-BLOCK PATH FROM CLKNET "clk_tmds" TO CLKNET "virtual_top/sck";
-BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "auxclks[0]";
-BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_pixel";
-BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_sys";
-BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_tmds";
+# Explicit constraints on the DCSC output clocks.
+FREQUENCY NET "clk_pixel" 66.0 MHz;
+FREQUENCY NET "clk_tmds" 330.0 MHz;
 
-MULTICYCLE FROM CLKNET "clk_pixel" TO CLKNET "clk_sys" 4X;
-MULTICYCLE FROM CLKNET "clk_sys" TO CLKNET "clk_pixel" 2X;
+# Used to avoid timing failures for HDMI clock switch as we use clk to switch DCSC
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[0]";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[1]";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "auxclks[1]" TO CLKNET "clk_c";
+
+# Block Path Constraints
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_28m";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_142m";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_28m" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_28m" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_142m" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_142m" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_28m";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_142m";
+
+MULTICYCLE FROM CLKNET "clk_28m" TO CLKNET "clk_sys" 4X;
+MULTICYCLE FROM CLKNET "clk_sys" TO CLKNET "clk_28m" 2X;
 
 BLOCK PATH TO PORT "led[*]";
 
@@ -262,6 +276,28 @@ BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/hr_filter*";
 BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/dither*";
 
 BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/beamcon0*";
+
+MAXDELAY FROM CELL "virtual_top/DVI_*" TO CELL "genvideo.hdmi_inst/*" 34.96 NS;
+
+BLOCK PATH TO CELL "genvideo.audio_sync/*sync*";
+BLOCK PATH TO CELL "genvideo.clock_control/reset_sync*";
+BLOCK PATH TO CELL "genvideo.hdmi_inst/true_hdmi_output.packet_picker_inst/audio_sample_word_buffer*";
+BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/reset_x5_sync*";
+
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_resetn_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_irq_28_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*fifo/*_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/config_meta*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.osd_rtg/enable_sync*";
+
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray_w1[*]";
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/wr_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/wr_gray_r1[*]";
+
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/interlace_out*" TO CELL "genvideo.hdmi_inst/*";
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/displaypal_out*" TO CELL "genvideo.hdmi_inst/*";
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/long_frame_r*" TO CELL "genvideo.hdmi_inst/*";
 
 BLOCK RESETPATHS ;
 BLOCK ASYNCPATHS ;

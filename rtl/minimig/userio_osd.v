@@ -3,6 +3,11 @@
 
 module userio_osd
 (
+    output osd_write_en,
+    output [10:0] osd_write_addr,
+    output [7:0] osd_write_data,
+    output osd_enabled,
+
 	input 	clk,		    	// 28MHz clock
 	input	clk7_en,
   input clk7n_en,
@@ -170,14 +175,14 @@ always @(posedge clk)
 
 
 // combine..
-reg osd_enabled;
+reg native_osd_enabled;
 always @(posedge clk)
   if (clk7_en) begin
     if (sof)
-      osd_enabled <= osd_enable;
+      native_osd_enabled <= osd_enable;
   end
 
-assign osdframe = vframe & hframe & osd_enabled;
+assign osdframe = vframe & hframe & native_osd_enabled;
 
 //always @(posedge clk)
 //  if (clk7_en) begin
@@ -199,6 +204,11 @@ assign osd_blank = osdframe;
 //--------------------------------------------------------------------------------------
 //video buffer
 //--------------------------------------------------------------------------------------
+
+assign osd_write_en = clk7_en && wren;
+assign osd_write_addr = wraddr;
+assign osd_write_data = wrdat;
+assign osd_enabled = osd_enable;
 
 //dual ported osd video buffer
 //video buffer is 1024*8

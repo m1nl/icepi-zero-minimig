@@ -51,10 +51,13 @@ module minimig_virtual_top #(
 	input sys_tdi,
 	input sys_tck,
 	input sys_tms,
+
 	// clock inputs
 	input wire            CLK_IN,
 	input wire            CLK_USB_IN,
+	input wire            CLK_RTG_IN,
 	input wire            RESET_N,
+
 	// clock outputs
 	output wire           CLK_114,
 	output wire           CLK_28,
@@ -62,7 +65,22 @@ module minimig_virtual_top #(
 	output wire           PLL_LOCKED,
 
 	// Button inputs
-	input						MENU_BUTTON,
+	input                 MENU_BUTTON,
+
+	// RTG control and RGB output
+	output wire           RTG_ENABLE,
+	input wire            RTG_ACTIVE,
+	input wire            RTG_VIDEO_RESET,
+	output reg [23:0]     RTG_RGB,
+
+	// HDMI events for RTG
+	input wire            HDMI_FRAME_START,
+	input wire            HDMI_VBLANK_START,
+	input wire            HDMI_RTG_PIXEL_REQUEST,
+	input wire            HDMI_RTG_FRAME_REQUEST,
+	input wire            HDMI_RTG_LINE_PREPARE,
+	input wire            HDMI_OSD_PIXEL_REQUEST,
+	input wire            HDMI_OSD_FRAME_REQUEST,
 
 	// LED outputs
 	output wire           LED_POWER,   // LED green
@@ -91,7 +109,7 @@ module minimig_virtual_top #(
 	output reg [  7:0]    DVI_R,      // VGA Red[5:0]
 	output reg [  7:0]    DVI_G,      // VGA Green[5:0]
 	output reg [  7:0]    DVI_B,      // VGA Blue[5:0]
-	output                DVI_STROBE,
+	output reg            DVI_STROBE,
 	output reg            DVI_DE,
 
 	// AUX video signals
@@ -133,10 +151,11 @@ module minimig_virtual_top #(
 	output                PS2_MCLK_O,     // PS2 Mouse Clock
 
 	// Potential Amiga keyboard from docking station
-	input						AMIGA_RESET_N,
-	input						[7:0] AMIGA_KEY,
-	input						AMIGA_KEY_STB,
-	input			[63:0]	C64_KEYS,
+	input                 AMIGA_RESET_N,
+	input       [  8-1:0] AMIGA_KEY,
+	input                 AMIGA_KEY_STB,
+	input       [ 64-1:0] C64_KEYS,
+
 	// Joystick
 	input       [  7-1:0] JOYA,         // joystick port A
 	input       [  7-1:0] JOYB,         // joystick port B
@@ -151,16 +170,16 @@ module minimig_virtual_top #(
 	input wire            SD_ACK,
 	output wire           RTC_CS,
 
-	inout wire [1:0]      USB_DP,
-	inout wire [1:0]      USB_DN,
+	inout wire  [  2-1:0] USB_DP,
+	inout wire  [  2-1:0] USB_DN,
 
 	input wire            AUX_SPI_CSN,
 	input wire            AUX_SPI_CLK,
 	input wire            AUX_SPI_MOSI,
 
-	output wire			RECONFIG,
-	output wire			IECSERIAL,
-	input wire			FREEZE
+	output wire           RECONFIG,
+	output wire           IECSERIAL,
+	input wire            FREEZE
 );
 
 ////////////////////////////////////////
@@ -179,13 +198,6 @@ wire [ 10-1:0] eclk;
 // reset
 wire           pll_rst;
 wire           sdctl_rst;
-wire           rst_50;
-wire           rst_minimig;
-
-// ctrl
-wire           rom_status;
-wire           ram_status;
-wire           reg_status;
 
 // tg68
 wire           tg68_rst;
@@ -232,7 +244,6 @@ wire           tg68_ovr;
 wire           tg68_fast_rd;
 
 // minimig
-wire           led;
 wire [ 16-1:0] ram_data;      // sram data bus
 wire [ 16-1:0] ram_data2;     // sram data bus 2nd word
 wire [ 16-1:0] ramdata_in;    // sram data bus in
@@ -247,14 +258,13 @@ wire           _ram_oe;       // sram output enable
 wire           _15khz;        // scandoubler disable
 wire           invertsync;    // helps some monitors with the scandoubled signal
 wire           sdo;           // SPI data output
-wire           vs;
-wire           hs;
-wire           cs;
+
 wire [  8-1:0] red_amiga;
 wire [  8-1:0] green_amiga;
 wire [  8-1:0] blue_amiga;
-wire				hsyncpol;
-wire				vsyncpol;
+wire           hsyncpol;
+wire           vsyncpol;
+wire           selcsync;
 
 // sdram
 wire           reset_out;
@@ -281,6 +291,7 @@ wire debug_txd;
 // Realtime clock
 wire [63:0] rtc;
 
+// Limit physical address space depending on SDRAM size
 localparam addr_max_bits = (ram_64meg == 0 ? 25 : 26);
 
 ////////////////////////////////////////
@@ -288,127 +299,177 @@ localparam addr_max_bits = (ram_64meg == 0 ? 25 : 26);
 ////////////////////////////////////////
 
 // SDRAM
-assign SDRAM_CKE        = 1'b1;
-assign SDRAM_CLK        = clk_sdram;
-assign SDRAM_nCS        = sdram_cs[0];
-assign SDRAM_DQML       = sdram_dqm[0];
-assign SDRAM_DQMH       = sdram_dqm[1];
-assign SDRAM_BA         = sdram_ba;
+assign SDRAM_CKE  = 1'b1;
+assign SDRAM_CLK  = clk_sdram;
+assign SDRAM_nCS  = sdram_cs[0];
+assign SDRAM_DQML = sdram_dqm[0];
+assign SDRAM_DQMH = sdram_dqm[1];
+assign SDRAM_BA   = sdram_ba;
 
 // reset
-assign pll_rst          = 1'b0;
-assign sdctl_rst        = PLL_LOCKED & RESET_N;
+assign pll_rst   = 1'b0;
+assign sdctl_rst = PLL_LOCKED & RESET_N;
 
-// RTG support...
-wire rtg_ena;	// RTG screen on/off
-
+// Native video blanking
 wire hblank_amiga;
 wire vblank_amiga;
 wire blank_amiga;
-reg rtg_vblank;
-wire rtg_blank;
-reg rtg_blank_d;
-reg rtg_blank_d2;
-reg rtg_blank_d3;
-reg [6:0] rtg_vbcounter;	// Vvbco counter
-wire [6:0] rtg_vbend; // Size of VBlank area
 
 // RTG register interface
 wire [10:0] rtg_reg_addr;
 wire [15:0] rtg_reg_d;
+wire [15:0] rtg_reg_q;
+
 wire rtg_reg_wr;
+wire rtg_reg_req;
+wire rtg_reg_ack;
+wire rtg_irq_28;
 
 // RTG to RAM interface
 wire [25:0] rtg_fetch_addr;
-wire rtg_ramreq;
 wire [15:0] rtg_fromram;
+
+wire rtg_ramreq;
 wire rtg_fill;
 wire rtg_rampri;
 wire rtg_ramack;
 
-// RTG video data
-wire [7:0] rtg_r;
-wire [7:0] rtg_g;
-wire [7:0] rtg_b;
+// OSD drawing for RTG
+wire [10:0] osd_write_addr;
+wire  [7:0] osd_write_data;
 
-wire rtg_pixel;
-
-wire selcsync;
-
-wire rtg_linecompare;
-wire rtg_ena_mm;
-wire rtg_de;
+wire osd_write_en;
+wire osd_enabled;
 
 // Overlaying of OSD graphics
 wire osd_window;
 wire osd_pixel;
-wire [1:0] osd_r;
-wire [1:0] osd_g;
-wire [1:0] osd_b;
-assign osd_r = osd_pixel ? 2'b11 : 2'b00;
-assign osd_g = osd_pixel ? 2'b11 : 2'b00;
-assign osd_b = osd_pixel ? 2'b11 : 2'b10;
-reg       VGA_CS_INT;
-reg       VGA_VS_INT;
-reg       VGA_HS_INT;
-wire [7:0] VGA_R_INT = osd_window ? {osd_r,rtg_r[7:2]} : rtg_r;
-wire [7:0] VGA_G_INT = osd_window ? {osd_g,rtg_g[7:2]} : rtg_g;
-wire [7:0] VGA_B_INT = osd_window ? {osd_b,rtg_b[7:2]} : rtg_b;
+
+wire [1:0] osd_r = osd_pixel ? 2'b11 : 2'b00;
+wire [1:0] osd_g = osd_pixel ? 2'b11 : 2'b00;
+wire [1:0] osd_b = osd_pixel ? 2'b11 : 2'b10;
+
+wire [7:0] VGA_R_INT = osd_window ? {osd_r, red_amiga[7:2]} : red_amiga;
+wire [7:0] VGA_G_INT = osd_window ? {osd_g, green_amiga[7:2]} : green_amiga;
+wire [7:0] VGA_B_INT = osd_window ? {osd_b, blue_amiga[7:2]} : blue_amiga;
+
+wire VGA_CS_INT;
+wire VGA_VS_INT;
+wire VGA_HS_INT;
 
 generate
-	if (havertg) begin
-		rtg_video rtg (
-			.clk_114(CLK_114),
-			.clk_28(CLK_28),
-			.clk_vid(CLK_114),
-			.reset_n(RESET_N),
-			.rtg_ena(rtg_ena),
-			.rtg_linecompare(rtg_linecompare),
-			.reg_addr(rtg_reg_addr),
-			.reg_wr(rtg_reg_wr),
-			.reg_d(rtg_reg_d),
-			.fetch_addr(rtg_fetch_addr),
-			.fetch_req(rtg_ramreq),
-			.fetch_pri(rtg_rampri),
-			.fetch_d(rtg_fromram),
-			.fetch_ack(rtg_ramack),
-			.fetch_fill(rtg_fill),
-			.amiga_r(red_amiga),
-			.amiga_g(green_amiga),
-			.amiga_b(blue_amiga),
-			.amiga_hb(hblank_amiga),
-			.amiga_vb(vblank_amiga),
-			.amiga_hs(hs),
-			.amiga_blank(blank_amiga),
-			.red(rtg_r),
-			.green(rtg_g),
-			.blue(rtg_b),
-			.pixel(rtg_pixel),
-			.de(rtg_de)
-		);
+	if (havertg) begin : gen_rtg
+		wire [7:0] scan_r;
+		wire [7:0] scan_g;
+		wire [7:0] scan_b;
 
-		always @(posedge CLK_28) begin
-			VGA_CS_INT <= cs;
-			VGA_HS_INT <= hs;
-			VGA_VS_INT <= vs;
+		(* ASYNC_REG = "TRUE" *)
+		reg [1:0] rtg_resetn_sync = 2'b00;
+
+		// Reset RTG on either system/CPU reset or the CPU RESET instruction.
+		// TG68K's nResetOut is generated in CLK_114.
+		wire rtg_cpu_resetn = tg68_rst_sync && tg68_nrst_out;
+
+		wire rtg_resetn = rtg_resetn_sync[1];
+
+		always @(posedge CLK_RTG_IN, negedge sdctl_rst) begin
+			if (!sdctl_rst)
+				rtg_resetn_sync <= 2'b00;
+			else begin
+				/* sample CPU reset synchronously in the video domain */
+				if (!rtg_cpu_resetn)
+					rtg_resetn_sync <= 2'b00;
+				else
+					rtg_resetn_sync <= {rtg_resetn_sync[0], 1'b1};
+			end
 		end
 
-	end else begin
+		wire rtg_irq;
+
+		(* ASYNC_REG = "TRUE" *)
+		reg [1:0] rtg_irq_28_sync;
+
+		always @(posedge CLK_28 or negedge sdctl_rst) begin
+			if (!sdctl_rst)
+				rtg_irq_28_sync <= 0;
+			else begin
+				/* sample CPU reset synchronously in the IRQ domain */
+				if (!rtg_cpu_resetn)
+					rtg_irq_28_sync <= 0;
+				else
+					rtg_irq_28_sync <= {rtg_irq_28_sync[0], rtg_irq};
+			end
+		end
+
+		assign rtg_irq_28 = rtg_irq_28_sync[1];
+
+		rtg_video rtg (
+			.clk_sys(CLK_114),
+			.resetn_sys(sdctl_rst && rtg_cpu_resetn),
+			.clk_rtg(CLK_RTG_IN),
+			.resetn_rtg(rtg_resetn),
+
+			.rtg_active(RTG_ACTIVE),
+			.rtg_enable(RTG_ENABLE),
+			.video_reset(RTG_VIDEO_RESET),
+			.frame_start_toggle(HDMI_FRAME_START),
+			.vblank_start_toggle(HDMI_VBLANK_START),
+			.pixel_request(HDMI_RTG_PIXEL_REQUEST),
+			.frame_request(HDMI_RTG_FRAME_REQUEST),
+			.line_prepare(HDMI_RTG_LINE_PREPARE),
+
+			// RTG register access
+			.reg_addr(rtg_reg_addr), .reg_wr(rtg_reg_wr), .reg_req(rtg_reg_req),
+			.reg_d(rtg_reg_d), .reg_ack(rtg_reg_ack), .reg_q(rtg_reg_q), .irq(rtg_irq),
+
+			// RTG SDRAM fetch
+			.fetch_addr(rtg_fetch_addr), .fetch_req(rtg_ramreq), .fetch_pri(rtg_rampri),
+			.fetch_d(rtg_fromram), .fetch_ack(rtg_ramack), .fetch_fill(rtg_fill),
+
+			// RTG output
+			.red(scan_r), .green(scan_g), .blue(scan_b)
+		);
+
+		wire rtg_overlay;
+		wire rtg_overlay_pixel;
+
+		rtg_osd osd_rtg (
+			.clk_write(CLK_28),
+			.clk_rtg(CLK_RTG_IN),
+			.reset_n(rtg_resetn),
+			.video_reset(RTG_VIDEO_RESET || !RTG_ACTIVE),
+			.write_en(osd_write_en),
+			.write_addr(osd_write_addr),
+			.write_data(osd_write_data),
+			.enable(osd_enabled),
+			.pixel_request(HDMI_OSD_PIXEL_REQUEST),
+			.frame_request(HDMI_OSD_FRAME_REQUEST),
+			.overlay(rtg_overlay),
+			.pixel(rtg_overlay_pixel)
+		);
+
+		wire [23:0] RTG_RGB_INT = rtg_overlay ?
+			{rtg_overlay_pixel ? 2'b11 : 2'b00, scan_r[7:2],
+			 rtg_overlay_pixel ? 2'b11 : 2'b00, scan_g[7:2],
+			 rtg_overlay_pixel ? 2'b11 : 2'b10, scan_b[7:2]} : {scan_r,scan_g,scan_b};
+
+		// Give HDMI's rising-edge capture half a pixel period of separation.
+		always @(negedge CLK_RTG_IN)
+			RTG_RGB <= RTG_RGB_INT;
+
+	end else begin : gen_no_rtg
+		assign RTG_ENABLE = 1'b0;
+
+		assign rtg_irq_28 = 1'b0;
+		assign rtg_reg_ack = 1'b0;
+		assign rtg_reg_q = 16'hffff;
+
 		assign rtg_fetch_addr = 26'b0;
 		assign rtg_ramreq     = 1'b0;
 		assign rtg_rampri     = 1'b0;
 
-		assign rtg_r     = red_amiga;
-		assign rtg_g     = green_amiga;
-		assign rtg_b     = blue_amiga;
-		assign rtg_pixel = 1'b0;
-		assign rtg_de    = ~blank_amiga;
-
-		always @(*) begin
-			VGA_CS_INT = cs;
-			VGA_HS_INT = hs;
-			VGA_VS_INT = vs;
-		end
+		always @(*)
+			RTG_RGB = 24'd0;
 	end
 endgenerate
 
@@ -588,14 +649,17 @@ TG68K #(
 	.ramuds       (tg68_cuds        ),
 	.CACR_out     (tg68_CACR_out    ),
 	.VBR_out      (tg68_VBR_out     ),
-	// RTG signals
-	.rtg_reg_addr(rtg_reg_addr),
-	.rtg_reg_d(rtg_reg_d),
-	.rtg_reg_wr(rtg_reg_wr),
 	// Audio signals
 	.audio_buf(aud_addr[15]),
 	.audio_ena(aud_ena_cpu),
 	.audio_int(aud_int),
+	// RTG signals
+	.rtg_reg_addr(rtg_reg_addr),
+	.rtg_reg_req(rtg_reg_req),
+	.rtg_reg_ack(rtg_reg_ack),
+	.rtg_reg_wr(rtg_reg_wr),
+	.rtg_reg_d(rtg_reg_d),
+	.rtg_reg_q(rtg_reg_q),
 	// Amiga to host signals
 	.host_addr(amigahost_addr),
 	.host_req(amigahost_req),
@@ -606,11 +670,8 @@ TG68K #(
 );
 
 `endif
-
-wire	[31:0]	hostRD;
 wire	[31:0]	hostWR;
 wire	[31:2]	hostaddr;
-wire	[ 2:0]	hostState;
 wire	[ 3:0]	hostbytesel;
 wire		host_interrupt;
 wire	[15:0]	host_ramdata;
@@ -620,9 +681,6 @@ wire	[31:0]	host_hwdata;
 wire		host_hwack;
 wire		host_hwreq;
 wire		host_we;
-wire		hostreq;
-wire		hostack;
-wire		hostce;
 
 //sdram sdram (
 sdram_ctrl #(
@@ -765,7 +823,8 @@ assign _ram_oe=1'b1;
 assign _ram_we=1'b1;
 `else
 
-minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wide_hblank(0)) minimig
+// RTG is independent of Agnus; leave its timing shadow functionality disabled.
+minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(1'b0),.wide_hblank(0)) minimig
 (
 	// JTAG
 	.sys_tdo(sys_tdo),
@@ -852,11 +911,11 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.sdo          (SPI_DO           ),  // SPI data output
 	.sck          (SPI_SCK          ),  // SPI clock
 	//video
+	._csync       (VGA_CS_INT       ),  // horizontal sync
+	._hsync       (VGA_HS_INT       ),  // horizontal sync
+	._vsync       (VGA_VS_INT       ),  // vertical sync
 	.selcsync     (selcsync         ),
-	._csync       (cs               ),  // horizontal sync
-	._hsync       (hs               ),  // horizontal sync
 	.hsyncpol     (hsyncpol         ),
-	._vsync       (vs               ),  // vertical sync
 	.vsyncpol     (vsyncpol         ),
 	.red          (red_amiga        ),  // red
 	.green        (green_amiga      ),  // green
@@ -901,15 +960,16 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(havertg),.wi
 	.vmode_out    (VIDEO_MODE       ),
 	.osd_blank_out(osd_window       ),  // Let the toplevel dither module handle drawing the OSD.
 	.osd_pixel_out(osd_pixel        ),
-	.rtg_ena      (rtg_ena_mm       ),
-	.rtg_linecompare (rtg_linecompare),
-	.ext_int2     (1'b0             ),
+	.rtg_ena      (                 ),
+	.rtg_linecompare(               ),
+	.osd_write_en (osd_write_en     ),
+	.osd_write_addr(osd_write_addr  ),
+	.osd_write_data(osd_write_data  ),
+	.osd_enabled  (osd_enabled      ),
+	.ext_int2     (rtg_irq_28       ),
 	.ext_int6     (aud_int          ),
 	.ram_64meg    (ram_64meg        )
 );
-
-assign rtg_ena = havertg && rtg_ena_mm;
-
 `endif
 
 EightThirtyTwo_Bridge #( debug) hostcpu
@@ -942,64 +1002,64 @@ cfide #(
 	.haveauxspi(haveauxspi),
 	.haveuart(haveuart)
 ) mycfide (
-		.sysclk(CLK_114),
-		.usbclk(CLK_USB_IN),
-		.reset_n(reset_out),
-		.addr(hostaddr),
-		.d(hostWR),
-		.req(host_hwreq),
-		.wr(host_we),
-		.ack(host_hwack),
-		.q(host_hwdata),
+	.sysclk(CLK_114),
+	.usbclk(CLK_USB_IN),
+	.reset_n(reset_out),
+	.addr(hostaddr),
+	.d(hostWR),
+	.req(host_hwreq),
+	.wr(host_we),
+	.ack(host_hwack),
+	.q(host_hwdata),
 
-		.aux_spi_csn(AUX_SPI_CSN),
-		.aux_spi_clk(AUX_SPI_CLK),
-		.aux_spi_mosi(AUX_SPI_MOSI),
+	.aux_spi_csn(AUX_SPI_CSN),
+	.aux_spi_clk(AUX_SPI_CLK),
+	.aux_spi_mosi(AUX_SPI_MOSI),
 
-		.sd_di(SPI_DO),
-		.sd_cs(SPI_CS),
-		.sd_clk(SPI_SCK),
-		.sd_do(SPI_DI),
-		.sd_dimm(SD_MISO),
-		.sd_ack(SD_ACK),
+	.sd_di(SPI_DO),
+	.sd_cs(SPI_CS),
+	.sd_clk(SPI_SCK),
+	.sd_do(SPI_DI),
+	.sd_dimm(SD_MISO),
+	.sd_ack(SD_ACK),
 
-		.debugTxD(CTRL_TX),
-		.debugRxD(CTRL_RX),
-		.menu_button(MENU_BUTTON),
-		.scandoubler(_15khz),
-		.invertsync(invertsync),
+	.debugTxD(CTRL_TX),
+	.debugRxD(CTRL_RX),
+	.menu_button(MENU_BUTTON),
+	.scandoubler(_15khz),
+	.invertsync(invertsync),
 
-		.audio_ena(aud_ena_host),
-		.audio_clear(aud_clear),
-		.audio_buf(aud_addr[15]),
-		.audio_amiga(aud_ena_cpu),
-		.vbl_int(vblank_amiga),
-		.interrupt(host_interrupt),
-		.amiga_key(c64_translated_key),
-		.amiga_key_stb(c64_translated_key_stb),
-		.c64_keys(C64_KEYS),
+	.audio_ena(aud_ena_host),
+	.audio_clear(aud_clear),
+	.audio_buf(aud_addr[15]),
+	.audio_amiga(aud_ena_cpu),
+	.vbl_int(vblank_amiga),
+	.interrupt(host_interrupt),
+	.amiga_key(c64_translated_key),
+	.amiga_key_stb(c64_translated_key_stb),
+	.c64_keys(C64_KEYS),
 
-		.amiga_addr(amigahost_addr),
-		.amiga_req(amigahost_req),
-		.amiga_ack(amigahost_ack),
-		.amiga_wr(amigahost_wr),
-		.amiga_d(amigahost_d),
-		.amiga_q(amigahost_q),
+	.amiga_addr(amigahost_addr),
+	.amiga_req(amigahost_req),
+	.amiga_ack(amigahost_ack),
+	.amiga_wr(amigahost_wr),
+	.amiga_d(amigahost_d),
+	.amiga_q(amigahost_q),
 
-		.rtc_q(rtc),
-		.reconfig(RECONFIG),
-		.iecserial(IECSERIAL),
+	.rtc_q(rtc),
+	.reconfig(RECONFIG),
+	.iecserial(IECSERIAL),
 
-		.usb_dp(USB_DP),
-		.usb_dn(USB_DN),
-		.usb_connected(LED_USB),
+	.usb_dp(USB_DP),
+	.usb_dn(USB_DN),
+	.usb_connected(LED_USB),
 
-		.joya(extjoya),
-		.joyb(extjoyb),
+	.joya(extjoya),
+	.joyb(extjoyb),
 
-		.clk_28(CLK_28),
-		.tick_in(AUDIO_TICK)
-	);
+	.clk_28(CLK_28),
+	.tick_in(AUDIO_TICK)
+);
 
 assign joysticka = {5'b11111, JOYA} & extjoya;
 assign joystickb = {5'b11111, JOYB} & extjoyb;
@@ -1012,29 +1072,28 @@ wire           dithered_hs;
 wire           dithered_de;
 
 reg [2:0] vga_strobe_ctr;
+
 always @(posedge CLK_114) begin
-	if(rtg_ena)
-		vga_strobe_ctr<={vga_strobe_ctr[2],2'b00}+3'b100;
 `ifdef MINIMIG_STATIC_HDMI_TIMING
-	else
-		vga_strobe_ctr<={vga_strobe_ctr[2:1],1'b0}+3'b010;
+	vga_strobe_ctr <= {vga_strobe_ctr[2:1], 1'b0} + 3'b010;
 `else
-	else if (_15khz)
-		vga_strobe_ctr<={vga_strobe_ctr[2:1],1'b0}+3'b010;
+	if (_15khz)
+		vga_strobe_ctr <= {vga_strobe_ctr[2:1], 1'b0} + 3'b010;
 	else
-		vga_strobe_ctr<= vga_strobe_ctr+3'b001;
+		vga_strobe_ctr <= vga_strobe_ctr + 3'b001;
 `endif
 end
 
 wire vga_stb;
+wire vga_window = 1'b1;
+
 assign vga_stb = ~(|vga_strobe_ctr);
 
-wire vga_window = 1'b1;
 video_vga_dither #(.outbits(vga_width), .flickerreduce(1)) dither
 (
 	.clk(CLK_114),
 	.ena(1'b1),
-	.pixel(rtg_ena ? rtg_pixel : vga_stb),
+	.pixel(vga_stb),
 	.vidEna(vga_window),
 	.iSelcsync(1'b0), // selcsync),
 	.iCsync(VGA_CS_INT),
@@ -1050,38 +1109,39 @@ video_vga_dither #(.outbits(vga_width), .flickerreduce(1)) dither
 	.oBlue(dithered_blue)
 );
 
-
 always @(posedge CLK_114) begin
-	if(haveaga) begin
+	if (haveaga) begin
 		VGA_VS <= dithered_vs ^ (vsyncpol & !selcsync);
 		VGA_HS <= dithered_hs ^ (hsyncpol & !selcsync);
-		VGA_R <= dithered_red[7:8-vga_width];
-		VGA_G <= dithered_green[7:8-vga_width];
-		VGA_B <= dithered_blue[7:8-vga_width];
-		VGA_STROBE <= rtg_ena ? rtg_pixel : vga_stb;
-		VGA_DE <= rtg_de;
+		VGA_R  <= dithered_red[7:8-vga_width];
+		VGA_G  <= dithered_green[7:8-vga_width];
+		VGA_B  <= dithered_blue[7:8-vga_width];
+		VGA_DE <= ~blank_amiga;
+
+		VGA_STROBE <= vga_stb;
+
 	end else begin
 		VGA_VS <= VGA_VS_INT ^ (vsyncpol & !selcsync);
 		VGA_HS <= VGA_HS_INT ^ (hsyncpol & !selcsync);
-		VGA_R <= VGA_R_INT[7:8-vga_width];
-		VGA_G <= VGA_G_INT[7:8-vga_width];
-		VGA_B <= VGA_B_INT[7:8-vga_width];
-		VGA_STROBE <= rtg_ena ? rtg_pixel : vga_stb;
-		VGA_DE <= rtg_de;
+		VGA_R  <= VGA_R_INT[7:8-vga_width];
+		VGA_G  <= VGA_G_INT[7:8-vga_width];
+		VGA_B  <= VGA_B_INT[7:8-vga_width];
+		VGA_DE <= ~blank_amiga;
+
+		VGA_STROBE <= vga_stb;
 	end
 end
 
-always @(*) begin
-	DVI_VS = VGA_VS_INT ^ (vsyncpol & !selcsync);
-	DVI_HS = VGA_HS_INT ^ (hsyncpol & !selcsync);
+always @(negedge CLK_28) begin
+	DVI_VS <= VGA_VS_INT ^ (vsyncpol & !selcsync);
+	DVI_HS <= VGA_HS_INT ^ (hsyncpol & !selcsync);
+	DVI_R  <= VGA_R_INT;
+	DVI_G  <= VGA_G_INT;
+	DVI_B  <= VGA_B_INT;
+	DVI_DE <= ~blank_amiga;
 
-	DVI_R = VGA_R_INT;
-	DVI_G = VGA_G_INT;
-	DVI_B = VGA_B_INT;
-	DVI_DE = rtg_de;
+	DVI_STROBE <= vga_stb;
 end
-
-assign DVI_STROBE = vga_stb; // rtg_ena ? rtg_pixel : vga_stb;
 
 endmodule
 // vim: set noexpandtab tabstop=2 shiftwidth=2 softtabstop=0:
