@@ -6,6 +6,52 @@ Huge thanks to the Replay team for releasing their own
 P96 driver as open-source - this driver is based heavily
 upon their work, and is thus under the same license - LGPL2.1.
 
+Building on Linux
+~~~~~~~~~~~~~~~~~
+
+The assembler must already be installed; it defaults to
+~/vbcc/bin/vasmm68k_mot. No assembler or compiler is downloaded.
+
+Run from the repository root:
+
+    make -C amiga_sw/rtg
+
+Missing Amiga NDK and public/private P96 headers are downloaded into the
+ignored .deps directory by download_deps.sh. Subsequent builds reuse them.
+To download just the dependencies:
+
+    make -C amiga_sw/rtg deps
+
+This requires GNU make 4.3 or newer, bash, curl, 7z, Python 3 and xdftool
+(from amitools). The private
+headers supply boardinfo.i and settings.i, while libraries/Picasso96.i
+supplies the RGB format constants. The old P96BoardInfo.i/P96CardStruct.i/
+P96ModeInfo.i dependencies are unused.
+
+This creates minimig.card, a minimig.card.lst assembler listing, and
+minimig-rtg.adf, an 880 KiB OFS floppy image named MinimigRTG. The disk
+contains Libs/Picasso96/minimig.card and this README. Insert it in a running
+Amiga and copy the driver with:
+
+    Copy MinimigRTG:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
+
+P96 must already be installed; the floppy is a transfer disk, not a boot disk.
+The disk also includes the read-only rtgcheck diagnostic. Run
+MinimigRTG:rtgcheck from an Amiga Shell to print the RTG ID/status registers,
+available 24-bit Fast RAM, installed .card version and its FindCard result.
+It does not switch video modes or install interrupts.
+Run make adf to generate just the image (building the driver if needed), or
+make minimig.card to build only the driver. Override XDFTOOL to select a
+different xdftool executable.
+
+Library vector offsets are generated from the NDK FD files with Python 3. Override
+VBCC, NDK_DIR, P96_PRIVATE or P96_PUBLIC on the make command line to use
+other installations. The output requires a 68020 or newer CPU.
+
+Dependency downloads:
+https://os.amigaworld.de/index.php?lang=en&page=12
+https://wiki.icomp.de/wiki/P96#Software_Developer_archive
+
 V1.1 adds support for screen dragging, removing a couple of ugly hacks
 and solving the issue of resyncing when flipping screens.
 
@@ -24,6 +70,28 @@ remains unavailable in RTG mode, however.)
 
 Installation
 ~~~~~~~~~~~~
+
+V1.8 restores BIF_VBLANKINTERRUPT and requires the matching FPGA update.
+The core now supplies frame interrupts from the selected HDMI pixel clock
+in both native and RTG modes, so P96 can receive its first interrupt before
+switching the display. Framebuffer DMA remains inactive in native mode.
+
+V1.7 is a diagnostic build that does not advertise BIF_VBLANKINTERRUPT to
+P96. It tests whether waiting for an interrupt before RTG scanout starts
+causes the mode-test hang. HDMI vblank polling remains available. No FPGA
+change is required when updating from V1.6.
+
+V1.6 requires the matching FPGA core. RTG uses fixed 1024x768 HDMI timing
+at 66 MHz. It does not program Agnus timing or BEAMCON0. Native video is
+selected at reset and until P96 explicitly switches to RTG.
+
+The RTG-owned word registers are:
+  $B80112: display switch, bit 0 (0 native / 1 RTG), read/write.
+  $B80114: secondary framebuffer's first display row, read/write;
+           $7ff disables the screen split. Rows are HDMI active-area rows.
+Framebuffer, pixel-format, palette and HDMI vblank registers retain their
+existing addresses. The clock controller resets HDMI during mode switching;
+that reset does not clear the requested display or framebuffer registers.
 
 * Install P96 using its installer.  You'll be prompted to pick a card
   (any card!) - it shouldn't matter which you choose, but I'll

@@ -1,0 +1,4 @@
+.deps/
+*.lst
+*.adf
+rtgcheck

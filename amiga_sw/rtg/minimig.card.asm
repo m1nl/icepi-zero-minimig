@@ -15,11 +15,6 @@
 
 	machine 68020
 
-	incdir	"include:"
-
-;	 include P96BoardInfo.i
-;	 include P96ModeInfo.i
-;	 include P96CardStruct.i
 	include hardware/custom.i
 
 	include lvo/exec_lib.i
@@ -33,24 +28,19 @@
 	include exec/interrupts.i
 
 
-	incdir "dev:Picasso96Develop/PrivateInclude"
+	include libraries/Picasso96.i
 	include boardinfo.i
 	include settings.i
 
 ; CardData is a region of 16 longwords, so 64 bytes we can use as we please
-CardData_HTotal = gbi_CardData+0
-CardData_HSStart = gbi_CardData+2
-CardData_HSStop = gbi_CardData+4
-CardData_HBStop = gbi_CardData+6
-CardData_VTotal = gbi_CardData+8
-CardData_VSStart = gbi_CardData+10
-CardData_VSStop = gbi_CardData+12
-CardData_VBStop = gbi_CardData+14
-CardData_Beamcon0 = gbi_CardData+16
-CardData_Control = gbi_CardData+18
-CardData_Control2 = gbi_CardData+20
-CardData_LineCompare = gbi_CardData+22
 CardData_IntEnabled = gbi_CardData+24
+
+; HDMI-timed RTG registers, relative to $B80100.
+RTG_STATUS = $0c       ; read: blank, pending, enabled, active (bits 0..3)
+RTG_IRQ_CONTROL = $0c  ; write: enable bit0, acknowledge bit1 (W1C)
+RTG_FRAME_SEQUENCE = $10
+RTG_DISPLAY_SWITCH = $12 ; read/write bit0: 0 native, 1 RTG
+RTG_SPLIT_ROW = $14    ; first secondary-framebuffer row, $7ff disables
 
 
 debug
@@ -178,7 +168,7 @@ MinimigCard:
 	dc.b	'minimig.card',0,0
 	dc.b	'$VER: '
 IDString:
-	dc.b	'minimig.card 1.4 (03.07.2024)',0
+	dc.b	'minimig.card 1.8 (12.10.2026)',0
 	dc.b	0
 expansionLibName:
 	dc.b	'expansion.library',0
@@ -203,7 +193,7 @@ DataTable:
 	INITLONG	LN_NAME,MinimigCard
 	INITBYTE	LIB_FLAGS,LIBF_SUMUSED|LIBF_CHANGED
 	INITWORD	LIB_VERSION,1
-	INITWORD	LIB_REVISION,2
+	INITWORD	LIB_REVISION,8
 	INITLONG	LIB_IDSTRING,IDString
 	INITLONG	card_Name,CardName
 	dc.w		0,0
@@ -348,11 +338,16 @@ FindCard:
 	move.w	$b8010e,d1
 	and.w	#$fff0,d1
 	cmp.w	#$8320,d1   ; Is this the Chameleon/MiST RTG implementation?
-	beq	.compat     ; First version still works, but suboptimally
+	beq	.compat
 	cmp.w	#$8321,d1
 	bne	.exit
 
 .compat
+    ; Earlier Minimig hardware returns its ID for every unused register.
+    ; Require the HDMI status register before using the new polling/IRQ path.
+    move.w  $b8010c,d1
+    and.w   #$fff0,d1
+    bne     .exit
 	move.l	$4,a6	; Do we have any 24-bit Fast RAM?
 			; (This is the easiest way to ensure the FB's not in bank 0)
 	move.l	#MEMF_24BITDMA|MEMF_FAST,d1
@@ -546,7 +541,7 @@ InitCard:
 
 	lea	SetSplitPosition(pc),a1
 	move.l	a1,gbi_SetSplitPosition(a2)
-	move.w	#-1,(CardData_LineCompare,a2)
+
 
 ;	 lea	 AllocCardMem(pc),a1
 ;	 move.l  a1,gbi_AllocCardMem(a2)
@@ -556,8 +551,8 @@ InitCard:
 	move.l	#113440000,gbi_MemoryClock(a2)
 
 	move.l	#0,(gbi_PixelClockCount+0,a2)
-	move.l	#21,(gbi_PixelClockCount+4,a2)
-	move.l	#16,(gbi_PixelClockCount+8,a2)
+	move.l	#1,(gbi_PixelClockCount+4,a2)
+	move.l	#1,(gbi_PixelClockCount+8,a2)
 	move.l	#0,(gbi_PixelClockCount+12,a2)
 	move.l	#0,(gbi_PixelClockCount+16,a2)
 ;- Planar
@@ -579,24 +574,31 @@ InitCard:
 
 	move.w	#0,(gbi_MaxHorResolution+0,a2)
 	move.w	#0,(gbi_MaxVerResolution+0,a2)
-	move.w	#2048,(gbi_MaxHorResolution+2,a2)
-	move.w	#2048,(gbi_MaxVerResolution+2,a2)
-	move.w	#2048,(gbi_MaxHorResolution+4,a2)
-	move.w	#2048,(gbi_MaxVerResolution+4,a2)
+	move.w	#1024,(gbi_MaxHorResolution+2,a2)
+	move.w	#768,(gbi_MaxVerResolution+2,a2)
+	move.w	#1024,(gbi_MaxHorResolution+4,a2)
+	move.w	#768,(gbi_MaxVerResolution+4,a2)
 	move.w	#0,(gbi_MaxHorResolution+6,a2)
 	move.w	#0,(gbi_MaxVerResolution+6,a2)
 	move.w	#0,(gbi_MaxHorResolution+8,a2)
 	move.w	#0,(gbi_MaxVerResolution+8,a2)
 
 	move.w	#0,(CardData_IntEnabled,a2)
+    movea.l gbi_RegisterBase(a2),a1
+    clr.w   gbi_MoniSwitch(a2)
+    clr.w   RTG_DISPLAY_SWITCH(a1) ; native until explicitly selected
+    move.w  #$7ff,RTG_SPLIT_ROW(a1)
+    move.w  #2,RTG_IRQ_CONTROL(a1) ; disable and clear stale IRQ
 	lea	gbi_HardInterrupt(a2),a1
 	lea	VBL_ISR(pc),a0
 	move.l	a0,IS_CODE(a1)
-	moveq	#INTB_VERTB,d0
+    move.l  a2,IS_DATA(a1)
+	moveq	#INTB_PORTS,d0
 	move.l	$4,a6
 	jsr	_LVOAddIntServer(a6)
 
-	ori.l	#(1<<4),gbi_Flags(a2)        ; BIF_VBLANKINTERRUPT
+    ; Matching core supplies HDMI frame interrupts even while native is selected.
+    ori.l   #(1<<4),gbi_Flags(a2)    ; BIF_VBLANKINTERRUPT
 	lea	SetInterrupt(pc),a1
 	move.l	a1,gbi_SetInterrupt(a2)
 
@@ -633,47 +635,18 @@ InitCard:
 
 ;------------------------------------------------------------------------------
 SetSwitch:
-;------------------------------------------------------------------------------
-;  a0:	struct BoardInfo
-;  d0.w:		BOOL state
-;  this function should set a board switch to let the Amiga signal pass
-;  through when supplied with a 0 in d0 and to show the board signal if
-;  a 1 is passed in d0. You should remember the current state of the
-;  switch to avoid unneeded switching. If your board has no switch, then
-;  simply supply a function that does nothing except a RTS.
-;
-;  NOTE: Return the opposite of the switch-state. BDK
-
-
-	movem.l d1-d6/a0-a6,-(a7)
-
-	BUG	"SetSwitch %ld",d0
-	move.w	gbi_MoniSwitch(a0),d1
-	andi.w	#$FFFE,d1
-
-	move.w	gbi_MoniSwitch(a0),d7
-	cmp.w	d7,d0
-	beq	.done
-	move.w	d0,gbi_MoniSwitch(a0)
-
-	tst.b	d0
-	bne.s	.trigger
-
-	; Hide the RTG screen
-	bset	#13,d0
-	lea	$dff000,a1
-	move.w	d0,(beamcon0,a1)
-;	 move.w  #0,(beamcon0,a1) ; This messes up the PAL/NTSC bit
-;	 bra.s	 .done
-
-.trigger
-
-.done:
-	bsr SetHardware
-	move.l	d7,d0
-	andi.w	#$0001,d0
-	movem.l (a7)+,d1-d6/a0-a6
-	rts
+; a0: BoardInfo, d0.w: requested display. Return the previous switch state.
+    movem.l d1/a1,-(sp)
+    BUG "SetSwitch %ld",d0
+    move.w gbi_MoniSwitch(a0),d1
+    andi.w #1,d0
+    move.w d0,gbi_MoniSwitch(a0)
+    movea.l gbi_RegisterBase(a0),a1
+    move.w d0,RTG_DISPLAY_SWITCH(a1)
+    move.w d1,d0
+    andi.l #1,d0
+    movem.l (sp)+,d1/a1
+    rts
 
 ;------------------------------------------------------------------------------
 SetDAC:
@@ -684,7 +657,7 @@ SetDAC:
 ;  e.g. from chunky to TrueColor. Usually, all you have to do is to set
 ;  the RAMDAC of your board accordingly.
 
-;	For Minimig the DAC setting and pixel clock interact, so despite the stipulation below, we set them together.
+; Indexed/16-bit format and RGB555/RGB565 selection; pixel clock is fixed.
 	moveq	#1,d0
 	cmp.l	#10,d7
 	beq	.16bit
@@ -692,120 +665,21 @@ SetDAC:
 .16bit
 	move.l	(gbi_RegisterBase,a0),a1
 	move.w	d0,(6,a1)
-;	 move.w  d0,CardData_Control2(a0)
-	bsr	SetHardware
+    moveq #0,d0
+    cmp.l #1,d7
+    bne.s .store_format
+    move.w #$8000,d0
+.store_format:
+    move.w d0,(4,a1)
 .done
 	rts
 
 ;------------------------------------------------------------------------------
 SetGC:
-;------------------------------------------------------------------------------
-;  a0: struct BoardInfo
-;  a1: struct ModeInfo
-;  d0: BOOL Border
-;  This function is called whenever another ModeInfo has to be set. This
-;  function simply sets up the CRTC and TS registers to generate the
-;  timing used for that screen mode. You should not set the DAC, clocks
-;  or linear start adress. They will be set when appropriate by their
-;  own functions.
-
-; For Minimig various factors interact so we store the register settings, and actually
-; set the chips in SetDisplay
-
-	movem.l d2-d7,-(sp)
-
-	move.l	a1,gbi_ModeInfo(a0)
-	move.w	d0,gbi_Border(a0)
-	move.w	d0,d4 ; Border
-
-	moveq	#0,d0
-	move.b	gmi_Depth(a1),d0
-	BUG	"Depth %ld",d0
-
-	; Since we're using the AGA registers for framing,
-	; and everything in AGA land is based around 3.545MHz colour clocks,
-	; we need to divide the various parameters accordingly.
-	move.l	gmi_PixelClock(a1),d7
-	divu	#35450,d7
-	and.l	#$ffff,d7
-
-	BUG	"Pixel clock divider %ld",d7
-
-	move.w	#100,d0
-	move.w	gmi_HorTotal(a1),d1
-	mulu	d0,d1
-	divu	d7,d1
-	ext.l	d1
-	subq	#1,d1
-	move.w	d1,CardData_HTotal(a0)
-	BUG	"HTotal: %ld",d1
-
-	move.w	gmi_HorSyncStart(a1),d2
-	mulu	d0,d2
-	divu	d7,d2
-	ext.l	d2
-	move.w	d2,CardData_HSStart(a0)
-	BUG	"HSStart: %ld",d2
-
-	move.w	gmi_HorSyncSize(a1),d3
-	add.w	gmi_HorSyncStart(a1),d3
-	mulu	d0,d3
-	divu	d7,d3
-	ext.l	d3
-	move.w	d3,CardData_HSStop(a0)
-	BUG	"HSStop: %ld",d3
-
-	move.w	gmi_HorTotal(a1),d4
-	move.w	gmi_Width(a1),d1
-;	 add.w	 #31,d1      ; Round up to multiple of 32
-;	 and.w	 #$ffe0,d1
-;	 sub.w	 d1,d4
-	sub.w	gmi_Width(a1),d4
-	mulu	d0,d4
-	divu	d7,d4
-	ext.l	d4
-;	 subq	 #1,d4
-	move.w	d4,CardData_HBStop(a0)
-	BUG	"HBStop: %ld",d4
-
-
-	move.w	gmi_VerTotal(a1),d0
-	subq.w	#1,d0
-	move.w	d0,CardData_VTotal(a0)
-	BUG	"VTotal = %ld",d0
-
-	move.w	gmi_VerSyncStart(a1),d1
-	move.w	d1,CardData_VSStart(a0)
-	BUG	"VSStart: %ld",d1
-
-	move.w	d1,d2
-	add.w	gmi_VerSyncSize(a1),d2
-	move.w	d2,CardData_VSStop(a0)
-	BUG	"VSStop: %ld",d2
-
-	move.w	gmi_VerTotal(a1),d3
-	sub.w	gmi_Height(a1),d3
-;	 addq.w  #1,d3
-	move.w	d3,CardData_VBStop(a0)
-	BUG	"VBStop: %ld",d3
-
-	move.w	gmi_Clock(a1),d4
-	lsl	#6,d3
-	or.w	d3,d4
-	move.w	d4,CardData_Control(a0)
-	BUG	"Mode: %lx",d4
-
-	move.w	#$1bc0,d1
-	move.b	gmi_Flags(a1),d0
-	lsr.b	#3,d0	; Shift and mask sync polarity...
-	and.w	#3,d0
-	or.w	d0,d1
-	move.w	d1,CardData_Beamcon0(a0)
-	BUG	"BEAMCON0 %lx",d1
-
-	bsr	SetHardware
-	movem.l (sp)+,d2-d7
-	rts
+; a0: BoardInfo, a1: ModeInfo, d0: border. HDMI supplies fixed 1024x768 timing.
+    move.l a1,gbi_ModeInfo(a0)
+    move.w d0,gbi_Border(a0)
+    rts
 
 ;------------------------------------------------------------------------------
 SetPanning:
@@ -855,7 +729,6 @@ SetPanning:
 .skip2
 	move.l	d1,(8,a1)
 
-	bsr	SetHardware
 	rts
 
 
@@ -978,7 +851,6 @@ SetDisplay:
 ;  NOTE: return the opposite of the state
 
 	BUG "SetDisplay %ld",d0
-	bsr SetHardware
 	not.b	d0
 	andi.w	#1,d0
 	rts
@@ -1010,51 +882,36 @@ SetClearMask:
 
 ;------------------------------------------------------------------------------
 WaitVerticalSync:
-;------------------------------------------------------------------------------
-;  a0:	struct BoardInfo
-;  This function waits for the next horizontal retrace.
-	BUG	"WaitVerticalSync"
-
-; On minimig can simply use VPOSR for this
-;	 BC 1,#$ff
-;	 move.l  $dff004,d0
-;	 BC 2,d0
-	move.w	(CardData_VSStart,a0),d1
-.wait_loop:
-	move.l	$dff004,d0	; VPOSR / VHPOSR
-	and.l	#$0007ff00,d0	; Mask off V bits
-	lsr.l	#8,d0
-	cmp.w	d1,d0
-	bne	.wait_loop	; Busy wait until we reach VSStart
-	rts
+; a0: BoardInfo, d0: FALSE waits for blank start, TRUE waits for blank end.
+; Inactive scanout returns immediately, including during a clock switch.
+    movem.l d1/a1,-(sp)
+    movea.l gbi_RegisterBase(a0),a1
+    tst.w   d0
+    bne.s   .wait_end
+.wait_start:
+    move.w  RTG_STATUS(a1),d1
+    btst    #3,d1
+    beq.s   .done
+    btst    #0,d1
+    beq.s   .wait_start
+    bra.s   .done
+.wait_end:
+    move.w  RTG_STATUS(a1),d1
+    btst    #3,d1
+    beq.s   .done
+    btst    #0,d1
+    bne.s   .wait_end
+.done:
+    movem.l (sp)+,d1/a1
+    rts
 
 ;------------------------------------------------------------------------------
 GetVSyncState:
-;------------------------------------------------------------------------------
-
-;	movea.l gbi_RegisterBase(a0),a0
-;	btst.b	#7,VDE_DisplayStatus(a0)        ;Vertical retrace
-;	sne	d0
-;	extb.l	d0
-	BC 0,#$55AA
-	move.l	$dff004,d0	; VPOSR / VHPOSR
-	BUG "VPOS %lx",d0
-	and.l	#$0007ff00,d0	; Mask off V bits
-	lsr.l	#8,d0
-	BUG "VPOS %lx",d0
-	move.w	(CardData_VBStop,a0),d1
-	BUG "VBStop %lx",d1
-
-	cmp.w	(CardData_VBStop,a0),d0
-	bgt	.notvsync
-	BUG	"GetVSyncState 1"
-	moveq	#1,d0
-	rts
-
-.notvsync
-	BUG	"GetVSyncState 0"
-	moveq	#0,d0
-	rts
+; Report HDMI blanking rather than the independent Amiga beam position.
+    movea.l gbi_RegisterBase(a0),a1
+    move.w  RTG_STATUS(a1),d0
+    and.l   #1,d0
+    rts
 
 ;------------------------------------------------------------------------------
 SetClock:
@@ -1073,293 +930,72 @@ SetClock:
 
 ;------------------------------------------------------------------------------
 ResolvePixelClock:
-;------------------------------------------------------------------------------
-; ARGS:
-;	d0 - requested pixel clock frequency
-; RESULT:
-;	d0 - pixel clock index
-
-;	 BUG "resolve %ld,%lx",d0,d7
-	movem.l d2/d3,-(sp)
-	move.l	d0,d1						; requested clock frequency
-	moveq	#0,d3
-	move.l	PixelClocksByFormat(pc,d7.l*4),d0
-	beq	.err
-	move.l	d0,a0
-
-	move.l	(a0),d0
-
-	moveq	#0,d0						; frequency index
-.loop:
-	cmp.l	(a0)+,d1
-	beq.b	.done
-
-	blt.b	.freq_lt_current
-
-	addq.l	#1,d0	; go to next frequency
-	tst.l	(a0)    ; check if the last one
-	bne.b	.loop
-
-	subq.l	#1,d0	; return to the last one
-	bra.b	.get_current
-
-.freq_lt_current:
-	tst.l	d0
-	beq.b	.get_current
-
-	move.l	(-4,a0),d2      ; current clock frequency
-	add.l	(-8,a0),d2      ; previous clock frequency
-	sub.l	d1,d2
-	sub.l	d1,d2
-	bmi.b	.get_current	; requested clock frequency is closer to the current one
-
-.get_previous:
-	move.l	(-8,a0),d1
-	subq.l	#1,d0
-	bra.b	.done
-
-.get_current:
-	move.l	(-4,a0),d1
-.done:
-	move.l	d1,gmi_PixelClock(a1)
-	move.l	ControlWordsByFormat(pc,d7.l*4),d1
-	move.l	d1,a0
-	move.w	(a0,d0.w*2),d1
-	move.w	d1,gmi_Clock(a1)        ; two consecutive bytes
-	movem.l (sp)+,d2/d3
-	rts
-.err:
-;	 BUG "No pixelclocks found"
-	moveq	#0,d0
-	bra	.done
-
-.rpc_BytesPerPixel:
-
-	dc.b	0	; RGBFB_NONE
-	dc.b	1	; RGBFB_CLUT
-	dc.b	0	; RGBFB_R8G8B8
-	dc.b	0	; RGBFB_B8G8R8
-	dc.b	0	; RGBFB_R5G6B5PC
-	dc.b	0	; RGBFB_R5G5B5PC
-	dc.b	0	; RGBFB_A8R8G8B8
-	dc.b	0	; RGBFB_A8B8G8R8
-	dc.b	0	; RGBFB_R8G8B8A8
-	dc.b	0	; RGBFB_B8G8R8A8
-	dc.b	2	; RGBFB_R5G6B5
-	dc.b	2	; RGBFB_R5G5B5
-	dc.b	0	; RGBFB_B5G6R5PC
-	dc.b	0	; RGBFB_B5G5R5PC
-	dc.b	0	; RGBFB_Y4U2V2
-	dc.b	0	; RGBFB_Y4U1V1
+; One fixed HDMI clock. No Agnus/PLL divider programming is required.
+; a1: ModeInfo; return d0=clock index 0.
+    move.l #66000000,gmi_PixelClock(a1)
+    clr.w gmi_Clock(a1)
+    moveq #0,d0
+    rts
 
 ;------------------------------------------------------------------------------
 GetPixelClock:
-;------------------------------------------------------------------------------
-;	 BUG "GPC %lx",d1
-	move.l	PixelClocksByFormat(pc,d7*4),d1
-	beq	.skip
-	move.l	d1,a0
-	move.l	(a0,d0.l*4),d1
-.skip
-	move.l	d1,d0
-	move.b	.gpc_BytesPerPixel(pc,d7.l),d1
-	rts
-
-.gpc_BytesPerPixel:
-
-	dc.b	1	; RGBFB_NONE
-	dc.b	1	; RGBFB_CLUT
-	dc.b	3	; RGBFB_R8G8B8
-	dc.b	3	; RGBFB_B8G8R8
-	dc.b	2	; RGBFB_R5G6B5PC
-	dc.b	2	; RGBFB_R5G5B5PC
-	dc.b	4	; RGBFB_A8R8G8B8
-	dc.b	4	; RGBFB_A8B8G8R8
-	dc.b	4	; RGBFB_R8G8B8A8
-	dc.b	4	; RGBFB_B8G8R8A8
-	dc.b	2	; RGBFB_R5G6B5
-	dc.b	2	; RGBFB_R5G5B5
-	dc.b	2	; RGBFB_B5G6R5PC
-	dc.b	2	; RGBFB_B5G5R5PC
-	dc.b	2	; RGBFB_Y4U2V2
-	dc.b	1	; RGBFB_Y4U1V1
-
-ControlWords_invalid equ 0
-ControlWordsByFormat:
-	dc.l	ControlWords_invalid	; RGBFB_NONE
-	dc.l	ControlWords_8bit	; RGBFB_CLUT
-	dc.l	ControlWords_invalid	; RGBFB_R8G8B8
-	dc.l	ControlWords_invalid	; RGBFB_B8G8R8
-	dc.l	ControlWords_invalid	; RGBFB_R5G6B5PC
-	dc.l	ControlWords_invalid	; RGBFB_R5G5B5PC
-	dc.l	ControlWords_invalid	; RGBFB_A8R8G8B8
-	dc.l	ControlWords_invalid	; RGBFB_A8B8G8R8
-	dc.l	ControlWords_invalid	; RGBFB_R8G8B8A8
-	dc.l	ControlWords_invalid	; RGBFB_B8G8R8A8
-	dc.l	ControlWords_16bit	; RGBFB_R5G6B5
-	dc.l	ControlWords_16bit	; RGBFB_R5G5B5
-	dc.l	ControlWords_invalid	; RGBFB_B5G6R5PC
-	dc.l	ControlWords_invalid	; RGBFB_B5G5R5PC
-	dc.l	ControlWords_invalid	; RGBFB_Y4U2V2
-	dc.l	ControlWords_invalid	; RGBFB_Y4U1V1
-
-	; The clock divider sets the word fetch rate. In 8-bit mode
-	; the effective pixel clock is twice the fetch rate, since
-	; there are two 8-bit pixels per word.
-ControlWords_8bit:
-	dc.w	$803f		; clk/64 * 2
-
-	dc.w	$8037		; clk/56 * 2
-	dc.w	$802f		; clk/48 * 2
-	dc.w	$8023		; clk/36 * 2
-	dc.w	$801f		; clk/32 * 2
-
-	dc.w	$8017		; clk/24 * 2
-	dc.w	$8011		; clk/18 * 2
-	dc.w	$800f		; clk/16 * 2
-	dc.w	$800d		; clk/14 * 2
-
-	dc.w	$800c		; clk/13 * 2
-	dc.w	$800b		; clk/12 * 2
-	dc.w	$800a		; clk/11 * 2
-	dc.w	$8009		; clk/10 * 2
-
-	dc.w	$8008		; clk/9 * 2
-	dc.w	$8007		; clk/8 * 2
-	dc.w	$8006		; clk/7 * 2
-	dc.w	$8005		; clk/6 * 2
-
-	dc.w	$8004		; clk/5 * 2
-	dc.w	$8003		; clk/4 * 2
-	dc.w	$8002		; clk/3 * 2
-	dc.w	$8001		; clk/2 * 2
-
-	dc.w	0,0
-
-ControlWords_16bit:
-	dc.w	$001f		; clk/32
-	dc.w	$0017		; clk/24
-	dc.w	$0013		; clk/20
-	dc.w	$0011		; clk/18
-
-	dc.w	$000f		; clk/16
-	dc.w	$000d		; clk/14
-	dc.w	$000b		; clk/12
-	dc.w	$0009		; clk/10
-
-	dc.w	$0008		; clk/9
-	dc.w	$0007		; clk/8
-	dc.w	$0006		; clk/7
-	dc.w	$0005		; clk/6
-
-	dc.w	$0004		; clk/5
-	dc.w	$0003		; clk/4
-	dc.w	$0002		; clk/3
-	dc.w	$0001		; clk/2
-
-	dc.w	0
-
-
-PixelClocks_invalid equ 0
-PixelClocksByFormat:
-	dc.l	PixelClocks_invalid	; RGBFB_NONE
-	dc.l	PixelClocks_8bit	; RGBFB_CLUT
-	dc.l	PixelClocks_invalid	; RGBFB_R8G8B8
-	dc.l	PixelClocks_invalid	; RGBFB_B8G8R8
-	dc.l	PixelClocks_invalid	; RGBFB_R5G6B5PC
-	dc.l	PixelClocks_invalid	; RGBFB_R5G5B5PC
-	dc.l	PixelClocks_invalid	; RGBFB_A8R8G8B8
-	dc.l	PixelClocks_invalid	; RGBFB_A8B8G8R8
-	dc.l	PixelClocks_invalid	; RGBFB_R8G8B8A8
-	dc.l	PixelClocks_invalid	; RGBFB_B8G8R8A8
-	dc.l	PixelClocks_16bit	; RGBFB_R5G6B5
-	dc.l	PixelClocks_16bit	; RGBFB_R5G5B5
-	dc.l	PixelClocks_invalid	; RGBFB_B5G6R5PC
-	dc.l	PixelClocks_invalid	; RGBFB_B5G5R5PC
-	dc.l	PixelClocks_invalid	; RGBFB_Y4U2V2
-	dc.l	PixelClocks_invalid	; RGBFB_Y4U1V1
-
-PixelClocks_8bit:
-	dc.l	 3545000	; clk/64 * 2
-
-	dc.l	 4051429	; clk/56 * 2
-	dc.l	 4726666	; clk/48 * 2
-	dc.l	 6302222	; clk/36 * 2
-	dc.l	 7090000	; clk/32 * 2
-
-	dc.l	 9453333	; clk/24 * 2
-	dc.l	12604444	; clk/18 * 2
-	dc.l	14180000	; clk/16 * 2
-	dc.l	16205000	; clk/14 * 2
-
-	dc.l	17452307	; clk/13 * 2
-	dc.l	18906667	; clk/12 * 2
-	dc.l	20625454	; clk/11 * 2
-	dc.l	22688000	; clk/10 * 2
-
-	dc.l	25208889	; clk/9 * 2
-	dc.l	28360000	; clk/8 * 2
-	dc.l	32411000	; clk/7 * 2
-	dc.l	37810000	; clk/6 * 2
-
-	dc.l	45376000	; clk/5 * 2
-	dc.l	56720000	; clk/4 * 2
-	dc.l	75620000	; clk/3 * 2
-	dc.l	113440000	; clk/2 * 2
-
-	dc.l	0
-
-PixelClocks_16bit:
-	dc.l	 3545000	; clk/32
-	dc.l	 4726666	; clk/24
-	dc.l	 5672000	; clk/20
-	dc.l	 6302222	; clk/18
-
-	dc.l	 7090000	; clk/16
-	dc.l	 8102857	; clk/14
-	dc.l	 9453333	; clk/12
-	dc.l	11344000	; clk/10
-
-	dc.l	12604444	; clk/9
-	dc.l	14180000	; clk/8
-	dc.l	16205000	; clk/7
-	dc.l	18906667	; clk/6
-
-	dc.l	22688000	; clk/5
-	dc.l	28360000	; clk/4
-	dc.l	37810000	; clk/3
-	dc.l	56720000	; clk/2
-
-	dc.l	0
-
+; d0: index, d7: RGB format. Return frequency in d0, bytes/pixel in d1.
+    moveq #0,d1
+    cmp.l #1,d7
+    beq.s .indexed
+    cmp.l #10,d7
+    beq.s .direct
+    cmp.l #11,d7
+    beq.s .direct
+    moveq #0,d0
+    rts
+.indexed:
+    moveq #1,d1
+    bra.s .clock
+.direct:
+    moveq #2,d1
+.clock:
+    move.l #66000000,d0
+    rts
 
 ;------------------------------------------------------------------------------
 SetInterrupt:
-;------------------------------------------------------------------------------
-	BUG "SetInterrupt %ld\n",d0
-	move.w	d0,(CardData_IntEnabled,a0)
-	BC  2,#$3456
-	rts
+    movem.l d1/a1,-(sp)
+    move.w  d0,CardData_IntEnabled(a0)
+    movea.l gbi_RegisterBase(a0),a1
+    moveq   #2,d1 ; acknowledge and disable
+    tst.w   d0
+    beq.s   .store
+    moveq   #3,d1 ; acknowledge and enable
+.store:
+    move.w  d1,RTG_IRQ_CONTROL(a1)
+    movem.l (sp)+,d1/a1
+    rts
 
 ;------------------------------------------------------------------------------
 VBL_ISR:
-;------------------------------------------------------------------------------
-
-	movem.l a1/a6,-(sp)
-
-	tst.w	(CardData_IntEnabled,a1)
-	beq .no_soft_int
-
-       movea.l gbi_ExecBase(a1),a6
-       lea     gbi_SoftInterrupt(a1),a1
-       jsr     _LVOCause(a6)
-
-.no_soft_int:
-
-       movem.l (sp)+,a1/a6
-	moveq	#0,d0
-	rts
-
+; Level-2 PORTS is shared with CIA/Gayle. Check our source before handling it.
+    movem.l d1/a0-a1/a6,-(sp)
+    movea.l gbi_RegisterBase(a1),a0
+    move.w  RTG_STATUS(a0),d1
+    btst    #1,d1
+    beq.s   .done
+    moveq   #2,d1
+    tst.w   CardData_IntEnabled(a1)
+    beq.s   .ack_only
+    moveq   #3,d1
+.ack_only:
+    move.w  d1,RTG_IRQ_CONTROL(a0)
+    move.w  RTG_STATUS(a0),d1 ; finish the hardware acknowledgement
+    tst.w   CardData_IntEnabled(a1)
+    beq.s   .done
+    movea.l gbi_ExecBase(a1),a6
+    lea     gbi_SoftInterrupt(a1),a1
+    jsr     _LVOCause(a6)
+.done:
+    movem.l (sp)+,d1/a0-a1/a6
+    moveq   #0,d0 ; allow other servers on the shared interrupt to run
+    rts
 
 ;------------------------------------------------------------------------------
 GetCompatibleFormats:
@@ -1398,70 +1034,16 @@ GetBytesPerPixel:
 
 ;==============================================================================
 
-SetHardware:
-	movem.l d0/a1,-(a7)
-;	 BUG	 "Setting hardware registers"
-	move.w	gbi_MoniSwitch(a0),d0
-	beq	.skip
-
-	move.l	(gbi_RegisterBase,a0),a1
-
-	move.w	(CardData_Control,a0),d0
-	move.w	d0,(4,a1)
-;	 move.w  (CardData_Control2,a0),d0
-;	 move.w  d0,(6,a1)
-
-	lea	$dff000,a1
-
-	move.w	(CardData_Beamcon0,a0),d0
-	bset	#13,d0	; Set LPENDIS bit to enable writes to shadow regs
-	move.w	d0,(beamcon0,a1)
-
-	move.w	#0,(hcenter,a1)
-	move.w	(CardData_HTotal,a0),(htotal,a1)
-	move.w	#0,(hbstrt,a1)
-	move.w	(CardData_HSStart,a0),(hsstrt,a1)
-	move.w	(CardData_HSStop,a0),(hsstop,a1)
-	move.w	(CardData_HBStop,a0),(hbstop,a1)
-
-	move.w	(CardData_VTotal,a0),d0
-	subq	#1,d0
-	move.w	d0,(vtotal,a1)
-	move.w	#0,(vbstrt,a1)
-	move.w	(CardData_VSStart,a0),(vsstrt,a1)
-	move.w	(CardData_VSStop,a0),(vsstop,a1)
-	move.w	(CardData_VBStop,a0),(vbstop,a1)
-
-	move.w	(CardData_Beamcon0,a0),(beamcon0,a1) ; disable writes to shadow regs
-
-	move.w	(CardData_LineCompare,a0),(bplhstrt,a1)
-.skip
-	movem.l (a7)+,d0/a1
-	rts
-
-;==============================================================================
-
-SetSplitPosition:   ; A0 - BoardInfo, d0 - ypos
-
-	; Move ypos to bplhstrt hardware register
-	; Also store to bi->YSplit
-	; 0 -> disabled. Store -1 to hw.
-
-	move.w	d0,(gbi_YSplit,a0);
-	sub.w	#1,d0
-	bpl .store
-	move.w	d0,(CardData_LineCompare,a0)
-	rts
-
-.store
-	move.w	(CardData_VBStop,a0),d1
-	subq	#2,d1
-	add.w	d1,d0
-	move.w	d0,(CardData_LineCompare,a0)
-
-	bsr	SetHardware
-
-	rts
+SetSplitPosition:
+; a0: BoardInfo, d0: first secondary-framebuffer row; 0 disables dragging.
+    move.w d0,gbi_YSplit(a0)
+    movea.l gbi_RegisterBase(a0),a1
+    tst.w d0
+    bne.s .store
+    move.w #$7ff,d0
+.store:
+    move.w d0,RTG_SPLIT_ROW(a1)
+    rts
 
 ProgEnd:
 	end
