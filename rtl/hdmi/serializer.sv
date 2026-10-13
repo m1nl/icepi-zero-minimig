@@ -169,14 +169,47 @@ module serializer
                 reset_x5_sync <= {reset_x5_sync[0], 1'b0};
         end
 
-        // Modulo-5 counter in the 5x domain drives load vs shift
-        logic [2:0] bit_cnt = 3'd4;
-
-        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
-            if (reset_x5)
-                bit_cnt <= 3'd4;
+        // Acquire the word phase from a pixel edge after every reset.
+        logic pixel_toggle = 1'b0;
+        always_ff @(posedge clk_pixel, posedge reset) begin
+            if (reset)
+                pixel_toggle <= 1'b0;
             else
-                bit_cnt <= (bit_cnt == 3'd4) ? 3'd0 : bit_cnt + 3'd1;
+                pixel_toggle <= ~pixel_toggle;
+        end
+
+        (* ASYNC_REG = "TRUE" *) logic [1:0] pixel_toggle_sync = 2'b00;
+        logic pixel_toggle_prev = 1'b0;
+
+        // Start synchronizing while reset_x5 is still being released.
+        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
+            if (reset_x5) begin
+                pixel_toggle_sync <= 2'b00;
+                pixel_toggle_prev <= 1'b0;
+            end else begin
+                pixel_toggle_sync <= {pixel_toggle_sync[0], pixel_toggle};
+                pixel_toggle_prev <= pixel_toggle_sync[1];
+            end
+        end
+
+        wire pixel_event = pixel_toggle_sync[1] ^ pixel_toggle_prev;
+
+        logic phase_locked  = 1'b0;
+        logic [2:0] bit_cnt = 3'd0;
+
+        wire load_word = phase_locked ? (bit_cnt == 3'd4) : pixel_event;
+
+        // Capture about 2-3 fast ticks after the pixel edge.
+        // Once acquired, keep exactly five ticks per word.
+        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
+            if (reset_x5) begin
+                phase_locked <= 1'b0;
+                bit_cnt <= 3'd0;
+            end else if (load_word) begin
+                phase_locked <= 1'b1;
+                bit_cnt <= 3'd0;
+            end else if (phase_locked)
+                bit_cnt <= bit_cnt + 3'd1;
         end
 
         // ----------------------------------------------------
@@ -191,8 +224,8 @@ module serializer
             always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
                 if (reset_x5)
                     shift <= 10'b0;
-                else if (bit_cnt == 3'd4)
-                    shift <= tmds_internal[i];   // load at end of each pixel period
+                else if (load_word)
+                    shift <= tmds_internal[i];
                 else
                     shift <= {2'b0, shift[9:2]}; // shift by 2: DDR outputs 2 bits per cycle
             end
@@ -219,7 +252,7 @@ module serializer
         always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
             if (reset_x5)
                 clk_shift <= 10'b0;
-            else if (bit_cnt == 3'd4)
+            else if (load_word)
                 clk_shift <= 10'b0000011111;
             else
                 clk_shift <= {2'b0, clk_shift[9:2]};

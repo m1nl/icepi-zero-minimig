@@ -400,6 +400,9 @@ MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/
 
 MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "clk_sys" 2X ;
 
+MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genvideo.hdmi_inst/serializer/g_ser*.shift*" 2X ;
+BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
+
 CLOCK_TO_OUT PORT "sdram_csn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
 CLOCK_TO_OUT PORT "sdram_a*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
 CLOCK_TO_OUT PORT "sdram_dq*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;

@@ -83,7 +83,7 @@ set_false_path -from [get_cells {virtual_top.minimig.USERIO1.osd1.dither*}]
 
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.beamcon0*}]
 
-# Native HS/VS are launched on the 28.6 MHz rising edge.
+# Native DVI signals are launched in the 28.6 MHz domain.
 set_max_delay 34.96 -from [get_cells {virtual_top.DVI_*}] -to [get_cells {genvideo.hdmi_inst.*}]
 
 set_false_path -to [get_cells {genvideo.audio_sync.*sync*}]
@@ -105,6 +105,12 @@ set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.*fifo.wr_gray[*]}] -to 
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.interlace_out*}]
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.displaypal_out*}]
 set_false_path -from [get_cells {virtual_top.minimig.AGNUS1.bc1.long_frame_r*}]
+
+# Direct word capture has at least two destination-clock cycles.
+set_multicycle_path -from [get_cells {genvideo.hdmi_inst.tmds_gen*.tmds_channel.*}] -to [get_cells {genvideo.hdmi_inst.serializer.g_ser*.shift*}] 2
+
+# Only the first pixel-marker synchronizer stage is exempt.
+set_false_path -to [get_cells {genvideo.hdmi_inst.serializer.pixel_toggle_sync[0]}]
 
 # Clock going to SDRAM (180° shifted)
 create_generated_clock -name sdram_clk -source [get_nets {virtual_top.amiga_clk.clk_114}] -phase 180 [get_ports sdram_clk]
