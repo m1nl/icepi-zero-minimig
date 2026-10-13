@@ -21,7 +21,7 @@ static unsigned char aux_qual = 0;
 
 static inline void aux_hid_send(int type, int code) {
     int t = (type << 14) | (aux_mouse_buttons0 << 8) | (code & 0xff);
-    HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
+    KeyboardSend(t);
 }
 
 static inline void aux_joy_send(unsigned char index, unsigned short joy) {
@@ -146,32 +146,86 @@ void aux_hid_handle(void) {
     }
 }
 
-void aux_hid_inthandler(void) {
-    unsigned char buf[AUX_SPI_BUFFER_SIZE];
-    unsigned int len = AUX_SPI_BUFFER_SIZE;
+/* FIFO reads can merge reports or split one across reads and interrupts.
+ * A new transaction discards any unfinished report from the previous one.
+ * Invalid headers discard the transaction until the next start marker. */
+static void aux_hid_feed(const unsigned short *buf, unsigned int len) {
+    static unsigned char report[7];
+    static unsigned int used = 0;
+    static unsigned int needed = 0;
+    static int discard = 1;
 
-    while (1) {
-        aux_spi_read_raw((char *)buf, &len);
+    for (unsigned int i = 0; i < len; ++i) {
+        unsigned short word = buf[i];
+        unsigned char byte = (unsigned char)word;
 
-        if (len < 2 || buf[0] != SPI_TARGET_HID)
-            break;
+        if (word & AUX_SPI_START) {
+            used = 0;
+            needed = 0;
+            discard = 0;
+        }
 
-        switch (buf[1]) {
+        if (discard)
+            continue;
+
+        if (used == 0) {
+            if (byte != SPI_TARGET_HID) {
+                DBG("AUX HID: ignoring target=%d\n", byte);
+                discard = 1;
+                continue;
+            }
+
+            report[used++] = byte;
+            continue;
+        }
+
+        if (used == 1) {
+            switch (byte) {
+                case SPI_HID_KEYBOARD:
+                    needed = 4;
+                    break;
+                case SPI_HID_MOUSE:
+                    needed = 5;
+                    break;
+                case SPI_HID_JOYSTICK:
+                    needed = 7;
+                    break;
+                default:
+                    DBG("AUX HID: ignoring type=%d\n", byte);
+                    used = 0;
+                    needed = 0;
+                    discard = 1;
+                    continue;
+            }
+        }
+
+        report[used++] = byte;
+
+        if (used != needed)
+            continue;
+
+        switch (report[1]) {
             case SPI_HID_KEYBOARD:
-                if (len >= 4)
-                    aux_hid_handlekb(&buf[2]);
+                aux_hid_handlekb(&report[2]);
                 break;
             case SPI_HID_MOUSE:
-                if (len >= 5)
-                    aux_hid_handlemouse(&buf[2]);
+                aux_hid_handlemouse(&report[2]);
                 break;
             case SPI_HID_JOYSTICK:
-                if (len >= 7)
-                    aux_hid_handlejoy(&buf[2]);
-                break;
-            default:
-                DBG("AUX HID: ignoring type=%d\n", buf[1]);
+                aux_hid_handlejoy(&report[2]);
                 break;
         }
+
+        used = 0;
+        needed = 0;
     }
+}
+
+void aux_hid_inthandler(void) {
+    unsigned short buf[AUX_SPI_BUFFER_SIZE];
+    unsigned int len = sizeof(buf) / sizeof(buf[0]);
+
+    /* Leave remaining bytes to the FIFO-level IRQ so other sources run. */
+    aux_spi_read_raw(buf, &len);
+    aux_hid_feed(buf, len);
 }

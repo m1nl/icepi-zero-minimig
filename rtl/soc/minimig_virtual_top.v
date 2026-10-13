@@ -196,7 +196,6 @@ wire           cck;
 wire [ 10-1:0] eclk;
 
 // reset
-wire           pll_rst;
 wire           sdctl_rst;
 
 // tg68
@@ -240,12 +239,10 @@ wire           tg68_clds;
 wire           tg68_cuds;
 wire [  4-1:0] tg68_CACR_out;
 wire [ 32-1:0] tg68_VBR_out;
-wire           tg68_ovr;
 wire           tg68_fast_rd;
 
 // minimig
 wire [ 16-1:0] ram_data;      // sram data bus
-wire [ 16-1:0] ram_data2;     // sram data bus 2nd word
 wire [ 16-1:0] ramdata_in;    // sram data bus in
 wire [ 48-1:0] chip48;        // big chip read
 wire [ 23-1:1] ram_address;   // sram address bus
@@ -256,8 +253,6 @@ wire           _ram_ble2;     // sram lower byte select 2nd word
 wire           _ram_we;       // sram write enable
 wire           _ram_oe;       // sram output enable
 wire           _15khz;        // scandoubler disable
-wire           invertsync;    // helps some monitors with the scandoubled signal
-wire           sdo;           // SPI data output
 
 wire [  8-1:0] red_amiga;
 wire [  8-1:0] green_amiga;
@@ -273,20 +268,10 @@ wire [  2-1:0] sdram_dqm;
 wire [  2-1:0] sdram_ba;
 
 // mist
-wire           user_io_sdo;
-wire           minimig_sdo;
 wire [  11:0] joysticka;
 wire [  11:0] joystickb;
-wire [   6:0] joyc;
-wire [   6:0] joyd;
 wire [  11:0] extjoya;
 wire [  11:0] extjoyb;
-
-// UART
-wire minimig_rxd;
-wire minimig_txd;
-wire debug_rxd;
-wire debug_txd;
 
 // Realtime clock
 wire [63:0] rtc;
@@ -307,11 +292,9 @@ assign SDRAM_DQMH = sdram_dqm[1];
 assign SDRAM_BA   = sdram_ba;
 
 // reset
-assign pll_rst   = 1'b0;
 assign sdctl_rst = PLL_LOCKED & RESET_N;
 
 // Native video blanking
-wire hblank_amiga;
 wire vblank_amiga;
 wire blank_amiga;
 
@@ -332,6 +315,7 @@ wire [15:0] rtg_fromram;
 wire rtg_ramreq;
 wire rtg_fill;
 wire rtg_rampri;
+wire rtg_ram_extend;
 wire rtg_ramack;
 
 // OSD drawing for RTG
@@ -424,6 +408,7 @@ generate
 
 			// RTG SDRAM fetch
 			.fetch_addr(rtg_fetch_addr), .fetch_req(rtg_ramreq), .fetch_pri(rtg_rampri),
+			.fetch_extend(rtg_ram_extend),
 			.fetch_d(rtg_fromram), .fetch_ack(rtg_ramack), .fetch_fill(rtg_fill),
 
 			// RTG output
@@ -467,6 +452,7 @@ generate
 		assign rtg_fetch_addr = 26'b0;
 		assign rtg_ramreq     = 1'b0;
 		assign rtg_rampri     = 1'b0;
+		assign rtg_ram_extend = 1'b0;
 
 		always @(*)
 			RTG_RGB = 24'd0;
@@ -492,7 +478,6 @@ wire [15:0] aud_fromram;
 wire aud_fill;
 wire aud_ena_host;
 wire aud_ena_cpu;
-wire aud_clear;
 
 wire [25:0] aud_ramaddr;
 assign aud_ramaddr[15:0]=aud_addr[15:0];
@@ -529,7 +514,7 @@ generate
 		VideoStream #(.fifodepth(9),.burstdepth(3),.signalwidth(16)) myaudiostream
 		(
 			.clk(CLK_114),
-			.reset_n(aud_ena_host | aud_ena_cpu), // !aud_clear),
+			.reset_n(aud_ena_host | aud_ena_cpu),
 			.enable(aud_ena_host | aud_ena_cpu),
 			.baseaddr(aud_baseaddr),
 			// SDRAM interface
@@ -737,6 +722,7 @@ sdram_ctrl #(
 	.rtgfill      (rtg_fill         ),
 	.rtgack       (rtg_ramack       ),
 	.rtgpri       (rtg_rampri       ),
+	.rtg_extend_ok(rtg_ram_extend   ),
 	.rtgRd        (rtg_fromram      ),
 
 	.audAddr      (aud_ramaddr      ),
@@ -752,24 +738,16 @@ sdram_ctrl #(
 );
 
 
-// multiplex spi_do, drive it from user_io if that's selected, drive
-// it from minimig if it's selected and leave it open else (also
-// to be able to monitor sd card data directly)
+// SPI signals shared by Minimig and the host controller.
 
 wire [8-1 : 0] SPI_CS;
 wire SPI_DO;
 wire SPI_DI;
 wire SPI_SCK;
-wire SPI_SS;
 wire SPI_SS2;
 wire SPI_SS3;
 wire SPI_SS4;
-wire CONF_DATA0;
 
-//assign SPI_DO = (CONF_DATA0 == 1'b0)?user_io_sdo:
-//    (((SPI_SS2 == 1'b0)|| (SPI_SS3 == 1'b0))?minimig_sdo:1'bZ);
-
-assign CONF_DATA0 = SPI_CS[3];
 assign SD_CLK = SPI_SCK;
 assign SD_CS = SPI_CS[1];
 assign SD_MOSI = SPI_DI;
@@ -786,12 +764,17 @@ wire		c64_translated_key_stb;
 reg	[7:0]	kbd_mouse_data;
 wire		kbd_reset_n;
 reg		kbd_mouse_stb;
+reg	[1:0]	kbd_mouse_type;
+
+wire		keyboard_done;
+wire		keyboard_unavailable;
+
+reg		kms_level;
 
 reg		mouse_idx;
-reg	[1:0]	kbd_mouse_type;
-reg		kms_level;
 reg	[2:0]	mouse0_buttons;
 reg	[2:0]	mouse1_buttons;
+
 reg		amiga_key_stb_r;
 
 assign kbd_reset_n = AMIGA_RESET_N;
@@ -821,6 +804,8 @@ end
 assign SPI_DO=1'b1;
 assign _ram_oe=1'b1;
 assign _ram_we=1'b1;
+assign keyboard_done=1'b0;
+assign keyboard_unavailable=1'b1;
 `else
 
 // RTG is independent of Agnus; leave its timing shadow functionality disabled.
@@ -848,7 +833,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(1'b0),.wide_
 	._cpu_reset   (tg68_rst         ), // M68K reset
 	._cpu_reset_in(tg68_nrst_out    ), // M68K reset out
 	.cpu_vbr      (tg68_VBR_out     ), // M68K VBR
-	.ovr          (tg68_ovr         ), // NMI override address decoding
+	.ovr          (                 ), // NMI override address decoding
 	//sram pins
 	.ram_data     (ram_data         ), // SRAM data bus
 	.ramdata_in   (ramdata_in       ), // SRAM data bus in
@@ -888,6 +873,8 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(1'b0),.wide_
 	.mouse_idx    (mouse_idx        ),  // mouse index
 	.kbd_reset_n  (kbd_reset_n      ),  // Aux keyboard reset
 	.kbd_mouse_data (kbd_mouse_data ),  // mouse direction data, keycodes
+	.keyboard_done (keyboard_done),
+	.keyboard_unavailable (keyboard_unavailable),
 	.kbd_mouse_type (kbd_mouse_type ),  // type of data
 	.kbd_mouse_strobe (kbd_mouse_stb), // kbd/mouse data strobe
 	.kms_level    (kms_level        ),
@@ -949,7 +936,7 @@ minimig #(.usevideofilter(havevideofilter),.useaga(haveaga),.usertg(1'b0),.wide_
 	.floppy_frd   (                 ),  // floppy fifo reading
 	.hd_fwr       (                 ),  // hd fifo writing
 	.hd_frd       (                 ),  // hd fifo  ading
-	.hblank_out   (hblank_amiga     ),
+	.hblank_out   (                 ),
 	.vblank_out   (vblank_amiga     ),
 	.blank_out    (blank_amiga      ),
 	.long_frame   (LONG_FRAME       ),
@@ -1027,16 +1014,18 @@ cfide #(
 	.debugRxD(CTRL_RX),
 	.menu_button(MENU_BUTTON),
 	.scandoubler(_15khz),
-	.invertsync(invertsync),
+	.invertsync(),
 
 	.audio_ena(aud_ena_host),
-	.audio_clear(aud_clear),
+	.audio_clear(),
 	.audio_buf(aud_addr[15]),
 	.audio_amiga(aud_ena_cpu),
 	.vbl_int(vblank_amiga),
 	.interrupt(host_interrupt),
 	.amiga_key(c64_translated_key),
 	.amiga_key_stb(c64_translated_key_stb),
+	.keyboard_done(keyboard_done),
+	.keyboard_unavailable(keyboard_unavailable),
 	.c64_keys(C64_KEYS),
 
 	.amiga_addr(amigahost_addr),
@@ -1069,7 +1058,6 @@ wire [  8-1:0] dithered_green;
 wire [  8-1:0] dithered_blue;
 wire           dithered_vs;
 wire           dithered_hs;
-wire           dithered_de;
 
 reg [2:0] vga_strobe_ctr;
 

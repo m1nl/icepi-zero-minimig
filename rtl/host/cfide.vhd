@@ -87,6 +87,8 @@ entity cfide is
 		c64_present : in std_logic := '0';
 		amiga_key : out std_logic_vector(15 downto 0);
 		amiga_key_stb : out std_logic;
+		keyboard_done : in std_logic;
+		keyboard_unavailable : in std_logic;
 
 		amiga_addr : in std_logic_vector(7 downto 0);
 		amiga_req : in std_logic;
@@ -124,11 +126,13 @@ signal uart_shiftout: std_logic;
 signal uart_txbusy: std_logic;
 signal uart_ld: std_logic;
 
-signal aux_spi_data_wr : std_logic_vector(7 downto 0);
+signal aux_spi_data_wr : std_logic_vector(8 downto 0);
 signal aux_spi_data_wr_en : std_logic;
-signal aux_spi_data_rd : std_logic_vector(7 downto 0);
+signal aux_spi_data_rd : std_logic_vector(8 downto 0);
 signal aux_spi_data_rd_ack : std_logic;
 signal aux_spi_fifo_empty : std_logic;
+signal aux_spi_first_byte : std_logic;
+signal aux_spi_data_wr_start : std_logic;
 
 signal aux_spi_shift : std_logic_vector(7 downto 0);
 signal aux_spi_clk_r : std_logic_vector(3 downto 0);
@@ -136,6 +140,7 @@ signal aux_spi_bit_cnt: integer range 0 to 7 := 0;
 signal aux_spi_select : std_logic;
 signal aux_spi_csn_r : std_Logic;
 signal aux_spi_csn_r_d : std_Logic;
+signal aux_spi_csn_r_dd : std_logic;
 signal aux_spi_mosi_r : std_Logic;
 signal aux_spi_status : std_logic_vector(1 downto 0);
 
@@ -171,9 +176,13 @@ signal audio_select : std_logic;
 signal interrupt_select : std_logic;
 signal interrupt_en : std_logic;
 signal interrupt_trigger : std_logic;
+signal interrupt_level : std_logic;
 
 signal input_select : std_logic;
 signal keyboard_q : std_logic_vector(15 downto 0);
+signal keyboard_busy : std_logic;
+signal keyboard_done_d : std_logic;
+signal keyboard_busy_sync : std_logic_vector(1 downto 0);
 signal joystick_d : std_logic_vector(23 downto 0);
 
 signal amiga_buffer  : std_logic_vector(15 downto 0);
@@ -238,7 +247,7 @@ q(15 downto 0) <=
 	audio_q when audio_select='1' else
 	keyboard_q when input_select='1' else
 	amiga_buffer when amiga_select='1' else
-	(15 downto 8 => '0') & aux_spi_data_rd when aux_spi_select='1' else
+	(15 downto 9 => '0') & aux_spi_data_rd when aux_spi_select='1' else
 	usbtohost_0(15 downto 0) when usb_select_0='1' else
 	usbtohost_1(15 downto 0) when usb_select_1='1' else
 	platformdata;
@@ -247,6 +256,7 @@ q(15 downto 0) <=
 q(31 downto 16) <=
 	(x"00" & std_logic_vector(timecnt(23 downto 16))) when timer_select='1' else
 	(aux_spi_status & (13 downto 0 => '0')) when aux_spi_select='1' else
+	((15 downto 1 => '0') & keyboard_busy_sync(1)) when input_select='1' else
 	usbtohost_0(31 downto 16) when usb_select_0='1' else
 	usbtohost_1(31 downto 16) when usb_select_1='1' else
 	(others => '0');
@@ -387,15 +397,25 @@ begin
 		amiga_key <= (others => '0');
 		amiga_key_stb <= '0';
 		joystick_d <= (others => '0');
+		keyboard_busy <= '0';
+		keyboard_done_d <= '0';
 
 	elsif rising_edge(clk_28) then
 		amiga_key_stb <= '0';
+		keyboard_done_d <= keyboard_done;
+
+		if keyboard_unavailable='1' or keyboard_done /= keyboard_done_d then
+			keyboard_busy <= '0';
+		end if;
 
 		if input_select='1' and req='1' and ack_28m='0' and wr='1' then
 			case addr(3 downto 2) is
 				when "00" =>
 					amiga_key <= d(15 downto 0);
 					amiga_key_stb <= '1';
+					if d(15 downto 14)="10" and keyboard_unavailable='0' then
+						keyboard_busy <= '1';
+					end if;
 				when "01" =>
 					joystick_d(11 downto 0) <= d(11 downto 0);
 				when "10" =>
@@ -407,6 +427,16 @@ begin
 	end if;
 end process;
 
+-- Keyboard status crosses from clk_28 into the host register clock domain.
+process (sysclk, reset_n)
+begin
+	if reset_n='0' then
+		keyboard_busy_sync <= (others => '0');
+	elsif rising_edge(sysclk) then
+		keyboard_busy_sync <= keyboard_busy_sync(0) & keyboard_busy;
+	end if;
+end process;
+
 keyboard_q <= X"FFFF" when c64_present='0' else
 	c64_keys(63 downto 48) when addr(3 downto 2)="00" else
 	c64_keys(47 downto 32) when addr(3 downto 2)="01" else
@@ -414,14 +444,14 @@ keyboard_q <= X"FFFF" when c64_present='0' else
 	c64_keys(15 downto  0) when addr(3 downto 2)="11";
 
 -- Interrupt handling at 0fffffa0
--- Read access to this range will clear the interrupt flag and disable interrupt
+-- Read access clears pending edge events and disables interrupt delivery.
+-- Level requests clear when the corresponding peripheral is serviced.
 -- Write access to this range will either enable or disable interrupt
 process (sysclk, reset_n)
 begin
 	if reset_n='0' then
 		amiga_req_d <= '0';
 		vbl_int_d <= '0';
-		aux_spi_csn_r_d <= '1';
 
 		interrupt_en <= '0';
 		interrupt_trigger <= '0';
@@ -450,13 +480,6 @@ begin
 			end if;
 		end if;
 
-		if auxspipresent='1' then
-			aux_spi_csn_r_d <= aux_spi_csn_r;
-			if aux_spi_csn_r='0' and aux_spi_csn_r_d='1' then
-				interrupt_trigger <= '1';
-			end if;
-		end if;
-
 		if usbhidpresent='1' then
 			if usb_report_req /= (usb_report_req'range => '0') then
 				interrupt_trigger <= '1';
@@ -465,12 +488,22 @@ begin
 	end if;
 end process;
 
-interrupt <= '1' when interrupt_trigger='1' and interrupt_en='1' else '0';
+-- Sample level requests independently of the acknowledged edge-event latch.
+process (sysclk, reset_n)
+begin
+	if reset_n='0' then
+		interrupt_level <= '0';
+	elsif rising_edge(sysclk) then
+		interrupt_level <= auxspipresent and not aux_spi_fifo_empty;
+	end if;
+end process;
+
+interrupt <= interrupt_en and (interrupt_trigger or interrupt_level);
 
 fifo_inst : circular_fifo
 generic map (
-	WIDTH => 8,
-	DEPTH => 8
+	WIDTH => 9,
+	DEPTH => 16
 )
 port map (
 	clk   => sysclk,
@@ -482,7 +515,8 @@ port map (
 	empty => aux_spi_fifo_empty
 );
 
-aux_spi_data_wr <= aux_spi_shift;
+-- Bit 8 travels with the first byte of each CS transaction through the FIFO.
+aux_spi_data_wr <= aux_spi_data_wr_start & aux_spi_shift;
 
 process (sysclk, reset_n)
 begin
@@ -491,17 +525,30 @@ begin
 		aux_spi_data_rd_ack <= '0';
 		aux_spi_status <= (others => '0');
 		aux_spi_bit_cnt <= 0;
+		aux_spi_csn_r_d <= '1';
+		aux_spi_csn_r_dd <= '1';
+		aux_spi_first_byte <= '1';
+		aux_spi_data_wr_start <= '0';
 
 	elsif rising_edge(sysclk) then
 		aux_spi_clk_r <= aux_spi_clk_r(2 downto 0) & aux_spi_clk;
 		aux_spi_csn_r <= aux_spi_csn;
+		aux_spi_csn_r_d <= aux_spi_csn_r;
+		aux_spi_csn_r_dd <= aux_spi_csn_r_d;
 		aux_spi_mosi_r <= aux_spi_mosi;
 
 		aux_spi_data_wr_en <= '0';
 		aux_spi_data_rd_ack <= '0';
 
+		-- Match CS boundary detection to the delayed SCLK edge detector,
+		-- so a new CS assertion cannot mark the preceding transaction's tail.
+		if aux_spi_csn_r_d='0' and aux_spi_csn_r_dd='1' then
+			aux_spi_first_byte <= '1';
+		end if;
+
 		if aux_spi_select='1' and req='1' and ack='0' then
-			if aux_spi_csn_r='0' or aux_spi_bit_cnt/=0 then
+			-- Stay busy until the final byte has been committed to the FIFO.
+			if aux_spi_csn_r='0' or aux_spi_bit_cnt/=0 or aux_spi_data_wr_en='1' then
 				aux_spi_status(1) <= '1';
 			else
 				aux_spi_status(1) <= '0';
@@ -511,15 +558,20 @@ begin
 			aux_spi_data_rd_ack <= not aux_spi_fifo_empty;
 		end if;
 
-		if aux_spi_csn_r='1' and aux_spi_bit_cnt=0 then
-			null; -- no-op
+		if aux_spi_csn_r='1' and aux_spi_clk_r="0000" then
+			-- Pending falling edges have drained; discard any partial byte.
+			aux_spi_bit_cnt <= 0;
 
-		elsif aux_spi_clk_r="1100" then  -- CPOL=0 CPHA=1
+		elsif aux_spi_clk_r="1100" and (aux_spi_csn_r='0' or aux_spi_bit_cnt/=0) then  -- CPOL=0 CPHA=1
 			aux_spi_shift <= aux_spi_shift(6 downto 0) & aux_spi_mosi_r;
-			aux_spi_bit_cnt <= aux_spi_bit_cnt + 1;
 
 			if aux_spi_bit_cnt=7 then
+				aux_spi_bit_cnt <= 0;
+				aux_spi_data_wr_start <= aux_spi_first_byte;
+				aux_spi_first_byte <= '0';
 				aux_spi_data_wr_en <= '1';
+			else
+				aux_spi_bit_cnt <= aux_spi_bit_cnt + 1;
 			end if;
 		end if;
 	end if;
@@ -1050,9 +1102,7 @@ begin
 				if hid_sync(0)(1) /= hid_sync(0)(2) then
 					hid_report_ready_0 <= '1';
 					usb_report_req(0) <= '1';
-				end if;
-
-				if hid_report_ack_0='1' then
+				elsif hid_report_ack_0='1' then
 					hid_report_ready_0 <= '0';
 				end if;
 			end if;
@@ -1069,9 +1119,7 @@ begin
 				if hid_sync(1)(1) /= hid_sync(1)(2) then
 					hid_report_ready_1 <= '1';
 					usb_report_req(1) <= '1';
-				end if;
-
-				if hid_report_ack_1='1' then
+				elsif hid_report_ack_1='1' then
 					hid_report_ready_1 <= '0';
 				end if;
 			end if;

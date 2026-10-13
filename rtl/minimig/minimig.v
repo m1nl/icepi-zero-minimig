@@ -213,6 +213,8 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	input kms_level,
 	input [1:0] kbd_mouse_type,
 	input [7:0] kbd_mouse_data,
+	output keyboard_done,
+	output keyboard_unavailable,
 	input	_15khz,			//scandoubler disable
 	input [63:0] rtc,
 	output pwr_led,			//power led
@@ -891,6 +893,34 @@ amber AMBER1
 wire       key_strobe;
 wire [7:0] key_data;
 wire       keyack;
+
+// Acknowledge only SDR reads after CIA has latched a key. Reset and OSD
+// keyboard disable cancel host waiting through keyboard_unavailable.
+reg keyboard_pending;
+reg keyboard_done_reg;
+
+assign keyboard_unavailable = reset | keyboard_disabled;
+assign keyboard_done = keyboard_done_reg;
+
+always @(posedge clk) begin
+	if (reset) begin
+		keyboard_pending <= 1'b0;
+		keyboard_done_reg <= 1'b0;
+
+	end else if (keyboard_disabled) begin
+		keyboard_pending <= 1'b0;
+
+	end else if (clk7_en) begin
+		if (keyboard_pending && keyack) begin
+			keyboard_pending <= 1'b0;
+			keyboard_done_reg <= ~keyboard_done_reg;
+		end
+
+		if (key_strobe) begin
+			keyboard_pending <= 1'b1;
+		end
+	end
+end
 
 amiga_keyboard kbd
 (

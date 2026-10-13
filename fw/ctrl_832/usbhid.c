@@ -35,7 +35,7 @@ static inline void usbhid_setkey(unsigned char code) { usbhid_keytable[code >> 5
 
 static inline void usbhid_send(int type, int code) {
     int t = (type << 14) | (mouse_buttons0 << 8) | (code & 0xff);
-    HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
+    KeyboardSend(t);
 }
 
 static void usbhid_handlekb(unsigned char *pkt) {

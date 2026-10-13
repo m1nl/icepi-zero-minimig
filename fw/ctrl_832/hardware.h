@@ -41,6 +41,8 @@
 
 #define KEYBOARDBASE 0x0fffff90
 #define HW_KEYBOARD(x) *(volatile unsigned short *)(KEYBOARDBASE + x)
+#define HW_KEYBOARD_STATUS (*(volatile unsigned int *)KEYBOARDBASE)
+#define KEYBOARD_BUSY (1U << 16)
 
 #define REG_KEYBOARD_WORD0 2
 #define REG_KEYBOARD_WORD1 6
@@ -50,6 +52,20 @@
 #define REG_KEYBOARD_OUT 2
 #define REG_JOYSTICK_0_OUT 6
 #define REG_JOYSTICK_1_OUT 10
+
+static inline void KeyboardSend(unsigned short event) {
+    if ((event & 0xc000U) == 0x8000U) {
+        unsigned int start = (unsigned int)HW_TIMER;
+        while (HW_KEYBOARD_STATUS & KEYBOARD_BUSY) {
+            /* HW_TIMER is scaled by 256; two increments allow about
+             * 22.68-45.36 us, depending on the initial timer phase.
+             * On timeout send anyway, accepting possible key loss. */
+            if ((unsigned int)(HW_TIMER - start) >= 512U)
+                break;
+        }
+    }
+    HW_KEYBOARD(REG_KEYBOARD_OUT) = event;
+}
 
 #define EnableCard() HW_SPI(HW_SPI_CS) = 0x02
 #define DisableCard() HW_SPI(HW_SPI_CS) = 0x03
@@ -139,10 +155,10 @@ static inline void Reconfigure() { PLATFORM = (1 << PLATFORM_RECONFIG); }
 
 static inline void SendKeypress(unsigned char ami, unsigned short delay_ms) {
     int t = (2 << 14) | ((unsigned int)ami);
-    HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
+    KeyboardSend(t);
     WaitTimer(delay_ms);
     t = (2 << 14) | ((unsigned int)(ami | 0x80));
-    HW_KEYBOARD(REG_KEYBOARD_OUT) = t;
+    KeyboardSend(t);
     WaitTimer(delay_ms);
 }
 

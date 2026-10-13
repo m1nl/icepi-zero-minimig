@@ -295,7 +295,7 @@ void c64keys_inthandler()
 
 	if(c64keys.out_hw!=c64keys.out_cpu)
 	{
-		HW_KEYBOARD(REG_KEYBOARD_OUT)=c64keys.outbuf[c64keys.out_hw];
+		KeyboardSend(c64keys.outbuf[c64keys.out_hw]);
 		c64keys.out_hw=(c64keys.out_hw+1) & (C64KEY_RINGBUFFER_SIZE-1);
 	}
 }

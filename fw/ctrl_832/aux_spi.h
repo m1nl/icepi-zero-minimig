@@ -8,6 +8,11 @@
 #define AUX_SPI_BUFFER_SIZE 32
 #endif
 
+/* AUX SPI register: byte in bits 7:0, transaction start in bit 8. */
+#define AUX_SPI_START (1U << 8)
+#define AUX_SPI_VALID (1U << 30)
+#define AUX_SPI_BUSY (1U << 31)
+
 #ifdef AUX_SPI_BUFFER_ADDRESS
 #define _spi_buffer ((volatile char *)AUX_SPI_BUFFER_ADDRESS)
 #else
@@ -42,7 +47,9 @@ static inline void aux_spi_inthandler(void) {
     }
 }
 
-void aux_spi_read_raw(char *spi_buffer, unsigned int *spi_buffer_size);
+/* Nonblocking: read up to size entries, stopping when no byte is available.
+ * Size is an entry count; each entry retains the byte and its start marker. */
+void aux_spi_read_raw(unsigned short *spi_buffer, unsigned int *spi_buffer_size);
 
 void aux_spi_read(char *dest, unsigned int *length);
 
