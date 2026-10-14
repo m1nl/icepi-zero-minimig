@@ -67,13 +67,13 @@ typedef struct
     unsigned short      ModifyTime;         /* last update time */
     unsigned short      ModifyDate;         /* last update date */
     unsigned short      StartCluster;       /* starting cluster of file */
-    unsigned long       FileSize;           /* size of file in bytes */
+    unsigned int        FileSize; /* 32-bit on-disk field */           /* size of file in bytes */
 } DIRENTRY;
 
 typedef struct {
     union {
         unsigned short fat16[256];
-        unsigned long  fat32[128];
+        unsigned int   fat32[128]; /* 32-bit on-disk entries */
     } fat;
     unsigned long index;
 } FATBUFFER;
@@ -113,8 +113,13 @@ unsigned int FindDrive(void);
 unsigned long GetFATLink(unsigned long cluster);
 unsigned int FileNextSector(fileTYPE *file) RAMFUNC;
 unsigned int FileOpen(fileTYPE *file, const char *name);
+unsigned int FileReadChecked(fileTYPE *file, unsigned char *buffer);
+unsigned int FileSeekChecked(fileTYPE *file, unsigned long offset);
+unsigned int FileOpenPath(fileTYPE *file, unsigned long directory, const char *name);
 unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin);
 unsigned int FileRead(fileTYPE *file, unsigned char *pBuffer) RAMFUNC;
+unsigned int FileReadExChecked(fileTYPE *file, unsigned char *buffer, unsigned long count);
+unsigned int FileWriteChecked(fileTYPE *file, unsigned char *buffer);
 unsigned int FileWrite(fileTYPE *file, unsigned char *pBuffer);
 unsigned int FileReadEx(fileTYPE *file, unsigned char *pBuffer, unsigned long nSize);
 

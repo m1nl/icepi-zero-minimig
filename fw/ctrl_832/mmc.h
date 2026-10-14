@@ -76,6 +76,11 @@ unsigned char MMC_Init(void);
 unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer);
 unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer);
 unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount);
+unsigned long MMC_GetSectorCount(void); // Cached capacity; no SD command
 unsigned long MMC_GetCapacity(); // Returns the capacity in 512 byte blocks
+
+unsigned char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count);
+unsigned char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer);
+unsigned char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer);
 
 #endif

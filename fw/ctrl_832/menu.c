@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "fpga.h"
 #include "fdd.h"
 #include "hdd.h"
+#include "cdrom.h"
 #include "hardware.h"
 #include "firmware.h"
 #include "config.h"
@@ -82,7 +83,7 @@ const char *config_on_off_msg[] = {"off", "on "};
 const char *config_scanlines_msg[] = {"off", "dim", "balanced"};
 const char *config_memory_fast_msg[] = {"none  ", "2.0 MB", "4.0 MB", "Maximum"};
 const char *config_cpu_msg[] = {"68000 ", "68010", "68EC020","68020"};
-const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4"};
+const char *config_hdf_msg[] = {"Disabled", "Hardfile (disk img)", "MMC/SD card", "MMC/SD partition 1", "MMC/SD partition 2", "MMC/SD partition 3", "MMC/SD partition 4", "CD-ROM", "CD-ROM"};
 const char *config_chipset_msg[] = {"OCS-A500", "OCS-A1000", "ECS", "---", "---", "---", "AGA", "---"};
 const char *config_turbo_msg[] = {"none", "chip", "kick", "both"};
 const char *config_mouse_speed_msg[] = {"x1.00", "x0.75", "x0.50", "x0.25"};
@@ -135,7 +136,7 @@ void SelectFile(char* pFileExt, unsigned char Options, unsigned char MenuSelect,
 {
     // this function displays file selection menu
 
-    if (strncmp(pFileExt, fs_pFileExt, 3) != 0) // check desired file extension
+    if (!fs_pFileExt || strcmp(pFileExt, fs_pFileExt) != 0) // check desired file extension
     { // if different from the current one go to the root directory and init entry buffer
         ChangeDirectory(DIRECTORY_ROOT);
         ScanDirectory(SCAN_INIT, pFileExt, Options);
@@ -200,11 +201,35 @@ void HideSplash()
 }
 
 
+/* CD-ROM is one optional IDE device. ISO and CUE are its media formats. */
+static void NextStorageType(hardfileTYPE *devices, unsigned int unit)
+{
+    unsigned int i, old=devices[unit].enabled, next;
+    if (old==HDF_FILE) next=HDF_FILE|HDF_SYNTHRDB;
+    else if (old==(HDF_FILE|HDF_SYNTHRDB)) next=HDF_CARD;
+    else if (HDF_IS_CD(old)) next=HDF_DISABLED;
+    else {
+        next=old+1;
+        if (next>=HDF_CARDPART0+partitioncount) next=HDF_CDROM;
+    }
+    if (next==HDF_CDROM) {
+        for (i=0;i<4;++i)
+            if (i!=unit && HDF_IS_CD(devices[i].enabled)) next=HDF_DISABLED;
+    }
+    if (HDF_IS_CD(old)!=HDF_IS_CD(next)) {
+        memset(devices[unit].name,0,sizeof(devices[unit].name));
+        memset(devices[unit].long_name,0,sizeof(devices[unit].long_name));
+        devices[unit].present=HDF_IS_CD(next);
+    }
+    devices[unit].enabled=next;
+}
+
 void HandleUI(void)
 {
     unsigned char i, c, up, down, select, menu, right, left, plus, minus;
     unsigned long len;
 	static char hardfile_firstunit;
+    static unsigned int cd_menu_unit, cd_return_sub;
     static hardfileTYPE t_hardfile[4]; // temporary copy of former hardfile configuration
 	static int t_hdfdir[4];
     static char t_enable_ide; // temporary copy of former enable_ide flag.
@@ -456,8 +481,8 @@ void HandleUI(void)
 			}
         }
         OsdWrite(4, " Floppy disk settings \x16", menusub == 4,0);
-        OsdWrite(5, " Primary hard disk \x16", menusub == 5,0);
-        OsdWrite(6, " Secondary hard disk \x16", menusub == 6,0);
+        OsdWrite(5, " Primary IDE controller \x16", menusub == 5,0);
+        OsdWrite(6, " Secondary IDE controller \x16", menusub == 6,0);
         OsdWrite(7, STD_EXIT, menusub == 7,0);
 
         menustate = MENU_MAIN2;
@@ -1458,7 +1483,7 @@ void HandleUI(void)
     case MENU_SETTINGS_HARDFILE1 :
         OsdColor(OSDCOLOR_SUBMENU);
 		helptext=helptexts[HELPTEXT_HARDFILE];
-		OsdSetTitle("Harddisks",0);
+		OsdSetTitle("IDE",0);
 
 		enable=t_enable_ide & (1<<(hardfile_firstunit>>1));
 		parentstate = menustate;
@@ -1488,7 +1513,9 @@ void HandleUI(void)
         else
             strcpy(s, "       ** file not found **");
 
-		enable=(t_enable_ide & (1<<(hardfile_firstunit>>1))) && ((t_hardfile[hardfile_firstunit].enabled&HDF_TYPEMASK)==HDF_FILE);
+        if (HDF_IS_CD(t_hardfile[hardfile_firstunit].enabled) && !t_hardfile[hardfile_firstunit].name[0])
+            strcpy(s,"        ** empty CD-ROM **");
+		enable=(t_enable_ide & (1<<(hardfile_firstunit>>1))) && (((t_hardfile[hardfile_firstunit].enabled&HDF_TYPEMASK)==HDF_FILE) || HDF_IS_CD(t_hardfile[hardfile_firstunit].enabled));
 		if(enable)
 			menumask|=0x04;	// Make hardfile selectable
 	    OsdWrite(2, s, enable ? (menusub == 2) : 0 , enable==0);
@@ -1512,7 +1539,9 @@ void HandleUI(void)
         else
             strcpy(s, "       ** file not found **");
 
-		enable=(t_enable_ide & (1<<(hardfile_firstunit>>1))) && ((t_hardfile[hardfile_firstunit+1].enabled&HDF_TYPEMASK)==HDF_FILE);
+        if (HDF_IS_CD(t_hardfile[hardfile_firstunit+1].enabled) && !t_hardfile[hardfile_firstunit+1].name[0])
+            strcpy(s,"        ** empty CD-ROM **");
+		enable=(t_enable_ide & (1<<(hardfile_firstunit>>1))) && (((t_hardfile[hardfile_firstunit+1].enabled&HDF_TYPEMASK)==HDF_FILE) || HDF_IS_CD(t_hardfile[hardfile_firstunit+1].enabled));
 		if(enable)
 			menumask|=0x10;	// Make hardfile selectable
         OsdWrite(4, s, enable ? (menusub == 4) : 0 ,enable==0);
@@ -1542,47 +1571,25 @@ void HandleUI(void)
             }
             if (menusub == 1)
             {
-				if(t_hardfile[hardfile_firstunit].enabled==HDF_FILE)
-				{
-					t_hardfile[hardfile_firstunit].enabled|=HDF_SYNTHRDB;
-				}
-				else if(t_hardfile[hardfile_firstunit].enabled==(HDF_FILE|HDF_SYNTHRDB))
-				{
-					t_hardfile[hardfile_firstunit].enabled&=~HDF_SYNTHRDB;
-					t_hardfile[hardfile_firstunit].enabled +=1;
-				}
-				else
-				{
-					t_hardfile[hardfile_firstunit].enabled +=1;
-					t_hardfile[hardfile_firstunit].enabled %=HDF_CARDPART0+partitioncount;
-				}
+                NextStorageType(t_hardfile,hardfile_firstunit);
                 menustate = MENU_SETTINGS_HARDFILE1;
             }
             else if (menusub == 2)
             {
-                SelectFile("HDF", SCAN_DIR | SCAN_LFN, MENU_HARDFILE_SELECTED, MENU_SETTINGS_HARDFILE1);
+                if (HDF_IS_CD(t_hardfile[hardfile_firstunit].enabled)) {
+                    cd_menu_unit=hardfile_firstunit; cd_return_sub=menusub; menusub=0; menustate=MENU_CD1;
+                } else SelectFile("HDF", SCAN_DIR | SCAN_LFN, MENU_HARDFILE_SELECTED, MENU_SETTINGS_HARDFILE1);
             }
             else if (menusub == 3)
             {
-				if(t_hardfile[hardfile_firstunit+1].enabled==HDF_FILE)
-				{
-					t_hardfile[hardfile_firstunit+1].enabled|=HDF_SYNTHRDB;
-				}
-				else if(t_hardfile[hardfile_firstunit+1].enabled==(HDF_FILE|HDF_SYNTHRDB))
-				{
-					t_hardfile[hardfile_firstunit+1].enabled&=~HDF_SYNTHRDB;
-					t_hardfile[hardfile_firstunit+1].enabled +=1;
-				}
-				else
-				{
-					t_hardfile[hardfile_firstunit+1].enabled +=1;
-					t_hardfile[hardfile_firstunit+1].enabled %=HDF_CARDPART0+partitioncount;
-				}
-				menustate = MENU_SETTINGS_HARDFILE1;
+                NextStorageType(t_hardfile,hardfile_firstunit+1);
+                menustate = MENU_SETTINGS_HARDFILE1;
             }
             else if (menusub == 4)
             {
-                SelectFile("HDF", SCAN_DIR | SCAN_LFN, MENU_HARDFILE_SELECTED, MENU_SETTINGS_HARDFILE1);
+                if (HDF_IS_CD(t_hardfile[hardfile_firstunit+1].enabled)) {
+                    cd_menu_unit=hardfile_firstunit+1; cd_return_sub=menusub; menusub=0; menustate=MENU_CD1;
+                } else SelectFile("HDF", SCAN_DIR | SCAN_LFN, MENU_HARDFILE_SELECTED, MENU_SETTINGS_HARDFILE1);
             }
             else if (menusub == 5)
             {
@@ -1608,6 +1615,75 @@ void HandleUI(void)
         /******************************************************************/
         /* hardfile selected menu                                         */
         /******************************************************************/
+    case MENU_CD1:
+        OsdColor(OSDCOLOR_SUBMENU);
+        OsdSetTitle("CD-ROM",0);
+        menumask=0x07;
+        parentstate=menustate;
+        OsdWrite(0," Insert ISO / CUE",menusub==0,0);
+        /* small_printf has no string precision; names may fill all 16 bytes. */
+        s[0]=' ';
+        if (t_hardfile[cd_menu_unit].long_name[0]) {
+            strncpy(s+1,t_hardfile[cd_menu_unit].long_name,16);
+            s[17]=0;
+        } else {
+            strncpy(s+1,t_hardfile[cd_menu_unit].name,8);
+            s[9]=0;
+        }
+        OsdWrite(1,s,0,0);
+        OsdWrite(2," Eject",menusub==1,0);
+        if (HDF_IS_CD(hdf[cd_menu_unit].type))
+            OsdWrite(3,CDMediaPending(cd_menu_unit) ? " Media change pending" :
+                CDMediaPresent(cd_menu_unit) ? " Media inserted" : " Drive empty",0,0);
+        else OsdWrite(3," Apply IDE settings to enable",0,0);
+        OsdWrite(4,"",0,0);
+        OsdWrite(5,"",0,0);
+        OsdWrite(6,"",0,0);
+        OsdWrite(7,STD_BACK,menusub==2,0); menustate=MENU_CD2; break;
+    case MENU_CD2:
+        if (menu || (select && menusub==2)) {
+            menusub=cd_return_sub; menustate=MENU_SETTINGS_HARDFILE1;
+        } else if (select && menusub==0) {
+            SelectFile("ISO,CUE",SCAN_DIR|SCAN_LFN,MENU_CD_SELECTED,MENU_CD1);
+        } else if (select && menusub==1) {
+            hardfileTYPE *live=cd_menu_unit<2 ? &config.hardfile[cd_menu_unit] : &config.secondaryhardfile[cd_menu_unit-2];
+            int result=0;
+            if (HDF_IS_CD(live->enabled) && HDF_IS_CD(hdf[cd_menu_unit].type)) result=CDEject(cd_menu_unit);
+            if (result) SetError(ERROR_HDD,CDMediaError(result),cd_menu_unit,0);
+            else {
+                memset(t_hardfile[cd_menu_unit].name,0,8);
+                memset(t_hardfile[cd_menu_unit].long_name,0,16);
+                if (HDF_IS_CD(live->enabled)) *live=t_hardfile[cd_menu_unit];
+            }
+            menustate=MENU_CD1;
+        }
+        break;
+    case MENU_CD_SELECTED:
+        {
+            hardfileTYPE *live=cd_menu_unit<2 ? &config.hardfile[cd_menu_unit] : &config.secondaryhardfile[cd_menu_unit-2];
+            unsigned long directory=CurrentDirectory();
+            int cue=!memcmp(file.name+8,"CUE",3), result;
+            char selected[12];
+            memcpy(selected,file.name,11); selected[11]=0;
+            if (HDF_IS_CD(live->enabled) && HDF_IS_CD(hdf[cd_menu_unit].type))
+                result=CDMount(cd_menu_unit,directory,selected,cue);
+            else result=CDValidateImage(directory,selected,cue);
+            if (result) SetError(ERROR_HDD,CDMediaError(result),cd_menu_unit,0);
+            else {
+                t_hardfile[cd_menu_unit].enabled=cue ? HDF_CDROM_CUE : HDF_CDROM;
+                t_hardfile[cd_menu_unit].present=1;
+                memcpy(t_hardfile[cd_menu_unit].name,file.name,8);
+                memcpy(t_hardfile[cd_menu_unit].long_name,file.long_name,16);
+                t_hdfdir[cd_menu_unit]=directory;
+                if (HDF_IS_CD(live->enabled)) {
+                    *live=t_hardfile[cd_menu_unit]; config.hdfdir[cd_menu_unit]=directory;
+                    hdf[cd_menu_unit].type=live->enabled;
+                }
+            }
+            menusub=0; menustate=MENU_CD1;
+        }
+        break;
+
     case MENU_HARDFILE_SELECTED :
         if (menusub == 2) // master drive selected
         {
@@ -1681,6 +1757,7 @@ void HandleUI(void)
     case MENU_HARDFILE_EXIT :
          if ((memcmp(config.hardfile, t_hardfile, sizeof(config.hardfile)) != 0)
 			|| (memcmp(config.secondaryhardfile, &t_hardfile[2], sizeof(config.secondaryhardfile)) != 0)
+				|| (memcmp(config.hdfdir,t_hdfdir,sizeof(config.hdfdir)) != 0)
 				|| (t_enable_ide!=config.enable_ide))
          {
              menustate = MENU_HARDFILE_CHANGED1;
@@ -1715,6 +1792,7 @@ void HandleUI(void)
         break;
 
     case MENU_HARDFILE_CHANGED2 :
+        if (select && menusub==1) { menustate=MENU_MAIN1; menusub=5; break; }
         if (select)
         {
 			int upd0=0,upd1=0,upd2=0,upd3=0;
@@ -1738,6 +1816,10 @@ void HandleUI(void)
 				|| (strncmp(config.secondaryhardfile[1].name, t_hardfile[3].name, sizeof(t_hardfile[3].name)) != 0))
 				upd3=1;
 
+            if (config.hdfdir[0]!=t_hdfdir[0]) upd0=1;
+            if (config.hdfdir[1]!=t_hdfdir[1]) upd1=1;
+            if (config.hdfdir[2]!=t_hdfdir[2]) upd2=1;
+            if (config.hdfdir[3]!=t_hdfdir[3]) upd3=1;
 			// Apply new configuration
 			config.hardfile[0]=t_hardfile[0];
 			config.hardfile[1]=t_hardfile[1];
@@ -1751,16 +1833,17 @@ void HandleUI(void)
 
 			// FIXME - waiting for user-confirmation increases the window of opportunity for file corruption!
 
-        if (upd0)
+        CDResetConfiguration();
+        if (upd0 || HDF_IS_CD(config.hardfile[0].enabled))
             OpenHardfile(0);
 
-        if (upd1)
+        if (upd1 || HDF_IS_CD(config.hardfile[1].enabled))
             OpenHardfile(1);
 
-        if (upd2)
+        if (upd2 || HDF_IS_CD(config.secondaryhardfile[0].enabled))
             OpenHardfile(2);
 
-        if (upd3)
+        if (upd3 || HDF_IS_CD(config.secondaryhardfile[1].enabled))
             OpenHardfile(3);
 
         ConfigIDE(config.enable_ide&1, config.hardfile[0].present && config.hardfile[0].enabled,

@@ -50,6 +50,8 @@ JB:
 // #include "small_DBG.h"
 
 int tolower(int c);
+int _strnicmp(const char *s1, const char *s2, size_t n);
+static unsigned long GetFATLinkImpl(unsigned long cluster, int quiet);
 
 unsigned short directory_cluster;       // first cluster of directory (0 if root)
 unsigned short entries_per_cluster;     // number of directory entries per cluster
@@ -293,7 +295,10 @@ static int doLFN(DIRENTRY *pEntry,char *lfnbuf)
 	{
 		unsigned char *p=&pEntry->Name[0];
 		int seq=p[0];
-		int offset=((seq&0x1f)-1)*13;
+		int offset;
+		if (!(seq&0x1f) || (seq&0x1f)>20) return 0;
+		if (seq&0x40) memset(lfnbuf,0,261);
+		offset=((seq&0x1f)-1)*13;
 		char *o=lfnbuf+offset;
 		*o++=p[1];
 		*o++=p[3];
@@ -316,7 +321,7 @@ static int doLFN(DIRENTRY *pEntry,char *lfnbuf)
 }
 
 
-unsigned int FileOpen(fileTYPE *file, const char *name)
+static unsigned int FileOpenImpl(fileTYPE *file, const char *name, int exact, int directory)
 {
 //    unsigned long  iDirectory = 0;       // only root directory is supported
     DIRENTRY      *pEntry = NULL;        // pointer to current entry in sector buffer
@@ -326,6 +331,7 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
     unsigned long  nEntries;             // number of entries per cluster or FAT16 root directory size
     unsigned char sector_buffer[1024];       // sector buffer - room for two consecutive sectors...
 
+    fileLFN[0]=0;
     if (iCurrentDirectory) // subdirectory
     {
         iDirectoryCluster = iCurrentDirectory;
@@ -345,7 +351,7 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
         {
             if ((iEntry & 0x0F) == 0) // first entry in sector, load the sector
             {
-                if(!MMC_Read(iDirectorySector++, sector_buffer)) // root directory is linear
+                if(!(exact ? MMC_ReadQuiet(iDirectorySector++, sector_buffer) : MMC_Read(iDirectorySector++, sector_buffer))) // root directory is linear
 					return(0);
                 pEntry = (DIRENTRY*)sector_buffer;
             }
@@ -359,9 +365,10 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
 				{
 //					DBG("Have long filename entry\n");
 				}
-                else if (!(pEntry->Attributes & (ATTR_VOLUME | ATTR_DIRECTORY))) // not a volume nor directory
+                else if (!(pEntry->Attributes & ATTR_VOLUME) &&
+                    (!!(pEntry->Attributes & ATTR_DIRECTORY) == !!directory))
                 {
-                    if (strncmp(fileLFN,name,strlen(name))==0 || strncmp((const char*)pEntry->Name, name, sizeof(file->name)) == 0)
+                    if ((exact ? _strnicmp(fileLFN,name,261)==0 : strncmp(fileLFN,name,strlen(name))==0) || (exact ? _strnicmp((const char*)pEntry->Name,name,11)==0 : strncmp((const char*)pEntry->Name,name,11)==0))
                     {
                         strncpy(file->name, (const char*)pEntry->Name, sizeof(file->name));
                         file->attributes = pEntry->Attributes;
@@ -380,6 +387,7 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
 
                         return(1);
                     }
+                    fileLFN[0]=0;
                 }
 				else
 					fileLFN[0]=0; /* Invalidate LFN if we encounter anything between LFN and its file */
@@ -388,8 +396,9 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
 
         if (iCurrentDirectory || fat32) // subdirectory is a linked cluster chain
         {
-            iDirectoryCluster = GetFATLink(iDirectoryCluster); // get next cluster in chain
+            iDirectoryCluster = GetFATLinkImpl(iDirectoryCluster,exact); // get next cluster in chain
 
+            if (iDirectoryCluster < 2) break;
             if (fat32 ? (iDirectoryCluster & 0x0FFFFFF8) == 0x0FFFFFF8 : (iDirectoryCluster & 0xFFF8) == 0xFFF8) // check if end of cluster chain
                 break; // no more clusters in chain
 
@@ -399,7 +408,7 @@ unsigned int FileOpen(fileTYPE *file, const char *name)
             break;
     }
 
-	SetError(ERROR_FILESYSTEM,"File not found",0,0);
+	if (!exact) SetError(ERROR_FILESYSTEM,"File not found",0,0);
 
     DBG("file \"%s\" not found\r", name);
     memset(file, 0, sizeof(fileTYPE));
@@ -840,7 +849,8 @@ int ScanDirectory(unsigned long mode, char *extension, unsigned char options)
 					 // if not VOLUME label (also filter current directory entry)
                     if (!(pEntry->Attributes & (ATTR_VOLUME | ATTR_HIDDEN)) && (pEntry->Name[0] != '.' || pEntry->Name[1] != ' '))
                     {
-                        if ((extension[0] == '*') || (strncmp((const char*)&pEntry->Name[8], extension, 3) == 0)
+                        if ((extension[0] == '*') || (strncmp((const char*)pEntry->Extension, extension, 3) == 0) ||
+                            (!strcmp(extension, "ISO,CUE") && !strncmp((const char*)pEntry->Extension, "CUE", 3))
 								 || (options & SCAN_DIR && pEntry->Attributes & ATTR_DIRECTORY))
                         {
                             if (mode == SCAN_INIT)
@@ -1302,7 +1312,7 @@ unsigned long CurrentDirectory()
 	return(iCurrentDirectory);
 }
 
-unsigned long GetFATLink(unsigned long cluster)
+static unsigned long GetFATLinkImpl(unsigned long cluster, int quiet)
 {
 // this function returns linked cluster for the given one
 // remember to check if the returned value indicates end of chain condition
@@ -1324,7 +1334,7 @@ unsigned long GetFATLink(unsigned long cluster)
     // read the desired FAT sector if not already in the buffer
     if (fat_index != fat_buffer.index)
     {
-        if (!MMC_Read(fat_start+fat_index, (unsigned char*)&fat_buffer))
+        if (!(quiet ? MMC_ReadQuiet(fat_start+fat_index, (unsigned char*)&fat_buffer) : MMC_Read(fat_start+fat_index, (unsigned char*)&fat_buffer)))
             return(0);
 
         // remember the index of buffered FAT sector
@@ -1334,6 +1344,11 @@ unsigned long GetFATLink(unsigned long cluster)
 
 //    return(fat32 ? fat_buffer.fat.fat32[buffer_index] & 0x0FFFFFFF : fat_buffer.fat.fat16[buffer_index]); // get FAT link
     return(fat32 ? SwapBBBB(fat_buffer.fat.fat32[buffer_index]) & 0x0FFFFFFF : SwapBB(fat_buffer.fat.fat16[buffer_index])); // get FAT link for 68000
+}
+
+unsigned long GetFATLink(unsigned long cluster)
+{
+    return GetFATLinkImpl(cluster,0);
 }
 
 RAMFUNC unsigned int FileNextSector(fileTYPE *file)
@@ -1380,7 +1395,57 @@ RAMFUNC unsigned int FileNextSector(fileTYPE *file)
     return(1);
 }
 
-unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin)
+unsigned int FileOpen(fileTYPE *file, const char *name)
+{
+    return FileOpenImpl(file, name, 0, 0);
+}
+
+/* Exact LFN or 8.3 lookup, relative to the image directory. */
+unsigned int FileOpenPath(fileTYPE *file, unsigned long directory, const char *name)
+{
+    unsigned long saved = CurrentDirectory();
+    char component[261], shortname[12];
+    const char *end;
+    unsigned int len, i, result = 0;
+    if (!name || !*name || *name == '/' || *name == '\\') return 0;
+    while (*name) {
+        end = name;
+        while (*end && *end != '/' && *end != '\\') ++end;
+        len = end - name;
+        if (!len || len > 260 || (*end && !end[1])) { result=0; break; }
+        memcpy(component, name, len); component[len] = 0;
+        if (!strcmp(component,".") && *end) { name=end+1; continue; }
+        ChangeDirectory(directory);
+        memset(shortname, ' ', 11); shortname[11] = 0;
+        i = 0;
+        if (!strcmp(component, "..")) {
+            shortname[0] = '.'; shortname[1] = '.'; i = 2;
+        } else {
+            while (component[i] && component[i] != '.' && i < 8) {
+                shortname[i] = component[i]; ++i;
+            }
+            if (component[i] == '.') {
+                unsigned int j = 0;
+                ++i;
+                while (component[i] && j < 3) shortname[8+j++] = component[i++];
+            }
+        }
+        result = 0;
+        if (!component[i]) {
+            for (i = 0; i < 11; ++i)
+                if (shortname[i] >= 'a' && shortname[i] <= 'z') shortname[i] -= 32;
+            result = FileOpenImpl(file, shortname, 1, !!*end);
+        }
+        if (!result) result = FileOpenImpl(file, component, 1, !!*end);
+        if (!result || !*end) break;
+        directory = file->start_cluster;
+        name = end + 1;
+    }
+    ChangeDirectory(saved);
+    return result;
+}
+
+static unsigned int FileSeekImpl(fileTYPE *file, unsigned long offset, unsigned long origin, int checked)
 {
 // offset in sectors (512 bytes)
 // origin can be set to SEEK_SET or SEEK_CUR
@@ -1393,7 +1458,7 @@ unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin
 
 	if(offset > (file->size>>9))	// Attempt to seek beyond the end of the file
 	{
-		FatalError(ERROR_FILESYSTEM,"Seek() beyond end of file",file->sector,0);
+		if (!checked) FatalError(ERROR_FILESYSTEM,"Seek() beyond end of file",file->sector,0);
 		return(0);
 	}
 
@@ -1426,7 +1491,7 @@ unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin
 
         if (sb != fat_buffer.index)
         {
-            if (!MMC_Read(fat_start + sb, (unsigned char*)&fat_buffer)) // read sector of FAT if not already in the buffer
+            if (!(checked ? MMC_ReadQuiet(fat_start + sb, (unsigned char*)&fat_buffer) : MMC_Read(fat_start + sb, (unsigned char*)&fat_buffer))) // read sector of FAT if not already in the buffer
                 return(0);
 
             fat_buffer.index = sb; // remember current buffer index
@@ -1435,13 +1500,13 @@ unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin
         if (fat32)
         {
             file->cluster = SwapBBBB(fat_buffer.fat.fat32[i]) & 0x0FFFFFFF; // get FAT32 link
-            if (file->cluster == 0x0FFFFFFF) // FAT32 EOC
+            if (file->cluster < 2 || file->cluster >= 0x0FFFFFF8) // FAT32 EOC
                 return 0;
         }
         else
         {
             file->cluster = SwapBB(fat_buffer.fat.fat16[i]); // get FAT16 link
-            if (file->cluster == 0xFFFF) // FAT16 EOC
+            if (file->cluster < 2 || file->cluster >= 0xFFF8) // FAT16 EOC
                 return 0;
         }
 
@@ -1467,11 +1532,30 @@ RAMFUNC unsigned int FileRead(fileTYPE *file, unsigned char *pBuffer)
         return(1);
 }
 
-unsigned int FileReadEx(fileTYPE *file, unsigned char *pBuffer, unsigned long nSize)
+unsigned int FileSeek(fileTYPE *file, unsigned long offset, unsigned long origin)
+{
+    return FileSeekImpl(file, offset, origin, 0);
+}
+unsigned int FileSeekChecked(fileTYPE *file, unsigned long offset)
+{
+    return FileSeekImpl(file, offset, SEEK_SET, 1);
+}
+unsigned int FileReadChecked(fileTYPE *file, unsigned char *buffer)
+{
+    unsigned long sb;
+    if (file->size == 0 || file->sector > (file->size - 1) / 512 || file->cluster < 2) return 0;
+    sb = data_start + cluster_size * (file->cluster - 2) + (file->sector & ~cluster_mask);
+    return MMC_ReadQuiet(sb, buffer);
+}
+
+static unsigned int FileReadExImpl(fileTYPE *file, unsigned char *pBuffer, unsigned long nSize, int checked)
 {
     unsigned long sb;
     unsigned long bc; // block count of single multisector read operation
 
+    if (checked && nSize &&
+        (file->sector >= (file->size >> 9) || nSize > (file->size >> 9) - file->sector ||
+         file->cluster < 2)) return 0;
     while (nSize)
     {
         sb = data_start;                         // start of data in partition
@@ -1481,12 +1565,17 @@ unsigned int FileReadEx(fileTYPE *file, unsigned char *pBuffer, unsigned long nS
         if (nSize < bc)
             bc = nSize;
 
-        if (!MMC_ReadMultiple(sb, pBuffer, bc))
+        if (!(checked ? MMC_ReadMultipleQuiet(sb, pBuffer, bc) : MMC_ReadMultiple(sb, pBuffer, bc)))
             return 0;
 
-        if (!FileSeek(file, bc, SEEK_CUR))
+        /* Do not traverse an EOC link after successfully reading the last
+         * sector. A subsequent backward seek will rebuild the position. */
+        if (file->size && file->sector + bc == (file->size - 1) / 512 + 1)
+            file->sector += bc;
+        else if (!(checked ? FileSeekChecked(file, file->sector + bc) : FileSeek(file, bc, SEEK_CUR)))
             return 0;
 
+        if (pBuffer) pBuffer += bc << 9;
         nSize -= bc;
     }
 
@@ -1494,20 +1583,40 @@ unsigned int FileReadEx(fileTYPE *file, unsigned char *pBuffer, unsigned long nS
 }
 
 
-unsigned int FileWrite(fileTYPE *file,unsigned char *pBuffer)
+unsigned int FileReadEx(fileTYPE *file, unsigned char *buffer, unsigned long count)
+{
+    return FileReadExImpl(file, buffer, count, 0);
+}
+unsigned int FileReadExChecked(fileTYPE *file, unsigned char *buffer, unsigned long count)
+{
+    return FileReadExImpl(file, buffer, count, 1);
+}
+
+static unsigned int FileWriteImpl(fileTYPE *file,unsigned char *pBuffer,int checked)
 {
     unsigned long sector;
 
+    if (checked && (file->size < 512 || file->sector >= (file->size >> 9) ||
+        file->cluster < 2 || (file->attributes & ATTR_READONLY))) return 0;
     sector = data_start;                       // start of data in partition
     sector += cluster_size * (file->cluster-2);  // cluster offset
     sector += file->sector & ~cluster_mask;    // sector offset in cluster
 
-    if (!MMC_Write(sector, pBuffer)) // write sector from drive
+    if (!(checked ? MMC_WriteQuiet(sector, pBuffer) : MMC_Write(sector, pBuffer))) // write sector from drive
         return(0);
     else
         return(1);
 }
 
+
+unsigned int FileWrite(fileTYPE *file, unsigned char *buffer)
+{
+    return FileWriteImpl(file, buffer, 0);
+}
+unsigned int FileWriteChecked(fileTYPE *file, unsigned char *buffer)
+{
+    return FileWriteImpl(file, buffer, 1);
+}
 
 unsigned int FileCreate(unsigned long iDirectory, fileTYPE *file)
 {

@@ -19,6 +19,7 @@ This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.or
 * kickstart : 1.2 - 3.2 (256kB, 512kB & 1MB kickstart ROMs currently supported)
 * floppy disks : 1-4 floppies (supports ADF floppy image format), with normal & turbo speeds
 * hard disks : 1-2 hard disk images (supports whole disk images, partition images, using whole SD card and using SD card partition)
+* optional IDE CD-ROM with ISO / CUE mounting and disc changes without rebooting
 * video standard : PAL / NTSC
 * supports HDMI video output with sound
 * peripherals : 2 x USB HID ports with FPGA USB controllers
@@ -202,6 +203,17 @@ You will also need a Kickstart ROM image file, which you can obtain by copying K
 The minimig can read any ADF floppy images you place on the SD card. I recommend at least Workbench 1.3 or 3.1 (AmigaOS), some of the Amigas great games (I recommend Ruff'n'Tumble) or some of the amazing demos from the vast Amiga demoscene (like State of the Art from Spaceballs).
 
 The minimig can also use HDF harddisk images, which can be created with [WinUAE](http://www.winuae.net/).
+
+### CD-ROM images (ISO / CUE)
+
+One IDE slot can be configured as an optional **CD-ROM** in **Storage / IDE**.
+Apply the device configuration and reset once, then use the slot's image menu to
+**Insert ISO / CUE** or **Eject**. Discs can be inserted, replaced or ejected
+without rebooting the Amiga.
+
+Copy ISO images, or CUE files with their associated BIN files, to the SD card.
+AmigaOS needs a compatible CD-ROM driver and filesystem. Data discs are supported;
+CD audio playback is not available.
 
 ### Recommended minimig config
 

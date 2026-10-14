@@ -6,6 +6,7 @@
 #include "fpga.h"
 #include "fdd.h"
 #include "hdd.h"
+#include "cdrom.h"
 #include "firmware.h"
 #include "menu.h"
 #include "config.h"
@@ -588,6 +589,7 @@ int ApplyConfiguration(char reloadkickstart, char applydrives, char ignoreovercl
 
 	if(applydrives)
 	{
+		CDResetConfiguration();
 		for(unit=0;unit<HDF_COUNT;unit++)
 		{
 			if(OpenHardfile(unit))
@@ -598,6 +600,15 @@ int ApplyConfiguration(char reloadkickstart, char applydrives, char ignoreovercl
 					case (HDF_FILE | HDF_SYNTHRDB):
 						snprintf(s, 32, "\nHardfile 0 (with fake RDB): %.8s.%.3s", hdf[unit].file.name, &hdf[unit].file.name[8]);
 						break;
+					case HDF_CDROM:
+					case HDF_CDROM_CUE:
+					{
+						char cdname[9];
+						memcpy(cdname,unit<2 ? config.hardfile[unit].name : config.secondaryhardfile[unit-2].name,8);
+						cdname[8]=0;
+						snprintf(s,32,"\nCD-ROM %d: %s",unit,cdname);
+						break;
+					}
 					case HDF_FILE:
 						snprintf(s, 32, "\nHardfile 0: %.8s.%.3s", hdf[unit].file.name, &hdf[unit].file.name[8]);
 						break;

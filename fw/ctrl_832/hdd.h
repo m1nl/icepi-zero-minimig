@@ -1,5 +1,6 @@
 #ifndef HDD_H
 #define HDD_H
+#include "fat.h"
 
 #define CMD_IDECMD 0x04
 #define CMD_IDEDAT 0x08
@@ -10,6 +11,8 @@
 #define CMD_IDE_DATA_RD 0xB0
 #define CMD_IDE_STATUS_WR 0xF0
 
+#define IDE_STATUS_ABORT 0x40
+#define IDE_STATUS_PKT 0x20
 #define IDE_STATUS_END 0x80
 #define IDE_STATUS_IRQ 0x10
 #define IDE_STATUS_RDY 0x08
@@ -26,6 +29,8 @@
 #define ACMD_SET_MULTIPLE_MODE 0xC6
 #define ACMD_DIAGNOSTIC 0x90
 
+#define ATA_MULTIPLE_MAX_SECTORS 16
+
 #define HDF_COUNT 4
 #define HDF_DISABLED 0
 #define HDF_FILE 1
@@ -34,6 +39,9 @@
 #define HDF_CARDPART1 4
 #define HDF_CARDPART2 5
 #define HDF_CARDPART3 6
+#define HDF_CDROM 7
+#define HDF_CDROM_CUE 8
+#define HDF_IS_CD(t) ((t)==HDF_CDROM || (t)==HDF_CDROM_CUE)
 #define HDF_TYPEMASK 15
 #define HDF_SYNTHRDB 128	// Flag to indicate whether we should auto-synthesize a RigidDiskBlock
 
@@ -49,15 +57,23 @@ typedef struct
 	long  offset;	// If a partition, the lba offset of the partition.  Can be negative if we've synthesized an RDB.
     unsigned long  index[1024];
     unsigned long  index_size;
+    unsigned long  total_sectors; // Cached guest-visible capacity, including synthetic RDB
 } hdfTYPE;
 
 void IdentifyDevice(unsigned short *pBuffer, int unit);
-unsigned long chs2lba(int cylinder, int head, int sector, int unit);
-void WriteTaskFile(int error,int sector_count,int sector_number,int cylinder_low,int cylinder_high,int drive_head);
-void WriteStatus(unsigned int status);
-void HandleHDD(unsigned int c1, unsigned int c2);
+void IDEWriteTaskFile(int error,int sector_count,int sector_number,int cylinder_low,int cylinder_high,int drive_head);
+void IDEWriteStatus(unsigned int status);
+void HandleIDE(unsigned int c1, unsigned int c2);
+
+/* Shared IDE SPI/timer transport, implemented in hdd.c. */
+void IDEReadPacket(unsigned char *packet);
+void IDEWriteData(const unsigned char *data, unsigned int bytes);
+unsigned long IDEDeadline(void);
+int IDEExpired(unsigned long deadline);
+unsigned int IDETransportState(void);
+
 void GetHardfileGeometry(hdfTYPE *hdf);
-void BuildHardfileIndex(hdfTYPE *hdf);
+int BuildHardfileIndex(hdfTYPE *hdf);
 unsigned char HardFileSeek(hdfTYPE *hdf, unsigned long lba);
 unsigned char OpenHardfile(unsigned int unit);
 

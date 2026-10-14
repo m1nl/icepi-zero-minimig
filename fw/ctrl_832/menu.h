@@ -75,6 +75,7 @@ enum MENU
     MENU_ERROR,
     MENU_ERROR2,
     MENU_INFO,
+    MENU_CD1, MENU_CD2, MENU_CD_SELECTED,
 };
 
 // UI strings, used by boot messages

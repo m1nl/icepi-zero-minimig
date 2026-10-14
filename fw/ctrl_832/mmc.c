@@ -37,7 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //#include "firmware.h"
 
 // variables
-static int sd_lbas;
+static unsigned long sd_lbas;
 static unsigned long timeout;
 static unsigned char response;
 static unsigned char CardType;
@@ -183,7 +183,7 @@ unsigned char MMC_Init(void)
 }
 
 // Read single 512-byte block
-unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer)
+static unsigned char MMC_ReadImpl(unsigned long lba, unsigned char *pReadBuffer, int quiet)
 {
 // if pReadBuffer is NULL then use direct to the FPGA transfer mode (FPGA2 asserted)
 
@@ -193,7 +193,7 @@ unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer)
 
     if(lba>=sd_lbas)
 	{
-		FatalError(ERROR_SDCARD,"Read beyond end of device.",lba,sd_lbas);
+		if (!quiet) FatalError(ERROR_SDCARD,"Read beyond end of device.",lba,sd_lbas);
 		return(0);
 	}
 
@@ -206,7 +206,7 @@ unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer)
     {
         DisableCard();
         ERR("CMD17 (READ_BLOCK): invalid response 0x%02X (lba=%lu)\n", response, lba);
-		FatalError(ERROR_SDCARD,"CMD17 Read block",lba,response);
+		if (!quiet) FatalError(ERROR_SDCARD,"CMD17 Read block",lba,response);
         return(0);
     }
 
@@ -218,7 +218,7 @@ unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer)
         {
             DisableCard();
             ERR("CMD17 (READ_BLOCK): no data token! (lba=%lu)\n", lba);
-			FatalError(ERROR_SDCARD,"CMD17 No data token",lba,0);
+			if (!quiet) FatalError(ERROR_SDCARD,"CMD17 No data token",lba,0);
             return(0);
         }
     }
@@ -247,6 +247,16 @@ unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer)
 
     DisableCard();
     return(1);
+}
+
+unsigned char MMC_Read(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_ReadImpl(lba, buffer, 0);
+}
+
+unsigned char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_ReadImpl(lba, buffer, 1);
 }
 
 // Read CSD register
@@ -287,6 +297,11 @@ static unsigned char MMC_GetCSD()
 }
 
 
+unsigned long MMC_GetSectorCount(void)
+{
+    return sd_lbas;
+}
+
 unsigned long MMC_GetCapacity()
 {
 	unsigned long result=0;
@@ -319,15 +334,15 @@ unsigned long MMC_GetCapacity()
 
 
 // read multiple 512-byte blocks
-unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount)
+static unsigned char MMC_ReadMultipleImpl(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount, int quiet)
 {
 // if pReadBuffer is NULL then use direct to the FPGA transfer mode (FPGA2 asserted)
     unsigned long i;
 	unsigned char *p;
 
-    if((lba+nBlockCount)>=sd_lbas)
+    if(lba >= sd_lbas || nBlockCount > sd_lbas - lba)
 	{
-		FatalError(ERROR_SDCARD,"ReadM beyond end of device.",lba+nBlockCount,sd_lbas);
+		if (!quiet) FatalError(ERROR_SDCARD,"ReadM beyond end of device.",lba+nBlockCount,sd_lbas);
 		return(0);
 	}
 
@@ -339,7 +354,7 @@ unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, un
     {
         ERR("CMD18 (READ_MULTIPLE_BLOCK): invalid response 0x%02X (lba=%lu)\n", response, lba);
         DisableCard();
-		FatalError(ERROR_SDCARD,"CMD18 - invalid response",response,lba);
+		if (!quiet) FatalError(ERROR_SDCARD,"CMD18 - invalid response",response,lba);
         return(0);
     }
 
@@ -352,8 +367,9 @@ unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, un
             if (timeout++ >= 1000000) // we can't wait forever
             {
                 ERR("CMD18 (READ_MULTIPLE_BLOCK): no data token! (lba=%lu)\n", lba);
+                MMC_CMD12(); // cancel the started multi-block stream
                 DisableCard();
-				FatalError(ERROR_SDCARD,"CMD18 - no data token",response,lba);
+				if (!quiet) FatalError(ERROR_SDCARD,"CMD18 - no data token",response,lba);
                 return(0);
             }
         }
@@ -383,20 +399,32 @@ unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, un
         SPI(0xFF); // read CRC hi byte
     }
 
-    MMC_CMD12(); // stop multi block transmission
-
+    response = MMC_CMD12(); // stop multi block transmission
     DisableCard();
+    if (response) {
+        if (!quiet) FatalError(ERROR_SDCARD,"CMD12 stop failed",response,lba);
+        return 0;
+    }
     return(1);
 }
 
+unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *buffer, unsigned long count)
+{
+    return MMC_ReadMultipleImpl(lba, buffer, count, 0);
+}
+unsigned char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count)
+{
+    return MMC_ReadMultipleImpl(lba, buffer, count, 1);
+}
+
 // write 512-byte block
-unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer)
+static unsigned char MMC_WriteImpl(unsigned long lba, unsigned char *pWriteBuffer, int quiet)
 {
     unsigned long i;
 
     if(lba>=sd_lbas)
 	{
-		FatalError(ERROR_SDCARD,"Read beyond end of device.",lba,sd_lbas);
+		if (!quiet) FatalError(ERROR_SDCARD,"Read beyond end of device.",lba,sd_lbas);
 		return(0);
 	}
 
@@ -409,7 +437,7 @@ unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer)
     {
         ERR("CMD24 (WRITE_BLOCK): invalid response 0x%02X (lba=%lu)\n", response, lba);
         DisableCard();
-		FatalError(ERROR_SDCARD,"CMD24 invalid response",response,lba);
+		if (!quiet) FatalError(ERROR_SDCARD,"CMD24 invalid response",response,lba);
         return(0);
     }
 
@@ -433,7 +461,7 @@ unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer)
     {
         ERR("CMD24 (WRITE_BLOCK): invalid status 0x%02X (lba=%lu)\n", response, lba);
         DisableCard();
-		FatalError(ERROR_SDCARD,"CMD24 invalid response",response,lba);
+		if (!quiet) FatalError(ERROR_SDCARD,"CMD24 invalid response",response,lba);
         return(0);
     }
 
@@ -444,13 +472,22 @@ unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer)
         {
             ERR("CMD24 (WRITE_BLOCK): busy wait timeout! (lba=%lu)\n", lba);
             DisableCard();
-			FatalError(ERROR_SDCARD,"CMD24 post-write timeout",lba,0);
+			if (!quiet) FatalError(ERROR_SDCARD,"CMD24 post-write timeout",lba,0);
             return(0);
         }
     }
 
     DisableCard();
     return(1);
+}
+
+unsigned char MMC_Write(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_WriteImpl(lba, buffer, 0);
+}
+unsigned char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_WriteImpl(lba, buffer, 1);
 }
 
 static unsigned char MMC_Command(unsigned char cmd, unsigned long arg)
@@ -516,7 +553,7 @@ static inline unsigned char MMC_CMD12(void)
         {
             ERR("CMD12 (STOP_TRANSMISSION): busy wait timeout!\n");
             DisableCard();
-            return(0);
+            return 0xff; // distinguish timeout from successful R1=0
         }
 }
     return response;

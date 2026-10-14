@@ -33,6 +33,9 @@
 // 2010-04-13	- changed sector buffer size
 // 2010-08-10	- improved BSY signal handling
 // 2022-08-18	- added packet command handling
+// 2026-10-14	- fixed odd packet byte counts and intermediate-phase completion;
+//                allow SPI register writes during DRQ, add abort/FIFO flush and
+//                command-generation metadata, clear stale PIO state on new commands
 
 module ide
 (
@@ -51,7 +54,7 @@ module ide
 	input          sel_ide,
 	output reg [1:0] intreq,
 	input    [1:0] intreq_ack,  // interrupt clear
-	output         nrdy,				// fifo is not ready for reading 
+	output         nrdy,				// fifo is not ready for reading
 	input    [1:0] hdd0_ena,		// enables Master & Slave drives on primary channel
 	input    [1:0] hdd1_ena,		// enables Master & Slave drives on secondary channel
 	output         fifo_rd,
@@ -96,7 +99,7 @@ Status:
 INTRQ	- Interrupt Request
 
 */
- 
+
 
 // address decoding signals
 wire 	sel_tfr;    // HDD task file registers select
@@ -135,14 +138,39 @@ assign status = {bsy,drdy,2'b00,drq,2'b00,err};
 
 // packet states
 reg  [1:0] packet_state;
+
 localparam PACKET_IDLE       = 0;
 localparam PACKET_WAITCMD    = 1;
 localparam PACKET_PROCESSCMD = 2;
-wire       packet_state_change;
-reg [12:0] packet_count;
-wire       packet_in_last;
-wire       packet_in;
-wire       packet_out;
+
+wire	packet_state_change;
+wire	transport_abort = hdd_status_wr && hdd_data_out[6];
+
+wire [12:0] packet_count;
+reg  [13:0] packet_bytes;
+
+/* Byte counts include a final partial word. The guest ignores its pad byte. */
+assign packet_count = {1'b0, packet_bytes[13:1]} + packet_bytes[0];
+
+reg [5:0] command_generation;
+reg command_old;
+
+always @(posedge clk)
+	if (clk_en) begin
+		if (reset) begin
+			command_generation <= 0;
+			command_old <= 0;
+
+		end else begin
+			command_old <= sel_command;
+			if (sel_command && !command_old)
+				command_generation <= command_generation + 1'b1;
+		end
+	end
+
+wire	packet_in_last;
+wire	packet_in;
+wire	packet_out;
 
 `ifdef IDE_DEBUG
 // cmd/status debug
@@ -218,12 +246,16 @@ assign sector_count_dec_in  = pio_in & fifo_last_out & sel_fifo_old & ~rd & rd_o
 assign sector_count_dec_out = pio_out & fifo_last_in & sel_fifo_old & ~hwr & ~lwr & wr_old & packet_state == PACKET_IDLE;
 
 // task file register control
-assign tfr_we =  packet_in_last ? 1'b1 : bsy ? hdd_wr : sel_tfr & hwr;
-assign tfr_sel = packet_in_last ? 3'd2 : bsy ? hdd_addr : address_in;
-assign tfr_in =  packet_in_last ? 8'h03: bsy ? hdd_data_out[7:0] : data_in[15:8];
+assign tfr_we =  (packet_in_last && !busy) ? 1'b1 : hdd_wr ? 1'b1 : !bsy && sel_tfr && hwr;
+assign tfr_sel = (packet_in_last && !busy) ? 3'd2 : (bsy || hdd_wr) ? hdd_addr : address_in;
+assign tfr_in =  (packet_in_last && !busy) ? 8'h03: (bsy || hdd_wr) ? hdd_data_out[7:0] : data_in[15:8];
 
 // input multiplexer for SPI host
-assign hdd_data_in = tfr_sel==0 ? fifo_data_out : {7'h0, dev[1], tfr_out};
+/* Register 7's formerly unused SPI high bits permit cooperative firmware to
+ * detect reset or replacement commands even while guest DRQ is asserted.
+ * Bit 8 retains its existing secondary-channel meaning. */
+assign hdd_data_in = hdd_addr == 7 ? {command_generation, busy, dev[1], tfr[7]} :
+                     tfr_sel==0 ? fifo_data_out : {7'h0, dev[1], tfr_out};
 
 // task file registers
 always @(posedge clk)
@@ -249,19 +281,19 @@ assign packet_state_change = busy && hdd_status_wr && hdd_data_out[5];
 always @(posedge clk)
 	if (clk_en) begin
 		if (reset)
-			packet_count <= 0;
+			packet_bytes <= 0;
 		else if (hdd_wr && hdd_addr == 4)
-			packet_count[6:0] <= hdd_data_out[7:1];
+			packet_bytes[7:0] <= hdd_data_out[7:0];
 		else if (hdd_wr && hdd_addr == 5)
-			packet_count[12:7] <= hdd_data_out[5:0];
+			packet_bytes[13:8] <= hdd_data_out[5:0];
 		else if (packet_state_change && packet_state == PACKET_IDLE)
-			packet_count <= 13'd6; // IDLE->WAITCMD transition, expect 6 words of packet command
+			packet_bytes <= 14'd12; // IDLE->WAITCMD transition, expect 6 words of packet command
 	end
 
 // status register (write only from SPI host)
 // 7 - busy status (write zero to finish command processing: allow host access to task file registers)
-// 6
-// 5
+// 6 - abort: discard pending FIFO data and clear PIO/packet state
+// 5 - advance packet state
 // 4 - intreq (used for writes only)
 // 3 - drq enable for pio in (PI) command type
 // 2 - drq enable for pio out (PO) command type
@@ -293,13 +325,13 @@ always @(posedge clk)
 				block_mark <= VCC; // to handle IDENTIFY
 
 			if (pio_in) begin // reads
-				if (hdd_status_wr && hdd_data_out[4]) 
+				if (hdd_status_wr && hdd_data_out[4])
 					block_mark <= VCC;
 				if ((error | (!drq_d & drq)) & block_mark) begin
 					intreq[dev[1]] <= VCC;
 					block_mark <= GND;
 				end
-				if (packet_in_last) // read the last word from the packet command result
+				if (packet_in_last && !busy) // completion IRQ only after the final data phase
 					intreq[dev[1]] <= VCC;
 			end else if (pio_out) begin // writes
 				if (hdd_status_wr && hdd_data_out[4])
@@ -311,7 +343,10 @@ always @(posedge clk)
 
 			if (intreq_ack[0]) intreq[0] <= GND; // cleared by the CPU
 			if (intreq_ack[1]) intreq[1] <= GND; // cleared by the CPU
-
+			if (transport_abort && hdd_data_out[4]) begin
+				intreq[dev[1]] <= VCC;
+				block_mark <= GND;
+			end
 		end
 	end
 
@@ -338,9 +373,9 @@ always @(posedge clk)
 	if (clk_en) begin
 		if (reset)
 			pio_in <= GND;
-		else if (drdy) // reset when processing of the current command ends
+		else if (transport_abort || sel_command || drdy) // reset at a new command or completion
 			pio_in <= GND;
-		else if (busy && hdd_status_wr && hdd_data_out[3])	// set by SPI host 
+		else if (busy && hdd_status_wr && hdd_data_out[3])	// set by SPI host
 			pio_in <= VCC;
   end
 
@@ -349,12 +384,12 @@ always @(posedge clk)
 	if (clk_en) begin
 		if (reset)
 			pio_out <= GND;
-		else if (busy && hdd_status_wr && hdd_data_out[7]) 	// reset by SPI host when command processing completes
+		else if (transport_abort || sel_command || (busy && hdd_status_wr && hdd_data_out[7]))
 			pio_out <= GND;
 		else if (busy && hdd_status_wr && hdd_data_out[3])	// pio_in set by SPI host (during PACKET processing)
 			pio_out <= GND;
 		else if (busy && hdd_status_wr && hdd_data_out[2])	// set by SPI host
-			pio_out <= VCC;	
+			pio_out <= VCC;
 	end
 
 // packet command state machine
@@ -362,7 +397,7 @@ always @(posedge clk)
 	if (clk_en) begin
 		if (reset)
 			packet_state <= PACKET_IDLE;
-		else if (drdy) 	// reset when processing of the current command ends
+		else if (transport_abort || sel_command || drdy) // reset at a new command or completion
 			packet_state <= PACKET_IDLE;
 		else if (packet_state_change)	// set by SPI host
 			packet_state <= packet_state == PACKET_IDLE ? PACKET_WAITCMD :
@@ -386,7 +421,7 @@ assign hdd_cmd_req = bsy; // bsy is set when command register is written, tells 
 assign hdd_dat_req = (fifo_full & pio_out); // the FIFO is full so SPI host may read it
 
 // FIFO in/out multiplexer
-assign fifo_reset = reset | sel_command | packet_state_change | packet_in_last;
+assign fifo_reset = reset | transport_abort | sel_command | packet_state_change | packet_in_last;
 assign fifo_data_in = pio_in ? hdd_data_out : data_in;
 assign fifo_rd = pio_out ? hdd_data_rd : sel_fifo & rd;
 assign fifo_wr = pio_in ? hdd_data_wr : sel_fifo & hwr & lwr;

@@ -85,7 +85,7 @@ static inline void HandleFpga(void)
 	DisableFpga();
 
 	HandleFDD(c1, c2, c3 ,c4);
-	HandleHDD(c1, c2);
+	HandleIDE(c1, c2);
 
 	UpdateDriveStatus();
 }
