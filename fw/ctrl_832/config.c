@@ -21,6 +21,165 @@ configTYPE config;
 fileTYPE file;
 char configfilename[12];
 
+static char configuration_titles[CONFIG_SLOT_COUNT][CONFIG_TITLE_STORAGE_LENGTH + 1];
+static int configuration_slot;
+static int active_configuration_slot=-1;
+static char active_configuration_name[CONFIG_TITLE_STORAGE_LENGTH+1]="Built-in defaults";
+
+const char *GetConfigurationTitle(unsigned int slot)
+{
+	static const char *defaults[CONFIG_SLOT_COUNT] = {
+		"Default", "Configuration slot 1", "Configuration slot 2",
+		"Configuration slot 3", "Configuration slot 4"
+	};
+	if(slot >= CONFIG_SLOT_COUNT)
+		return "";
+	return configuration_titles[slot][0] ? configuration_titles[slot] : defaults[slot];
+}
+
+const char *GetConfigurationDisplayTitle(unsigned int slot, int exists)
+{
+	static const char *empty_defaults[CONFIG_SLOT_COUNT] = {
+		"Default", "Configuration 1", "Configuration 2", "Configuration 3", "Configuration 4"
+	};
+	if(slot>=CONFIG_SLOT_COUNT) return "";
+	if(!exists && !configuration_titles[slot][0]) return empty_defaults[slot];
+	return GetConfigurationTitle(slot);
+}
+
+void FormatConfigurationSlotLabel(char *label, unsigned int slot, int exists, int saving)
+{
+	FormatConfigurationSlotLabelAtOffset(label, slot, exists, saving, 0);
+}
+
+void FormatConfigurationSlotLabelAtOffset(char *label, unsigned int slot, int exists, int saving, unsigned int offset)
+{
+	const char *suffix=exists ? "" : CONFIG_EMPTY_SUFFIX;
+	char title[CONFIG_TITLE_LENGTH+1];
+	unsigned int length=CONFIG_TITLE_LENGTH-strlen(suffix);
+	const char *name;
+	unsigned int i, name_length;
+	if(slot>=CONFIG_SLOT_COUNT)
+	{
+		label[0]=0;
+		return;
+	}
+	/* The firmware printf does not support string precision (%.*s). */
+	name=GetConfigurationDisplayTitle(slot, exists);
+	name_length=strlen(name);
+	if(offset && name_length>length)
+	{
+		/* Repeat the full title with a three-space gap, keeping status fixed. */
+		for(i=0; i<length; ++i)
+		{
+			unsigned int position=(offset+i)%(name_length+3);
+			title[i]=position<name_length ? name[position] : ' ';
+		}
+	}
+	else
+		strncpy(title, name, length);
+	title[length]=0;
+	snprintf(label, CONFIG_SLOT_LABEL_LENGTH+1, " %d%c %s%s", slot,
+		saving && exists ? '*' : ':', title, suffix);
+}
+
+void FormatActiveConfigurationLabel(char *label)
+{
+	if(active_configuration_slot>=0)
+		snprintf(label, CONFIG_SLOT_LABEL_LENGTH+1, " Active: %d: %s",
+			active_configuration_slot, GetConfigurationTitle(active_configuration_slot));
+	else
+		snprintf(label, CONFIG_SLOT_LABEL_LENGTH+1, " Active: %s", active_configuration_name);
+}
+
+void LoadConfigurationTitles(void)
+{
+	fileTYPE titlefile;
+	unsigned char buffer[512];
+	char title[CONFIG_TITLE_STORAGE_LENGTH + 1];
+	unsigned long remaining;
+	unsigned int i, count, slot=0, length=0, state=0;
+	unsigned long directory=CurrentDirectory();
+
+	memset(configuration_titles, 0, sizeof(configuration_titles));
+	ChangeDirectory(DIRECTORY_ROOT);
+	if(!FileOpen(&titlefile, "MINMGAA TXT"))
+	{
+		/* This file is optional, just like missing configuration slots. */
+		ClearError(ERROR_FILESYSTEM);
+		ChangeDirectory(directory);
+		return;
+	}
+	ChangeDirectory(directory);
+	remaining=titlefile.size;
+	while(remaining)
+	{
+		if(!FileRead(&titlefile, buffer))
+			goto read_error;
+		count=remaining > sizeof(buffer) ? sizeof(buffer) : remaining;
+		i=0;
+		/* Accept a UTF-8 BOM, but titles themselves use the OSD's ASCII font. */
+		if(titlefile.sector==0 && count>=3 && buffer[0]==0xef && buffer[1]==0xbb && buffer[2]==0xbf)
+			i=3;
+		for(; i<count; ++i)
+		{
+			unsigned char c=buffer[i];
+			if(c=='\r' || c=='\n')
+			{
+				if(state==2 || state==3)
+				{
+					while(length && title[length-1]==' ') --length;
+					title[length]=0;
+					strcpy(configuration_titles[slot], title);
+				}
+				state=0;
+				length=0;
+			}
+			else if(state==0)
+			{
+				if(c==' ' || c=='\t') continue;
+				if(c>='0' && c<'0'+CONFIG_SLOT_COUNT)
+				{
+					slot=c-'0';
+					state=1;
+				}
+				else state=4; /* Comment or invalid slot: discard the line. */
+			}
+			else if(state==1)
+			{
+				if(c=='=') state=2;
+				else if(c!=' ' && c!='\t') state=4;
+			}
+			else if(state==2 || state==3)
+			{
+				if(c=='\t') c=' ';
+				if(state==2 && c==' ') continue;
+				if(c<32 || c>126) state=4;
+				else
+				{
+					state=3;
+					if(length<CONFIG_TITLE_STORAGE_LENGTH) title[length++]=c;
+				}
+			}
+		}
+		remaining-=count;
+		if(remaining && !FileNextSector(&titlefile))
+			goto read_error;
+	}
+	/* EOF also terminates the last line, without reading sector padding. */
+	if(state==2 || state==3)
+	{
+		while(length && title[length-1]==' ') --length;
+		title[length]=0;
+		strcpy(configuration_titles[slot], title);
+	}
+	return;
+
+read_error:
+	/* Never expose a partially read set of titles. Keep the I/O error visible. */
+	memset(configuration_titles, 0, sizeof(configuration_titles));
+}
+
 #ifdef DEBUG
 char DebugMode;
 char DebugMsg[128];
@@ -222,6 +381,7 @@ char UploadActionReplay()
 
 void SetConfigurationFilename(int config)
 {
+	configuration_slot=config;
 	if(config)
 		snprintf(configfilename,sizeof(configfilename),"MINMGAA%dCFG",config);
 	else
@@ -277,6 +437,7 @@ unsigned char CheckConfiguration(fileTYPE *cfgfile)
 
 unsigned char LoadConfiguration(fileTYPE *cfgfile)
 {
+	int slot_based=cfgfile==NULL;
 	int updatekickstart=0;
 	int result=0;
 	unsigned int key;
@@ -298,7 +459,8 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
         INFO("Configuration file size: %lu\n", cfgfile->size);
         if (cfgfile->size <= sizeof(config))
         {
-            FileRead(cfgfile, sector_buffer);
+            if(!FileRead(cfgfile, sector_buffer))
+				return(0);
 
 			// A few more sanity checks...
 			if(tmpconf->floppy.drives<=4)
@@ -385,6 +547,30 @@ unsigned char LoadConfiguration(fileTYPE *cfgfile)
 		BootPrint("Defaults set\n");
 	}
 
+    if(result)
+    {
+        active_configuration_slot=slot_based ? configuration_slot : -1;
+        if(!slot_based)
+        {
+            if(cfgfile->long_name[0])
+            {
+                strncpy(active_configuration_name, cfgfile->long_name, CONFIG_TITLE_STORAGE_LENGTH);
+                active_configuration_name[CONFIG_TITLE_STORAGE_LENGTH]=0;
+            }
+            else
+            {
+                unsigned int length=8;
+                while(length && cfgfile->name[length-1]==' ') --length;
+                memcpy(active_configuration_name, cfgfile->name, length);
+                strcpy(active_configuration_name+length, ".CFG");
+            }
+        }
+    }
+    else
+    {
+        active_configuration_slot=-1;
+        strcpy(active_configuration_name, "Built-in defaults");
+    }
     return(result);
 }
 

@@ -121,6 +121,7 @@ int Init() {
 			int key;
 			int override=0;
 			ChangeDirectory(DIRECTORY_ROOT);
+			LoadConfigurationTitles();
 			config.kickstart.name[0]=0;
 			SetConfigurationFilename(0); // Use default config
 			LoadConfiguration(0);	// Use slot-based config filename

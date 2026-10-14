@@ -118,6 +118,20 @@ static inline signed char MouseScale(char v) {
 int UploadKickstart(unsigned long dir,char *name);
 char UploadActionReplay();
 void SetConfigurationFilename(int config);	// Set configuration filename by slot number
+#define CONFIG_SLOT_COUNT 5
+#define CONFIG_SLOT_LABEL_LENGTH 29
+/* OsdWrite allows 29 glyphs; reserve four for the leading space and "0: ". */
+#define CONFIG_TITLE_LENGTH (CONFIG_SLOT_LABEL_LENGTH - 4)
+#define CONFIG_EMPTY_SUFFIX " (empty)"
+#define CONFIG_EMPTY_SUFFIX_LENGTH 8
+#define CONFIG_TITLE_STORAGE_LENGTH 63
+void LoadConfigurationTitles(void);
+const char *GetConfigurationTitle(unsigned int slot);
+const char *GetConfigurationDisplayTitle(unsigned int slot, int exists);
+/* label must have room for CONFIG_SLOT_LABEL_LENGTH + 1 bytes. */
+void FormatConfigurationSlotLabel(char *label, unsigned int slot, int exists, int saving);
+void FormatConfigurationSlotLabelAtOffset(char *label, unsigned int slot, int exists, int saving, unsigned int offset);
+void FormatActiveConfigurationLabel(char *label);
 unsigned char LoadConfiguration(fileTYPE *cfgfile);	// Can supply NULL to use filename previously set by slot number
 unsigned char SaveConfiguration(fileTYPE *cfgfile);	// Can supply NULL to use filename previously set by slot number
 unsigned char ConfigurationExists(char *filename);

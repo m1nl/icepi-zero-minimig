@@ -154,6 +154,29 @@ void SelectFile(char* pFileExt, unsigned char Options, unsigned char MenuSelect,
 #define HELPTEXT_DELAY 2500
 #define FRAME_DELAY 50
 
+static unsigned long configuration_scroll_timer;
+static unsigned int configuration_scroll_offset;
+
+static void ResetConfigurationTitleScroll(void)
+{
+    configuration_scroll_timer=GetTimer(1500);
+    configuration_scroll_offset=0;
+}
+
+static void ScrollConfigurationTitle(unsigned int slot, int exists, int saving)
+{
+    char label[CONFIG_SLOT_LABEL_LENGTH+1];
+    unsigned int length;
+    if(slot>=CONFIG_SLOT_COUNT) return;
+    length=strlen(GetConfigurationDisplayTitle(slot, exists));
+    if(length <= CONFIG_TITLE_LENGTH-(exists ? 0 : CONFIG_EMPTY_SUFFIX_LENGTH)) return;
+    if(!CheckTimer(configuration_scroll_timer)) return;
+    configuration_scroll_timer=GetTimer(120);
+    configuration_scroll_offset=(configuration_scroll_offset+1)%(length+3);
+    FormatConfigurationSlotLabelAtOffset(label, slot, exists, saving, configuration_scroll_offset);
+    OsdWrite(slot, label, 1, !saving && !exists);
+}
+
 
 void ShowSplash()
 {
@@ -192,6 +215,7 @@ void HandleUI(void)
 	static const char *helptext;
 	static char helpstate=0;
 	static char osd_item;
+	static unsigned char configuration_exists;
 	char s[40];
 
     // get user control codes
@@ -591,8 +615,7 @@ void HandleUI(void)
         menumask |= 0x10;
         OsdWrite(osd_item++, "      video settings \x16", menusub == 4,0);
         OsdWrite(osd_item++, "      input settings \x16", menusub == 5,0);
-        for (; osd_item < 7; osd_item++)
-          OsdWrite(osd_item, "", 0,0);
+        OsdWrite(osd_item++, "", 0,0);
         OsdWrite(osd_item, STD_EXIT, menusub == 6,0);
 		parentstate = menustate;
         menustate = MENU_MAIN2_2;
@@ -650,14 +673,15 @@ void HandleUI(void)
 
     case MENU_MISC1 :
         OsdColor(OSDCOLOR_TOPLEVEL);
+        FormatActiveConfigurationLabel(s);
 		helptext=helptexts[HELPTEXT_MAIN];
 		menumask=0x7f;	// Reset, about and exit.
  		OsdSetTitle("Misc",OSD_ARROW_LEFT);
-        OsdWrite(0, "  Reset", menusub == 0,0);
-        OsdWrite(1, "  Reboot", menusub == 1,0);
-        OsdWrite(2, "", 0,0);
+        OsdWrite(0, " Reset", menusub == 0,0);
+        OsdWrite(1, " Reboot", menusub == 1,0);
+
 		if(PLATFORM&(1<<PLATFORM_RECONFIG))
-	        OsdWrite(2, "  Return to Chameleon", menusub == 2,0);
+	        OsdWrite(2, " Return to Chameleon", menusub == 2,0);
 		else
 		{
 	        OsdWrite(2, "", 0,0);
@@ -667,9 +691,9 @@ void HandleUI(void)
 		if(PLATFORM&(1<<PLATFORM_IECSERIAL))
 		{
 			if(config.misc & (1<<PLATFORM_IECSERIAL))
-			    OsdWrite(3, "  Serial over IEC : On", menusub==3,0);
+			    OsdWrite(3, " Serial over IEC : On", menusub==3,0);
 			else
-			    OsdWrite(3, "  Serial over IEC : Off", menusub==3,0);
+			    OsdWrite(3, " Serial over IEC : Off", menusub==3,0);
 		}
 		else
 		{
@@ -677,9 +701,9 @@ void HandleUI(void)
 			menumask&=~0x08;	// Remove the IEC option from the menu
 		}
 
-        OsdWrite(4, "  About", menusub == 4,0);
-        OsdWrite(5, "  Supporters", menusub == 5,0);
-        OsdWrite(6, "", 0,0);
+        OsdWrite(4, " About", menusub == 4,0);
+        OsdWrite(5, " Supporters", menusub == 5,0);
+        OsdWrite(6, s, 0,0);
         OsdWrite(7, STD_EXIT, menusub == 6,0);
 
 		parentstate = menustate;
@@ -833,6 +857,7 @@ void HandleUI(void)
 		break;
 
     case MENU_LOADCONFIG_1 :
+        ResetConfigurationTitleScroll();
         OsdColor(OSDCOLOR_SUBMENU);
 		helptext=helptexts[HELPTEXT_NONE];
 		if(parentstate!=menustate)	// First run?
@@ -849,12 +874,12 @@ void HandleUI(void)
 		parentstate=menustate;
  		OsdSetTitle("Load",0);
 
-        OsdWrite(0, "    Default", menusub == 0,(menumask & 1)==0);
-        OsdWrite(1, "          1", menusub == 1,(menumask & 2)==0);
-        OsdWrite(2, "          2", menusub == 2,(menumask & 4)==0);
-        OsdWrite(3, "          3", menusub == 3,(menumask & 8)==0);
-        OsdWrite(4, "          4", menusub == 4,(menumask & 0x10)==0);
-        OsdWrite(5, "      Other \x16", menusub==5,0);
+        for(i=0; i<CONFIG_SLOT_COUNT; ++i)
+        {
+            FormatConfigurationSlotLabel(s, i, (menumask & (1<<i))!=0, 0);
+            OsdWrite(i, s, menusub == i, (menumask & (1<<i))==0);
+        }
+        OsdWrite(5, " Other \x16", menusub==5,0);
         OsdWrite(6, "", 0,0);
         OsdWrite(7, STD_EXIT, menusub == 6,0);
 
@@ -862,6 +887,7 @@ void HandleUI(void)
         break;
 
     case MENU_LOADCONFIG_2 :
+        ScrollConfigurationTitle(menusub, (menumask & (1<<menusub))!=0, 0);
 
 		if(select)
         {
@@ -1114,27 +1140,21 @@ void HandleUI(void)
         /******************************************************************/
 
     case MENU_SAVECONFIG_1 :
+        ResetConfigurationTitleScroll();
         OsdColor(OSDCOLOR_SUBMENU);
 		helptext=helptexts[HELPTEXT_NONE];
 		menumask=0x7f;
 		parentstate=menustate;
  		OsdSetTitle("Save",0);
 
-		SetConfigurationFilename(0);
-		snprintf(s, 32, "    Default %s",ConfigurationExists(0) ? "(overwrite)" : "");
-        OsdWrite(0, s, menusub == 0,0);
-		SetConfigurationFilename(1);
-		snprintf(s, 32, "          1 %s",ConfigurationExists(0) ? "(overwrite)" : "");
-        OsdWrite(1, s, menusub == 1,0);
-		SetConfigurationFilename(2);
-		snprintf(s, 32, "          2 %s",ConfigurationExists(0) ? "(overwrite)" : "");
-        OsdWrite(2, s, menusub == 2,0);
-		SetConfigurationFilename(3);
-		snprintf(s, 32, "          3 %s",ConfigurationExists(0) ? "(overwrite)" : "");
-        OsdWrite(3, s, menusub == 3,0);
-		SetConfigurationFilename(4);
-		snprintf(s, 32, "          4 %s",ConfigurationExists(0) ? "(overwrite)" : "");
-        OsdWrite(4, s, menusub == 4,0);
+        configuration_exists=0;
+        for(i=0; i<CONFIG_SLOT_COUNT; ++i)
+        {
+            SetConfigurationFilename(i);
+            if(ConfigurationExists(0)) configuration_exists|=1<<i;
+            FormatConfigurationSlotLabel(s, i, (configuration_exists & (1<<i))!=0, 1);
+            OsdWrite(i, s, menusub == i, 0);
+        }
         OsdWrite(5, "     Other \x16", menusub==5, 0);
         OsdWrite(6, "", 0,0);
         OsdWrite(7, STD_EXIT, menusub == 6,0);
@@ -1143,6 +1163,7 @@ void HandleUI(void)
         break;
 
     case MENU_SAVECONFIG_2 :
+        ScrollConfigurationTitle(menusub, (configuration_exists & (1<<menusub))!=0, 1);
 
         if (menu)
 		{

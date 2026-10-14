@@ -121,6 +121,18 @@ Other low-speed and full-speed USB 2.0 HID devices should generally work as well
 
 ## Usage
 
+To name configuration slots in Load/Save, add `MINMGAA.TXT` to the SD-card root, then restart:
+
+```ini
+0=Default A500
+1=A1200 Workbench
+2=A500 Games
+3=CD32
+4=Diagnostics
+```
+
+Use `slot=title`, where slot `0` is Default and `1`–`4` are numbered slots. Titles support up to 63 ASCII characters; long selected titles scroll after a short pause. Unnamed slots show `0: Default` or `N: Configuration slot N`. Unused slots show `(empty)`. The Misc page shows the active configuration.
+
 ### Hardware
 
 To use this Minimig core, you will at the minimum need an SD/SDHC card, formatted with the FAT32 filesystem, USB HID keyboard / mouse and a HDMI monitor / TV.
