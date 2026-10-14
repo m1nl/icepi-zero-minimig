@@ -23,6 +23,78 @@ This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.or
 * supports HDMI video output with sound
 * peripherals : 2 x USB HID ports with FPGA USB controllers
 * has an implementation of the [Akiko](https://en.wikipedia.org/wiki/Amiga_custom_chips#Akiko) chunky to planar converter
+* RTG framebuffer video with a Picasso96 driver and independent 1x / 2x / 3x horizontal and vertical pixel repetition
+
+## RTG video (Picasso96)
+
+RTG uses a framebuffer in Fast RAM and a fixed 1024x768 HDMI output at a 66 MHz pixel clock. Smaller source modes use pixel repetition; the physical HDMI timing stays the same. Native Amiga video is selected at boot and works without the RTG driver. RTG is enabled when Picasso96 requests it.
+
+Use an FPGA build with RTG support, the matching `minimig.card` driver, a 68020 CPU configuration and enough Fast RAM for both RTG and AmigaOS. The driver reserves 4 MiB by default, reducing its reservation if allocation fails. The optional `VIDEOMEMORY` monitor tooltype can request a different amount.
+
+### Building the RTG driver
+
+On Linux, install GNU make 4.3 or newer, bash, curl, 7z, Python 3, and `xdftool` from amitools. The `vasmm68k_mot` assembler must already be installed; its default location is `~/vbcc/bin/vasmm68k_mot`.
+
+Run from the repository root:
+
+```sh
+make -C amiga_sw/rtg
+```
+
+Missing Amiga NDK and public/private P96 headers are downloaded automatically into `amiga_sw/rtg/.deps` and reused by subsequent builds. The assembler is not downloaded. To use another vbcc installation, pass `VBCC=/path/to/vbcc` to make.
+
+The build produces these files in `amiga_sw/rtg/`:
+
+* `minimig.card` - the Amiga driver library.
+* `minimig.card.lst` - the assembler listing.
+* `rtgcheck` - a read-only board/driver diagnostic.
+* `minimig-rtg.adf` - an 880 KiB OFS transfer floppy named `MinimigRTG`, containing the driver, diagnostic and driver README.
+
+Serial debug logging is disabled by default. Build with `make -C amiga_sw/rtg DEBUG=1` to enable it, or `DEBUG=0` to disable it again. Changing this option rebuilds the driver and ADF without requiring `make clean`.
+
+### Installing the RTG driver
+
+1. Install Picasso96 on the Amiga. The driver works with P96 2.0. If the installer requires a board choice, select PicassoIV to obtain a monitor executable.
+2. Mount `amiga_sw/rtg/minimig-rtg.adf` as an Amiga floppy and copy the driver from an Amiga Shell:
+
+   ```text
+   Copy MinimigRTG:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
+   ```
+
+3. Rename the installed monitor executable and its icon from `DEVS:Monitors/PicassoIV` and `PicassoIV.info` to `DEVS:Monitors/Minimig` and `Minimig.info`. The monitor executable comes from the P96 installer.
+4. Open the Minimig monitor icon's Information window and set the tooltype `BOARDTYPE=minimig`. Optionally add `VIDEOMEMORY=<n>`, where `n` is the requested reservation in MiB, from 1 to 7.
+5. Reboot, open Picasso96Mode, attach a setting to the Minimig board and create modes from the table below. Test them before saving. Select a tested Workbench mode in `Prefs:ScreenMode`.
+
+Picasso96Mode settings provide the mode list; modes are not stored in the FPGA or installed automatically by the `.card` driver. The ADF is a transfer disk; Picasso96 must be installed separately. Run `MinimigRTG:rtgcheck` to inspect the RTG ID/status, available Fast RAM and installed driver without changing video modes.
+
+### Supported RTG modes
+
+These nine source resolutions cover the complete hardware viewport and produce a correct image. All support 8-bit indexed colour (CLUT), 16-bit RGB565 and 15-bit RGB555.
+
+| Source resolution | Horizontal repetition | Vertical repetition |
+| --- | --- | --- |
+| 1024x768 | 1x | 1x |
+| 1024x384 | 1x | 2x |
+| 1024x256 | 1x | 3x |
+| 512x768 | 2x | 1x |
+| 512x384 | 2x | 2x |
+| 512x256 | 2x | 3x |
+| 320x768 | 3x | 1x |
+| 320x384 | 3x | 2x |
+| 320x256 | 3x | 3x |
+
+The 320-wide modes produce 960 output pixels, with 32 black pixels on each side. Every mode uses the same physical 1024x768 HDMI output.
+
+### RTG limitations and fallback modes
+
+* Driver 1.12 also permits nonzero source sizes up to 1024x768 as a display fallback. Horizontal repetition is 3x for widths up to 320, 2x up to 512 and 1x above 512; vertical repetition is 3x for heights up to 256, 2x up to 384 and 1x above 384.
+* The fallback keeps clock/timing values nonzero, but hardware still fetches a complete source viewport from the table above. Areas outside a smaller bitmap can show data from subsequent rows or beyond its allocation. They are not guaranteed black. For example, 320x240 uses 3x3 repetition and reads 16 additional source rows. Prefer the nine exact modes for Workbench.
+* Zero-sized modes and dimensions above 1024x768 cannot enable RTG scanout.
+* Horizontal panning is unsupported. Dragged screens must share pixel format and repetition settings.
+* Pixel repetition supports integer factors 1x, 2x and 3x independently on each axis. Vertical repetition rereads each output row from SDRAM and does not reduce SDRAM traffic by itself.
+* Rendering uses the CPU; the driver provides no hardware blitter or hardware sprite acceleration. Double buffering is controlled by the application through P96.
+
+See [the driver README](amiga_sw/rtg/README) for additional details and version history.
 
 ## USB support
 
