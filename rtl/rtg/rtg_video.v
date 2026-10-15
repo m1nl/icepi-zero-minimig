@@ -615,6 +615,22 @@ end
 
 // Here we have the RTG read path clocked with clk_rtg
 
+wire video_reset_request = video_reset || !resetn_rtg;
+
+(* ASYNC_REG = "TRUE" *)
+reg [1:0] video_reset_sync = 2'b11;
+
+// Assert immediately, including while clk_rtg is stopped.
+// Release locally so FIFO read control starts from a clk_rtg register.
+always @(posedge clk_rtg or posedge video_reset_request) begin
+  if (video_reset_request)
+    video_reset_sync <= 2'b11;
+  else
+    video_reset_sync <= {video_reset_sync[0], 1'b0};
+end
+
+wire video_reset_rtg = video_reset_sync[1];
+
 (* ASYNC_REG = "TRUE" *) reg [1:0] ready_vid;
 
 // Bundled data is held from FIFO reset through the entire frame. Ready crosses later.
@@ -651,7 +667,7 @@ wire source_request = display_req && in_source_window && horizontal_phase == 0;
 // Latch frame state there so FIFO reads need no first-pixel bypass muxes.
 wire start_display = frame_request && ready_vid[1] && !reset_top_r && !reset_bottom_r;
 
-wire display_req = rtg_active && !video_reset && !reset_top_r && !reset_bottom_r &&
+wire display_req = rtg_active && !video_reset_rtg && !reset_top_r && !reset_bottom_r &&
                      pixel_request &&
                      frame_active && !frame_fault;
 
@@ -759,7 +775,7 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
     config_meta <= {pixel_repeat[1:0], frame_split, frame_indexed, frame_565};
     config_vid  <= config_meta;
 
-    if (!rtg_active || video_reset || reset_top_r || reset_bottom_r) begin
+    if (!rtg_active || video_reset_rtg || reset_top_r || reset_bottom_r) begin
       frame_active <= 0;
       frame_fault <= 0;
       scan_row <= 0;
