@@ -3,11 +3,6 @@
 
 module userio_osd
 (
-    output osd_write_en,
-    output [10:0] osd_write_addr,
-    output [7:0] osd_write_data,
-    output osd_enabled,
-
 	input 	clk,		    	// 28MHz clock
 	input	clk7_en,
   input clk7n_en,
@@ -26,6 +21,10 @@ module userio_osd
 	output	osd_blank,			//osd overlay, normal video blank output
 	output	osd_pixel,			//osd video pixel
 	output	reg osd_enable = 0,			//osd enable
+	output	osd_write_en,
+	output	[10:0] osd_write_addr,
+	output	[7:0] osd_write_data,
+	output osd_enabled,
   output  reg key_disable = 0,      // keyboard disable
 	output	reg [1:0] lr_filter = 0,
 	output	reg [1:0] hr_filter = 0,

@@ -288,12 +288,12 @@ module minimig #(parameter usevideofilter=1'b1, parameter useaga=1'b1, parameter
 	output  [2:0] vmode_out,
 	output	osd_blank_out,		// Let the toplevel dither module handle drawing the OSD.
 	output	osd_pixel_out,
+	output  osd_write_en,
+	output  [10:0] osd_write_addr,
+	output  [7:0] osd_write_data,
+	output  osd_enabled,
 	output	rtg_ena,
 	output	rtg_linecompare,
-    output osd_write_en,
-    output [10:0] osd_write_addr,
-    output [7:0] osd_write_data,
-    output osd_enabled,
 
 	output	ntscmode,		//PAL/NTSC video mode selection
 	input	 ext_int2,		// External interrupt for Akiko
@@ -737,10 +737,6 @@ end
 //instantiate user IO
 userio USERIO1
 (
-    .osd_write_en(osd_write_en),
-    .osd_write_addr(osd_write_addr),
-    .osd_write_data(osd_write_data),
-    .osd_enabled(osd_enabled),
 	.clk(clk),
 	.clk7_en(clk7_en),
 	.clk7n_en(clk7n_en),
@@ -776,14 +772,18 @@ userio USERIO1
 	.kbd_mouse_strobe(kbd_mouse_strobe),
 	.kms_level(kms_level),
 	.kbd_mouse_data(kbd_mouse_data),
-	.osd_ctrl(osd_ctrl),
 	.keyboard_disabled(keyboard_disabled),
 	._scs(_scs[1]),
 	.sdi(sdi),
 	.sdo(user_sdo),
 	.sck(sck),
+	.osd_ctrl(osd_ctrl),
 	.osd_blank(osd_blank),
 	.osd_pixel(osd_pixel),
+	.osd_write_en(osd_write_en),
+	.osd_write_addr(osd_write_addr),
+	.osd_write_data(osd_write_data),
+	.osd_enabled(osd_enabled),
 	.lr_filter(lr_filter),
 	.hr_filter(hr_filter),
 	.memory_config(userio_memory_config),
@@ -868,8 +868,6 @@ amber AMBER1
 	.hires(hires),
 	.long_frame(long_frame),	// AMR - keep blank aligned with VSync for scandoubled DVI / HDMI output in lace mode.
 	.track_vsync(track_vsync),	// GS - shift VSync instead for scandoubled lace mode.
-	.osd_blank(osd_blank),
-	.osd_pixel(osd_pixel),
 	.red_in(red_i),
 	.blue_in(blue_i),
 	.green_in(green_i),
@@ -885,6 +883,8 @@ amber AMBER1
 	._csync_out(_csync),
 	.blank_out(blank_out),
 	.selcsync(selcsync),
+	.osd_blank(osd_blank),
+	.osd_pixel(osd_pixel),
 	.osd_blank_out(osd_blank_out),
 	.osd_pixel_out(osd_pixel_out)
 );

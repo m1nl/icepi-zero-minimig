@@ -26,11 +26,6 @@
 
 
 module userio (
-    output osd_write_en,
-    output [10:0] osd_write_addr,
-    output [7:0] osd_write_data,
-    output osd_enabled,
-
   input  wire           clk,                // bus clock
   input  wire           reset,              // reset
   input  wire           clk7_en,
@@ -66,14 +61,18 @@ module userio (
   input  wire           kms_level,
   input  wire [  2-1:0] kbd_mouse_type,
   input  wire [  8-1:0] kbd_mouse_data,
-  input  wire [  8-1:0] osd_ctrl,           // OSD control (minimig->host, [menu,select,down,up])
-  output reg            keyboard_disabled,  // disables Amiga keyboard while OSD is active
   input  wire           _scs,               // SPI enable
   input  wire           sdi,                // SPI data in
   output wire           sdo,                // SPI data out
   input  wire           sck,                // SPI clock
+  input  wire [  8-1:0] osd_ctrl,           // OSD control (minimig->host, [menu,select,down,up])
+  output reg            keyboard_disabled,  // disables Amiga keyboard while OSD is active
   output wire           osd_blank,          // osd overlay, normal video blank output
   output wire           osd_pixel,          // osd video pixel
+  output wire           osd_write_en,
+  output wire [ 11-1:0] osd_write_addr,
+  output wire [  8-1:0] osd_write_data,
+  output wire           osd_enabled,
   output wire [  2-1:0] lr_filter,
   output wire [  2-1:0] hr_filter,
   output wire [  7-1:0] memory_config,
@@ -604,10 +603,6 @@ assign anajoy = 1'b0;
 //instantiate osd controller
 userio_osd osd1
 (
-    .osd_write_en(osd_write_en),
-    .osd_write_addr(osd_write_addr),
-    .osd_write_data(osd_write_data),
-    .osd_enabled(osd_enabled),
   .clk              (clk),
   .clk7_en          (clk7_en),
   .clk7n_en         (clk7n_en),
@@ -618,14 +613,18 @@ userio_osd osd1
   .sof              (sof),
   .varbeamen        (varbeamen),
   .rtg_ena          (rtg_ena),
-  .osd_ctrl         (t_osd_ctrl),
   ._scs             (_scs),
   .sdi              (sdi),
   .sdo              (sdo),
   .sck              (sck),
+  .osd_ctrl         (t_osd_ctrl),
   .osd_blank        (osd_blank),
   .osd_pixel        (osd_pixel),
   .osd_enable       (osd_enable),
+  .osd_write_en     (osd_write_en),
+  .osd_write_addr   (osd_write_addr),
+  .osd_write_data   (osd_write_data),
+  .osd_enabled      (osd_enabled),
   .key_disable      (key_disable),
   .lr_filter        (lr_filter),
   .hr_filter        (hr_filter),
