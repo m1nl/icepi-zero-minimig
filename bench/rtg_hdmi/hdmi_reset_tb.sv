@@ -51,7 +51,8 @@ module hdmi_reset_tb;
             expected_request_x = (cycles + LEAD) % 1344;
             expected_request_y = ((cycles + LEAD) / 1344) % 806;
             if (scan_pixel !== (expected_request_x<1024 && expected_request_y<768) ||
-                scan_frame !== (expected_request_x==0 && expected_request_y==0) ||
+                // Frame setup precedes the first pixel request by one cycle.
+                scan_frame !== (expected_request_x==1343 && expected_request_y==805) ||
                 scan_line !== (expected_request_x==1024))
                 $fatal(1,"RTG event alignment at %0d,%0d",x,y);
             if (osd_pixel !== (expected_request_x>=640 && expected_request_x<896 && expected_request_y>=512 && expected_request_y<640) ||

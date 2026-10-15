@@ -28,6 +28,7 @@ module rtg_video #(
 
   // Timed one-bit requests from HDMI; its lead compensates for this
   // pipeline and the edge used by the top-level RGB output register.
+  // Frame request must arrive one cycle before the first pixel request.
   input wire pixel_request,
   input wire frame_request,
   input wire line_prepare,
@@ -639,22 +640,24 @@ localparam COLUMN_BITS = H_ACTIVE > 1 ? $clog2(H_ACTIVE) : 1;
 
 reg [COLUMN_BITS-1:0] scan_column;
 
-wire [1:0] repeat_now = start_display ? config_vid[13:12] : repeat_vid;
+wire [1:0] repeat_now = repeat_vid;
 
 wire in_source_window = repeat_now != 2 ||
     (scan_column >= H_BORDER && scan_column < H_ACTIVE - H_BORDER);
 
 wire source_request = display_req && in_source_window && horizontal_phase == 0;
 
+// Frame request arrives during blanking, one cycle before the first pixel.
+// Latch frame state there so FIFO reads need no first-pixel bypass muxes.
 wire start_display = frame_request && ready_vid[1] && !reset_top_r && !reset_bottom_r;
 
 wire display_req = rtg_active && !video_reset && !reset_top_r && !reset_bottom_r &&
                      pixel_request &&
-                     (start_display || (frame_active && !frame_fault));
+                     frame_active && !frame_fault;
 
-wire selected_bottom = start_display ? 1'b0 : scan_bottom;
+wire selected_bottom = scan_bottom;
 
-wire indexed_now = start_display ? config_vid[1] : indexed_vid;
+wire indexed_now = indexed_vid;
 
 wire need_word = !indexed_now || !byte_phase;
 
@@ -825,7 +828,7 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       low_byte_1 <= byte_phase;
       indexed_1 <= indexed_now;
       indexed_2 <= indexed_1;
-      rgb565_1 <= start_display ? config_vid[0] : rgb565_vid;
+      rgb565_1 <= rgb565_vid;
 
       // Hold the decoded RGB through repetitions, with unchanged latency.
       if (!valid_2)

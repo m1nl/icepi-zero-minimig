@@ -33,7 +33,8 @@ module rtg_video_tb;
         if(video_reset || !ena) begin scan_pixel<=0;scan_frame<=0;scan_line<=0;end
         else begin
             scan_pixel <= px4<W && py4<H;
-            scan_frame <= px4==0 && py4==0;
+            // Arm the frame one cycle before the first pixel request.
+            scan_frame <= cx==HT-5 && cy==VT-1;
             scan_line <= px4==W;
         end
     end

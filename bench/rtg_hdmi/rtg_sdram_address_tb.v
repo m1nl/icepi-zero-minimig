@@ -34,7 +34,8 @@ module rtg_sdram_address_tb #(
         if(video_reset || !ena) begin scan_pixel<=0;scan_frame<=0;scan_line<=0;end
         else begin
             scan_pixel<=px4<1024 && py4<768;
-            scan_frame<=px4==0 && py4==0;
+            // Match HDMI: arm the frame one cycle before the first pixel.
+            scan_frame<=x==1339 && y==805;
             scan_line<=px4==1024;
         end
     end

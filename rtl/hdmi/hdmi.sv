@@ -166,7 +166,8 @@ always @(posedge clk_pixel) begin
 
     end else begin
         rtg_pixel_request <= (cx < SCAN_BLANK || scan_next_line) && scan_y < RTG_SCREEN_HEIGHT;
-        rtg_frame_request <= cx == SCAN_WRAP && cy == (RTG_FRAME_HEIGHT - 1);
+        // Arm RTG one cycle before its first pixel request, during blanking.
+        rtg_frame_request <= cx == (SCAN_WRAP - 1) && cy == (RTG_FRAME_HEIGHT - 1);
         // First horizontal-blank request: prepare the NEXT row while idle.
         rtg_line_prepare <= cx == SCAN_BLANK;
 

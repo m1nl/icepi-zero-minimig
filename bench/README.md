@@ -71,6 +71,10 @@ CCACHE_DISABLE=1 verilator --binary --timing -Wno-fatal -DSOC_SIM \
 
 ## Testbench assumptions
 
+RTG frame requests arrive during blanking, one cycle before the first pixel
+request. Standalone raster generators follow the same timing as HDMI so frame
+configuration is registered before FIFO consumption starts.
+
 The audio CDC module has no reset input or HDL initialization. Its bench seeds
 handshake state once at simulation startup and checks capture, hold and clock
 switching afterward; it does not establish FPGA power-up behavior.
