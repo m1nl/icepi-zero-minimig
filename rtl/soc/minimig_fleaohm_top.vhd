@@ -9,81 +9,81 @@ use work.board_config.all;
 entity minimig_fleaohm_top is
 port(
 	-- System clock and reset
-	clk	: in	std_logic;	-- 25MHz clock input from external xtal oscillator.
-	reset_n	: in	std_logic;	-- master reset input from reset header.
+	clk	:	in	std_logic;	-- 25MHz clock input from external xtal oscillator.
+	reset_n	:	in	std_logic;	-- master reset input from reset header.
 
 	-- On-board user buttons and status LED
-	n_led1	: out	std_logic;
+	n_led1	:	out	std_logic;
 
 	-- Digital video out
-	lvds_dp : out std_logic_vector(3 downto 0);	-- Quasi-differential output for digital video.
+	lvds_dp	:	out std_logic_vector(3 downto 0);	-- Quasi-differential output for digital video.
 
 	-- USB Slave (FT230x) debug interface
-	slave_tx_o	: out	std_logic;
-	slave_rx_i	: in	std_logic;
-	slave_cts_i	: in	std_logic;	-- Receives signal from #RTS pin on FT230x, where applicable.
+	slave_tx_o	:	out	std_logic;
+	slave_rx_i	:	in	std_logic;
+	slave_cts_i	:	in	std_logic;	-- Receives signal from #RTS pin on FT230x, where applicable.
 
 	-- SDRAM interface (For use with 16Mx16bit or 32Mx16bit SDR DRAM, depending on version)
-	sdram_clk	: out	std_logic;	-- clock to SDRAM
-	sdram_cke	: out	std_logic;	-- clock to SDRAM
-	sdram_rasn	: out	std_logic;	-- SDRAM RAS
-	sdram_casn	: out	std_logic;	-- SDRAM CAS
-	sdram_wen	: out	std_logic;	-- SDRAM write-enable
-	sdram_ba	: out	std_logic_vector(1 downto 0);	-- SDRAM bank-address
-	sdram_dqm	: out	std_logic_vector(1 downto 0);
-	sdram_a		: out	std_logic_vector(12 downto 0);	-- SDRAM address bus
-	sdram_dq	: inout	std_logic_vector(15 downto 0);	-- data bus to/from SDRAM
-	sdram_csn	: out	std_logic;
+	sdram_clk	:	out	std_logic;	-- clock to SDRAM
+	sdram_cke	:	out	std_logic;	-- clock to SDRAM
+	sdram_rasn	:	out	std_logic;	-- SDRAM RAS
+	sdram_casn	:	out	std_logic;	-- SDRAM CAS
+	sdram_wen	:	out	std_logic;	-- SDRAM write-enable
+	sdram_ba	:	out	std_logic_vector(1 downto 0);	-- SDRAM bank-address
+	sdram_dqm	:	out	std_logic_vector(1 downto 0);
+	sdram_a		:	out	std_logic_vector(12 downto 0);	-- SDRAM address bus
+	sdram_dq	:	inout	std_logic_vector(15 downto 0);	-- data bus to/from SDRAM
+	sdram_csn	:	out	std_logic;
 
 	-- GPIO Header (RasPi compatible GPIO format)
-	GPIO_2	: in	std_logic;
-	GPIO_3	: out	std_logic;
-	GPIO_4	: in	std_logic;
-	GPIO_5	: inout	std_logic;
-	GPIO_6	: inout	std_logic;
-	GPIO_7	: in	std_logic;
-	GPIO_8	: in	std_logic;
-	GPIO_9	: in	std_logic;
-	GPIO_10	: in	std_logic;
-	GPIO_11	: in	std_logic;
-	GPIO_12	: out	std_logic;
-	GPIO_13	: out	std_logic;
-	GPIO_14	: inout	std_logic;
-	GPIO_15	: in	std_logic;
-	GPIO_16	: in	std_logic;
+	GPIO_2	:	in	std_logic;
+	GPIO_3	:	out	std_logic;
+	GPIO_4	:	in	std_logic;
+	GPIO_5	:	inout	std_logic;
+	GPIO_6	:	inout	std_logic;
+	GPIO_7	:	in	std_logic;
+	GPIO_8	:	in	std_logic;
+	GPIO_9	:	in	std_logic;
+	GPIO_10	:	in	std_logic;
+	GPIO_11	:	in	std_logic;
+	GPIO_12	:	out	std_logic;
+	GPIO_13	:	out	std_logic;
+	GPIO_14	:	inout	std_logic;
+	GPIO_15	:	in	std_logic;
+	GPIO_16	:	in	std_logic;
 
-	GPIO_17	: in	std_logic;
-	GPIO_18	: in	std_logic;
-	GPIO_19	: out	std_logic;
-	GPIO_20	: in	std_logic;
-	GPIO_21	: in	std_logic;
-	GPIO_22	: in	std_logic;
-	GPIO_23	: in	std_logic;
-	GPIO_24	: in	std_logic;
-	GPIO_25	: inout	std_logic;
-	GPIO_26	: inout	std_logic;
-	GPIO_27	: inout	std_logic;
-	GPIO_IDSD	: inout	std_logic;
-	GPIO_IDSC	: inout	std_logic;
+	GPIO_17	:	in	std_logic;
+	GPIO_18	:	in	std_logic;
+	GPIO_19	:	out	std_logic;
+	GPIO_20	:	in	std_logic;
+	GPIO_21	:	in	std_logic;
+	GPIO_22	:	in	std_logic;
+	GPIO_23	:	in	std_logic;
+	GPIO_24	:	in	std_logic;
+	GPIO_25	:	inout	std_logic;
+	GPIO_26	:	inout	std_logic;
+	GPIO_27	:	inout	std_logic;
+	GPIO_IDSD	:	inout	std_logic;
+	GPIO_IDSC	:	inout	std_logic;
 
 	-- Sigma Delta ADC ('Enhanced' Ohm-specific GPIO functionality)
 	-- NOTE: Must comment out GPIO_5, GPIO_7, GPIO_10 AND GPIO_24 as instructed in the pin constraints file (.LPF) in order to use
-	--ADC0_input	: in		std_logic;
-	--ADC0_error	: buffer	std_logic;
-	--ADC1_input	: in		std_logic;
-	--ADC1_error	: buffer	std_logic;
-	--ADC2_input	: in		std_logic;
-	--ADC2_error	: buffer	std_logic;
-	--ADC3_input	: in		std_logic;
-	--ADC3_error	: buffer	std_logic;
+	--ADC0_input	:	in		std_logic;
+	--ADC0_error	:	buffer	std_logic;
+	--ADC1_input	:	in		std_logic;
+	--ADC1_error	:	buffer	std_logic;
+	--ADC2_input	:	in		std_logic;
+	--ADC2_error	:	buffer	std_logic;
+	--ADC3_input	:	in		std_logic;
+	--ADC3_error	:	buffer	std_logic;
 
 	-- SD/MMC Interface (Support either SPI or nibble-mode)
-	mmc_dat1	: in	std_logic;
-	mmc_dat2	: in	std_logic;
-	mmc_n_cs	: out	std_logic;
-	mmc_clk	: out	std_logic;
-	mmc_mosi	: out	std_logic;
-	mmc_miso	: in	std_logic;
+	mmc_dat1	:	in	std_logic;
+	mmc_dat2	:	in	std_logic;
+	mmc_n_cs	:	out	std_logic;
+	mmc_clk	:	out	std_logic;
+	mmc_mosi	:	out	std_logic;
+	mmc_miso	:	in	std_logic;
 
 	usb_dp	:	inout std_logic_vector(1 downto 0);
 	usb_dn	:	inout std_logic_vector(1 downto 0);
@@ -136,21 +136,21 @@ architecture rtl of minimig_fleaohm_top is
 	signal pll_locked	:	std_logic;
 	signal auxpll_locked	:	std_logic;
 
-	signal clk_rtg_5x : std_logic;
-	signal clk_rtg : std_logic;
+	signal clk_rtg_5x	:	std_logic;
+	signal clk_rtg	:	std_logic;
 
-	signal rtg_enable : std_logic;
-	signal rtg_active : std_logic := '0';
-	signal rtg_rgb : std_logic_vector(23 downto 0);
+	signal rtg_enable	:	std_logic;
+	signal rtg_active	:	std_logic := '0';
+	signal rtg_rgb	:	std_logic_vector(23 downto 0);
 
-	signal hdmi_frame_start : std_logic;
-	signal hdmi_vblank_start : std_logic;
-	signal hdmi_rtg_pixel_request : std_logic;
-	signal hdmi_rtg_frame_request : std_logic;
-	signal hdmi_rtg_line_prepare : std_logic;
-	signal hdmi_osd_pixel_request : std_logic;
-	signal hdmi_osd_frame_request : std_logic;
-	signal hdmi_reset : std_logic;
+	signal hdmi_frame_start	:	std_logic;
+	signal hdmi_vblank_start	:	std_logic;
+	signal hdmi_rtg_pixel_request	:	std_logic;
+	signal hdmi_rtg_frame_request	:	std_logic;
+	signal hdmi_rtg_line_prepare	:	std_logic;
+	signal hdmi_osd_pixel_request	:	std_logic;
+	signal hdmi_osd_frame_request	:	std_logic;
+	signal hdmi_reset	:	std_logic;
 
 	signal VTEMP_DAC	:	std_logic_vector(4 downto 0);
 	signal audio_data	:	std_logic_vector(17 downto 0);
@@ -168,13 +168,13 @@ architecture rtl of minimig_fleaohm_top is
 
 	component DCSC
 	generic (
-		DCSMODE : string := "NEG"
+		DCSMODE	:	string := "NEG"
 	);
 	port (
-		CLK1, CLK0 : in std_logic;
-		SEL1, SEL0 : in std_logic;
-		MODESEL : in std_logic;
-		DCSOUT : out std_logic
+		CLK1, CLK0	:	in std_logic;
+		SEL1, SEL0	:	in std_logic;
+		MODESEL	:	in std_logic;
+		DCSOUT	:	out std_logic
 	);
 	end component;
 begin
@@ -202,7 +202,7 @@ usb_pull <= '0';
 -- SPI
 n_led1 <= NOT led_power;
 
-auxpll : entity work.ecp5pll
+auxpll	:	entity work.ecp5pll
 generic map (
 	in_hz => natural(base_frequency),
 	out0_hz => natural(330e6),
@@ -222,7 +222,7 @@ clk_rtg_5x <= auxclks(0);
 clk_rtg <= auxclks(1);
 clk_usb <= auxclks(2);
 
-virtual_top : COMPONENT minimig_virtual_top
+virtual_top : component minimig_virtual_top
 generic map (
 	hostonly => 0,
 	debug => 0,
@@ -352,81 +352,81 @@ PORT map
 genvideo: block
 	component hdmi
 	generic (
-		IT_CONTENT : std_logic := '1';
-		DVI_OUTPUT : std_logic := '0';
-		RTG_REQUEST_LEAD : integer := 3;
-		VIDEO_RATE : integer := 28571400;
-		RTG_VIDEO_RATE : integer := 66000000;
-		AUDIO_RATE : integer := 48000;
-		AUDIO_BIT_WIDTH : integer := 16;
-		VENDOR_NAME : std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
-		PRODUCT_DESCRIPTION : std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "A" + padding
-		SOURCE_DEVICE_INFORMATION : std_logic_vector(7 downto 0) := x"09"
+		IT_CONTENT	:	std_logic := '1';
+		DVI_OUTPUT	:	std_logic := '0';
+		RTG_REQUEST_LEAD	:	integer := 3;
+		VIDEO_RATE	:	integer := 28571400;
+		RTG_VIDEO_RATE	:	integer := 66000000;
+		AUDIO_RATE	:	integer := 48000;
+		AUDIO_BIT_WIDTH	:	integer := 16;
+		VENDOR_NAME	:	std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
+		PRODUCT_DESCRIPTION	:	std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "A" + padding
+		SOURCE_DEVICE_INFORMATION	:	std_logic_vector(7 downto 0) := x"09"
 	);
 	port (
-		clk_pixel_x5 : in  std_logic;
-		clk_pixel    : in  std_logic;
-		reset        : in  std_logic;
+		clk_pixel_x5	:	in  std_logic;
+		clk_pixel	:	in  std_logic;
+		reset	:	in  std_logic;
 
-		rtg_en : in std_logic;
+		rtg_en	:	in std_logic;
 
-		rtg_pixel_request : out std_logic;
-		rtg_frame_request : out std_logic;
-		rtg_line_prepare : out std_logic;
+		rtg_pixel_request	:	out std_logic;
+		rtg_frame_request	:	out std_logic;
+		rtg_line_prepare	:	out std_logic;
 
-		osd_pixel_request : out std_logic;
-		osd_frame_request : out std_logic;
+		osd_pixel_request	:	out std_logic;
+		osd_frame_request	:	out std_logic;
 
-		frame_start_toggle : out std_logic;
-		vblank_start_toggle : out std_logic;
+		frame_start_toggle	:	out std_logic;
+		vblank_start_toggle	:	out std_logic;
 
-		pal_mode    : in  std_logic;
-		long_frame  : in  std_logic;
-		interlace   : in  std_logic;
-		screen_mode : in  std_logic_vector(1 downto 0);
+		pal_mode	:	in  std_logic;
+		long_frame	:	in  std_logic;
+		interlace	:	in  std_logic;
+		screen_mode	:	in  std_logic_vector(1 downto 0);
 
-		vsync_in : in  std_logic;
-		hsync_in : in  std_logic;
+		vsync_in	:	in  std_logic;
+		hsync_in	:	in  std_logic;
 
-		offset_x : in  unsigned(7 downto 0);
-		offset_y : in  unsigned(6 downto 0);
+		offset_x	:	in  unsigned(7 downto 0);
+		offset_y	:	in  unsigned(6 downto 0);
 
-		rgb : in  std_logic_vector(23 downto 0);
+		rgb	:	in  std_logic_vector(23 downto 0);
 
-		audio_sample_word_0 : in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
-		audio_sample_word_1 : in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
-		audio_sample_en     : out std_logic;
+		audio_sample_word_0	:	in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
+		audio_sample_word_1	:	in  std_logic_vector(AUDIO_BIT_WIDTH-1 downto 0);
+		audio_sample_en	:	out std_logic;
 
-		tmds       : out std_logic_vector(2 downto 0);
-		tmds_clock : out std_logic
+		tmds	:	out std_logic_vector(2 downto 0);
+		tmds_clock	:	out std_logic
 	);
 	end component;
 
 	component audio_cdc
 	port (
-		clk : in std_logic;
-		clk_pixel : in std_logic;
-		audio_l : in std_logic_vector(15 downto 0);
-		audio_r : in std_logic_vector(15 downto 0);
-		sample_en : in std_logic;
-		sample : out std_logic_vector(31 downto 0)
+		clk	:	in std_logic;
+		clk_pixel	:	in std_logic;
+		audio_l	:	in std_logic_vector(15 downto 0);
+		audio_r	:	in std_logic_vector(15 downto 0);
+		sample_en	:	in std_logic;
+		sample	:	out std_logic_vector(31 downto 0)
 	);
 	end component;
-	signal hdmi_audio_sample : std_logic_vector(31 downto 0);
-	signal hdmi_audio_sample_en : std_logic;
+	signal hdmi_audio_sample	:	std_logic_vector(31 downto 0);
+	signal hdmi_audio_sample_en	:	std_logic;
 
 
-	signal tmds_clock : std_logic;
-	signal tmds : std_logic_vector(2 downto 0);
-	signal rgb : std_logic_vector(23 downto 0);
+	signal tmds_clock	:	std_logic;
+	signal tmds	:	std_logic_vector(2 downto 0);
+	signal rgb	:	std_logic_vector(23 downto 0);
 
-	signal offset_x : unsigned(7 downto 0);
-	signal offset_y : unsigned(6 downto 0);
+	signal offset_x	:	unsigned(7 downto 0);
+	signal offset_y	:	unsigned(6 downto 0);
 
-	signal hsync_in : std_logic := '0';
-	signal vsync_in : std_logic := '0';
+	signal hsync_in	:	std_logic := '0';
+	signal vsync_in	:	std_logic := '0';
 
-	signal clksel_n : std_logic;
+	signal clksel_n	:	std_logic;
 
 	component video_clock_control
 	port (
@@ -546,28 +546,28 @@ begin
 	lvds_dp <= tmds_clock & tmds;
 end block;
 
-genaudio : block
-	signal DAC_L : std_logic;
-	signal DAC_R : std_logic;
+genaudio	:	block
+	signal DAC_L	:	std_logic;
+	signal DAC_R	:	std_logic;
 
-	COMPONENT hybrid_pwm_sd
+	component hybrid_pwm_sd
 		PORT
 		(
-			clk		:	 in std_logic;
-			terminate		:	in std_logic:='0';
-			d_l		:	 in std_logic_vector(15 downto 0);
-			q_l		:	 out std_logic;
-			d_r		:	 in std_logic_vector(15 downto 0);
-			q_r		:	 out std_logic
+			clk	:	 in std_logic;
+			terminate	:	in std_logic:='0';
+			d_l	:	 in std_logic_vector(15 downto 0);
+			q_l	:	 out std_logic;
+			d_r	:	 in std_logic_vector(15 downto 0);
+			q_r	:	 out std_logic
 		);
-	END COMPONENT;
+	END component;
 
 begin
 	-- Audio output mapped to GPIO header
 	GPIO_13 <= DAC_R;
 	GPIO_19 <= DAC_L;
 
-	audiosd : COMPONENT hybrid_pwm_sd
+	audiosd : component hybrid_pwm_sd
 	PORT map
 	(
 		clk => clk_sys,
