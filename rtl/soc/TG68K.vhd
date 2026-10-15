@@ -549,7 +549,7 @@ begin
 			(ena7RDreg='1' and clkena_e='1') or
 			(ena7WRreg='1' and clkena_f='1') or
 			(clkena_in='1' and fast_rd='1' and slower(0)='0') or
-			(cpu_internal='1' and slower(0)='0') or
+			(cpu_internal='1' and slower(1)='0') or
 			(sel_undecoded_d='1' and slower(0)='0') or
 			akiko_ack='1' or
 			rtg_reg_ack_d='1' or
