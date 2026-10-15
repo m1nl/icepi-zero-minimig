@@ -6,6 +6,7 @@ in temporary directories unless an existing Makefile specifies otherwise.
 
 | Directory | Contents |
 | --- | --- |
+| [`input/`](input/README.md) | Firmware event timing, mouse counters, keyboard/OSD delivery and serial key transmission |
 | `rtg_hdmi/` | RTG pixels/repetition, DMA addresses/contention, MMIO, IRQ, FIFO reset, HDMI timing, serializer, clock switching, audio and OSD tests |
 | [`ide/`](ide/README.md) | IDE/FIFO packet phases, abort/reset recovery and ATA read/write tests |
 | `rtg_area/` | Isolated ECP5 resource assessments, equivalence checks and optimization patches |
@@ -24,6 +25,7 @@ Firmware regression tests for ATAPI, HDD, FAT and SD access live in
 Run from the repository root (the Python runners also work from other directories):
 
 ```sh
+make -C bench/input test
 make -C bench/ide test
 python3 bench/rtg_hdmi/run.py
 python3 bench/rtg_hdmi/run.py repeat priority

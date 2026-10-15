@@ -541,6 +541,7 @@ reg  [ 7:0] ycount0, ycount1;
 reg  [ 7:0] zcount0, zcount1;
 reg         wheel_next; // next byte will be the wheel data
 // mouse counters
+// The virtual top holds the strobe until clk7_en; consume it only once.
 always @(posedge clk) begin
 	if(reset) begin
 		xcount0 <= #1 8'd0;
@@ -552,7 +553,7 @@ always @(posedge clk) begin
 	end else if (test_load && clk7_en) begin
 		ycount0[7:2] <= #1 test_data[15:10];
 		xcount0[7:2] <= #1 test_data[7:2];
-	end else if (kbd_mouse_strobe) begin
+	end else if (kbd_mouse_strobe && clk7_en) begin
 		if(kbd_mouse_type == 2'b00) begin
 			wheel_next <= 0;
 			if (!mouse_idx)
