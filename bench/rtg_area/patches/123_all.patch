@@ -1,0 +1,147 @@
+--- a/rtl/rtg/rtg_video.v
++++ b/rtl/rtg/rtg_video.v
+@@ -145,7 +145,8 @@
+     reg [9:0] frame_split;
+     reg frame_indexed, frame_565;
+     reg [25:0] base_top, base_bottom;
+-    reg [19:0] top_words, bottom_words, issued_top, issued_bottom;
++    localparam COUNT_BITS = $clog2(H_ACTIVE * V_ACTIVE / 8 + 1);
++    reg [COUNT_BITS-1:0] top_words, bottom_words, issued_top, issued_bottom;
+     reg frame_ready;
+     reg fifo_reset = 1;
+     reg owner;
+@@ -159,18 +160,20 @@
+     wire full_top, full_bottom, empty_top, empty_bottom;
+     wire reset_top_w, reset_top_r, reset_bottom_w, reset_bottom_r;
+     wire [15:0] data_top, data_bottom;
+-    wire [19:0] issued = owner ? issued_bottom : issued_top;
+-    wire [19:0] top_prefill = top_words < 256 ? top_words : 20'd256;
+-    wire [19:0] bottom_prefill = bottom_words < 256 ? bottom_words : 20'd256;
+-    wire [19:0] limit_words = state == PREFILL_BOTTOM ? bottom_prefill : owner ? bottom_words : top_words;
+-    wire [19:0] remaining = limit_words > issued ? limit_words-issued : 20'd0;
++    // Transfer counters/limits below count eight-word SDRAM bursts.
++    wire [COUNT_BITS-1:0] issued = owner ? issued_bottom : issued_top;
++    wire [COUNT_BITS-1:0] top_prefill = H_ACTIVE >= 512 ? 32 : (top_words < 32 ? top_words : 32);
++    wire [COUNT_BITS-1:0] bottom_prefill = H_ACTIVE >= 512 ? 32 : (bottom_words < 32 ? bottom_words : 32);
++    wire [COUNT_BITS-1:0] limit_words = state == PREFILL_BOTTOM ? bottom_prefill : owner ? bottom_words : top_words;
++    wire [COUNT_BITS-1:0] remaining = limit_words - issued;
++    wire more_words = issued < limit_words;
+     wire [9:0] used = owner ? used_bottom : used_top;
+     wire fetching = state == PREFILL_BOTTOM || state == RUN_TOP || state == RUN_BOTTOM;
+     assign fetch_req = ena_sys[1] && !reset_sys[1] && fetching && !fifo_reset &&
+-                       remaining >= 8 && used < 480;
++                       more_words && (H_ACTIVE % 16 == 0 || remaining >= 1) && used < 480;
+     // Drop priority before the final bursts so SDRAM does not extend past the section.
+-    assign fetch_pri = fetch_req && used < 256 && remaining > 32;
+-    wire [25:0] fetch_raw = (owner ? base_bottom : base_top) + {5'd0,issued,1'b0};
++    assign fetch_pri = fetch_req && used < 256 && remaining > 4;
++    wire [25:0] fetch_raw = (owner ? base_bottom : base_top) + {{(26-COUNT_BITS-4){1'b0}},issued,4'd0};
+     assign fetch_addr = {fetch_raw[25:24],fetch_raw[23]^(fetch_raw[22]|fetch_raw[21]),fetch_raw[22:0]};
+     wire keep_fill = !fifo_reset && state != OFF && state != DRAIN &&
+                      ena_sys[1] && !reset_sys[1];
+@@ -192,13 +195,13 @@
+                 if (state == DRAIN && prepare_count < PREPARE_DELAY)
+                     prepare_count <= prepare_count + 1'b1;
+                 if (fetch_ack && !fifo_reset) begin
+-                    if (owner) issued_bottom <= issued_bottom + 8;
+-                    else issued_top <= issued_top + 8;
++                    if (owner) issued_bottom <= issued_bottom + 1'b1;
++                    else issued_top <= issued_top + 1'b1;
+                 end
+                 if (fetch_ack || fetch_fill) quiet <= 0;
+                 else if (quiet != 32) quiet <= quiet + 1'b1;
+                 if (!frame_ready && (state == RUN_TOP || state == DRAIN_TOP || state == RUN_BOTTOM) &&
+-                    {10'd0,used_top} >= top_prefill && (bottom_words == 0 || {10'd0,used_bottom} >= bottom_prefill)) frame_ready <= 1;
++                    used_top >= {top_prefill,3'd0} && (bottom_words == 0 || used_bottom >= {bottom_prefill,3'd0})) frame_ready <= 1;
+                 case (state)
+                     OFF: begin state <= DRAIN; quiet <= 0; prepare_count <= 0; end
+                     DRAIN: if (prepare_count >= PREPARE_DELAY && quiet == 32 && !fetch_ack && !fetch_fill) begin
+@@ -212,11 +215,11 @@
+                             issued_top <= 0; issued_bottom <= 0;
+                             if (split_row != 11'h7ff && split_row > 0 && split_row < V_ACTIVE) begin
+                                 frame_split <= split_row[9:0];
+-                                top_words <= rtg_clut ? (split_row * H_ACTIVE)/2 : split_row * H_ACTIVE;
+-                                bottom_words <= rtg_clut ? ((V_ACTIVE-split_row)*H_ACTIVE)/2 : (V_ACTIVE-split_row)*H_ACTIVE;
++                                top_words <= rtg_clut ? (split_row * H_ACTIVE)/16 : (split_row * H_ACTIVE)/8;
++                                bottom_words <= rtg_clut ? ((V_ACTIVE-split_row)*H_ACTIVE)/16 : ((V_ACTIVE-split_row)*H_ACTIVE)/8;
+                             end else begin
+                                 frame_split <= V_ACTIVE;
+-                                top_words <= rtg_clut ? (V_ACTIVE*H_ACTIVE)/2 : V_ACTIVE*H_ACTIVE;
++                                top_words <= rtg_clut ? (V_ACTIVE*H_ACTIVE)/16 : (V_ACTIVE*H_ACTIVE)/8;
+                                 bottom_words <= 0;
+                             end
+                         end
+@@ -269,16 +272,30 @@
+     wire pop_top = valid_req && need_word && !selected_bottom;
+     wire pop_bottom = valid_req && need_word && selected_bottom;
+ 
+-    rtg_async_fifo top_fifo (
++    // One physical EBR, two independently managed 512-word FIFO banks.
++    wire [8:0] top_wr_addr, bottom_wr_addr, top_rd_addr, bottom_rd_addr;
++    wire write_top, write_bottom, read_top, read_bottom;
++    reg [15:0] shared_ram [0:1023] /* synthesis syn_ramstyle="block_ram" */;
++    reg [15:0] shared_rd_data;
++    assign data_top = shared_rd_data;
++    assign data_bottom = shared_rd_data;
++    always @(posedge clk_114)
++        if (write_top || write_bottom)
++            shared_ram[{owner, owner ? bottom_wr_addr : top_wr_addr}] <= fetch_d;
++    always @(posedge clk_rtg)
++        if (read_top || read_bottom)
++            shared_rd_data <= shared_ram[{selected_bottom, selected_bottom ? bottom_rd_addr : top_rd_addr}];
++
++    rtg_fifo_control top_fifo (
+         .wr_clk(clk_114),.rd_clk(clk_rtg),.reset(fifo_reset | !reset_n),
+-        .wr_en(keep_fill && !owner && fetch_fill),.wr_data(fetch_d),
+-        .rd_en(pop_top),.rd_data(data_top),.full(full_top),.empty(empty_top),.wr_used(used_top),
++        .wr_en(keep_fill && !owner && fetch_fill),
++        .rd_en(pop_top),.wr_addr(top_wr_addr),.rd_addr(top_rd_addr),.wr_accept(write_top),.rd_accept(read_top),.full(full_top),.empty(empty_top),.wr_used(used_top),
+         .wr_reset_busy(reset_top_w),.rd_reset_busy(reset_top_r)
+     );
+-    rtg_async_fifo bottom_fifo (
++    rtg_fifo_control bottom_fifo (
+         .wr_clk(clk_114),.rd_clk(clk_rtg),.reset(fifo_reset | !reset_n),
+-        .wr_en(keep_fill && owner && fetch_fill),.wr_data(fetch_d),
+-        .rd_en(pop_bottom),.rd_data(data_bottom),.full(full_bottom),.empty(empty_bottom),.wr_used(used_bottom),
++        .wr_en(keep_fill && owner && fetch_fill),
++        .rd_en(pop_bottom),.wr_addr(bottom_wr_addr),.rd_addr(bottom_rd_addr),.wr_accept(write_bottom),.rd_accept(read_bottom),.full(full_bottom),.empty(empty_bottom),.wr_used(used_bottom),
+         .wr_reset_busy(reset_bottom_w),.rd_reset_busy(reset_bottom_r)
+     );
+     reg valid_1, valid_2, valid_3, bottom_1, low_byte_1, indexed_1, indexed_2, rgb565_1;
+--- a/rtl/rtg/rtg_async_fifo.v
++++ b/rtl/rtg/rtg_async_fifo.v
+@@ -1,16 +1,17 @@
+ // Dual-clock video FIFO. RAM contents are never reset, allowing ECP5 EBR inference.
+-module rtg_async_fifo #(
++module rtg_fifo_control #(
+     parameter ADDR_BITS = 9,
+     parameter DATA_BITS = 16
+ ) (
+     input wr_clk, input rd_clk, input reset,
+-    input wr_en, input [DATA_BITS-1:0] wr_data,
+-    input rd_en, output reg [DATA_BITS-1:0] rd_data,
++    input wr_en,
++    input rd_en,
++    output [ADDR_BITS-1:0] wr_addr, rd_addr,
++    output wr_accept, rd_accept,
+     output full, output empty,
+     output [ADDR_BITS:0] wr_used,
+     output wr_reset_busy, output rd_reset_busy
+ );
+-    reg [DATA_BITS-1:0] ram [0:(1<<ADDR_BITS)-1] /* synthesis syn_ramstyle="block_ram" */;
+     reg [1:0] wr_rst = 2'b11, rd_rst = 2'b11;
+     always @(posedge wr_clk or posedge reset)
+         if (reset) wr_rst <= 2'b11; else wr_rst <= {wr_rst[0],1'b0};
+@@ -57,8 +58,8 @@
+             if (rd_en && !empty) begin rd_bin <= rd_next; rd_gray <= (rd_next>>1)^rd_next; end
+         end
+     end
+-    always @(posedge wr_clk)
+-        if (!wr_reset_busy && wr_en && !full) ram[wr_bin[ADDR_BITS-1:0]] <= wr_data;
+-    always @(posedge rd_clk)
+-        if (!rd_reset_busy && rd_en && !empty) rd_data <= ram[rd_bin[ADDR_BITS-1:0]];
++    assign wr_addr = wr_bin[ADDR_BITS-1:0];
++    assign rd_addr = rd_bin[ADDR_BITS-1:0];
++    assign wr_accept = !wr_reset_busy && wr_en && !full;
++    assign rd_accept = !rd_reset_busy && rd_en && !empty;
+ endmodule

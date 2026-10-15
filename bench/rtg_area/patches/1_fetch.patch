@@ -1,0 +1,17 @@
+--- a/rtl/rtg/rtg_video.v
++++ b/rtl/rtg/rtg_video.v
+@@ -163,11 +163,12 @@
+     wire [19:0] top_prefill = top_words < 256 ? top_words : 20'd256;
+     wire [19:0] bottom_prefill = bottom_words < 256 ? bottom_words : 20'd256;
+     wire [19:0] limit_words = state == PREFILL_BOTTOM ? bottom_prefill : owner ? bottom_words : top_words;
+-    wire [19:0] remaining = limit_words > issued ? limit_words-issued : 20'd0;
++    wire [19:0] remaining = limit_words - issued;
++    wire more_words = issued < limit_words;
+     wire [9:0] used = owner ? used_bottom : used_top;
+     wire fetching = state == PREFILL_BOTTOM || state == RUN_TOP || state == RUN_BOTTOM;
+     assign fetch_req = ena_sys[1] && !reset_sys[1] && fetching && !fifo_reset &&
+-                       remaining >= 8 && used < 480;
++                       more_words && (H_ACTIVE % 16 == 0 || remaining >= 8) && used < 480;
+     // Drop priority before the final bursts so SDRAM does not extend past the section.
+     assign fetch_pri = fetch_req && used < 256 && remaining > 32;
+     wire [25:0] fetch_raw = (owner ? base_bottom : base_top) + {5'd0,issued,1'b0};

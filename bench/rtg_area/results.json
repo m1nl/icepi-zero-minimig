@@ -1,0 +1,121 @@
+{
+  "1_fetch": {
+    "LUT4": 638,
+    "CCU2C": 141,
+    "FF": 528,
+    "EBR": 3,
+    "PFUMX": 31,
+    "L6MUX21": 10,
+    "all_cells": {
+      "TRELLIS_FF": 528,
+      "LUT4": 638,
+      "CCU2C": 141,
+      "PFUMX": 31,
+      "$scopeinfo": 2,
+      "DP16KD": 3,
+      "L6MUX21": 10
+    }
+  },
+  "baseline": {
+    "LUT4": 644,
+    "CCU2C": 149,
+    "FF": 528,
+    "EBR": 3,
+    "PFUMX": 30,
+    "L6MUX21": 8,
+    "all_cells": {
+      "TRELLIS_FF": 528,
+      "LUT4": 644,
+      "$scopeinfo": 2,
+      "DP16KD": 3,
+      "CCU2C": 149,
+      "PFUMX": 30,
+      "L6MUX21": 8
+    }
+  },
+  "2_bursts": {
+    "LUT4": 651,
+    "CCU2C": 111,
+    "FF": 527,
+    "EBR": 3,
+    "PFUMX": 34,
+    "L6MUX21": 13,
+    "all_cells": {
+      "TRELLIS_FF": 527,
+      "LUT4": 651,
+      "CCU2C": 111,
+      "$scopeinfo": 2,
+      "DP16KD": 3,
+      "PFUMX": 34,
+      "L6MUX21": 13
+    }
+  },
+  "3_shared_ram": {
+    "LUT4": 649,
+    "CCU2C": 149,
+    "FF": 527,
+    "EBR": 2,
+    "PFUMX": 31,
+    "L6MUX21": 10,
+    "all_cells": {
+      "TRELLIS_FF": 527,
+      "LUT4": 649,
+      "PFUMX": 31,
+      "$scopeinfo": 2,
+      "DP16KD": 2,
+      "CCU2C": 149,
+      "L6MUX21": 10
+    }
+  },
+  "12_fetch_bursts": {
+    "LUT4": 656,
+    "CCU2C": 111,
+    "FF": 527,
+    "EBR": 3,
+    "PFUMX": 38,
+    "L6MUX21": 11,
+    "all_cells": {
+      "TRELLIS_FF": 527,
+      "LUT4": 656,
+      "PFUMX": 38,
+      "$scopeinfo": 2,
+      "DP16KD": 3,
+      "CCU2C": 111,
+      "L6MUX21": 11
+    }
+  },
+  "123_all": {
+    "LUT4": 652,
+    "CCU2C": 111,
+    "FF": 526,
+    "EBR": 2,
+    "PFUMX": 42,
+    "L6MUX21": 14,
+    "all_cells": {
+      "TRELLIS_FF": 526,
+      "LUT4": 652,
+      "$scopeinfo": 2,
+      "DP16KD": 2,
+      "CCU2C": 111,
+      "PFUMX": 42,
+      "L6MUX21": 14
+    }
+  },
+  "23_bursts_shared": {
+    "LUT4": 647,
+    "CCU2C": 110,
+    "FF": 526,
+    "EBR": 2,
+    "PFUMX": 37,
+    "L6MUX21": 10,
+    "all_cells": {
+      "TRELLIS_FF": 526,
+      "LUT4": 647,
+      "CCU2C": 110,
+      "PFUMX": 37,
+      "$scopeinfo": 2,
+      "DP16KD": 2,
+      "L6MUX21": 10
+    }
+  }
+}

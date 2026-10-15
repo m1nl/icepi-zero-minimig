@@ -1,0 +1,76 @@
+--- a/rtl/rtg/rtg_video.v
++++ b/rtl/rtg/rtg_video.v
+@@ -269,16 +269,30 @@
+     wire pop_top = valid_req && need_word && !selected_bottom;
+     wire pop_bottom = valid_req && need_word && selected_bottom;
+ 
+-    rtg_async_fifo top_fifo (
++    // One physical EBR, two independently managed 512-word FIFO banks.
++    wire [8:0] top_wr_addr, bottom_wr_addr, top_rd_addr, bottom_rd_addr;
++    wire write_top, write_bottom, read_top, read_bottom;
++    reg [15:0] shared_ram [0:1023] /* synthesis syn_ramstyle="block_ram" */;
++    reg [15:0] shared_rd_data;
++    assign data_top = shared_rd_data;
++    assign data_bottom = shared_rd_data;
++    always @(posedge clk_114)
++        if (write_top || write_bottom)
++            shared_ram[{owner, owner ? bottom_wr_addr : top_wr_addr}] <= fetch_d;
++    always @(posedge clk_rtg)
++        if (read_top || read_bottom)
++            shared_rd_data <= shared_ram[{selected_bottom, selected_bottom ? bottom_rd_addr : top_rd_addr}];
++
++    rtg_fifo_control top_fifo (
+         .wr_clk(clk_114),.rd_clk(clk_rtg),.reset(fifo_reset | !reset_n),
+-        .wr_en(keep_fill && !owner && fetch_fill),.wr_data(fetch_d),
+-        .rd_en(pop_top),.rd_data(data_top),.full(full_top),.empty(empty_top),.wr_used(used_top),
++        .wr_en(keep_fill && !owner && fetch_fill),
++        .rd_en(pop_top),.wr_addr(top_wr_addr),.rd_addr(top_rd_addr),.wr_accept(write_top),.rd_accept(read_top),.full(full_top),.empty(empty_top),.wr_used(used_top),
+         .wr_reset_busy(reset_top_w),.rd_reset_busy(reset_top_r)
+     );
+-    rtg_async_fifo bottom_fifo (
++    rtg_fifo_control bottom_fifo (
+         .wr_clk(clk_114),.rd_clk(clk_rtg),.reset(fifo_reset | !reset_n),
+-        .wr_en(keep_fill && owner && fetch_fill),.wr_data(fetch_d),
+-        .rd_en(pop_bottom),.rd_data(data_bottom),.full(full_bottom),.empty(empty_bottom),.wr_used(used_bottom),
++        .wr_en(keep_fill && owner && fetch_fill),
++        .rd_en(pop_bottom),.wr_addr(bottom_wr_addr),.rd_addr(bottom_rd_addr),.wr_accept(write_bottom),.rd_accept(read_bottom),.full(full_bottom),.empty(empty_bottom),.wr_used(used_bottom),
+         .wr_reset_busy(reset_bottom_w),.rd_reset_busy(reset_bottom_r)
+     );
+     reg valid_1, valid_2, valid_3, bottom_1, low_byte_1, indexed_1, indexed_2, rgb565_1;
+--- a/rtl/rtg/rtg_async_fifo.v
++++ b/rtl/rtg/rtg_async_fifo.v
+@@ -1,16 +1,17 @@
+ // Dual-clock video FIFO. RAM contents are never reset, allowing ECP5 EBR inference.
+-module rtg_async_fifo #(
++module rtg_fifo_control #(
+     parameter ADDR_BITS = 9,
+     parameter DATA_BITS = 16
+ ) (
+     input wr_clk, input rd_clk, input reset,
+-    input wr_en, input [DATA_BITS-1:0] wr_data,
+-    input rd_en, output reg [DATA_BITS-1:0] rd_data,
++    input wr_en,
++    input rd_en,
++    output [ADDR_BITS-1:0] wr_addr, rd_addr,
++    output wr_accept, rd_accept,
+     output full, output empty,
+     output [ADDR_BITS:0] wr_used,
+     output wr_reset_busy, output rd_reset_busy
+ );
+-    reg [DATA_BITS-1:0] ram [0:(1<<ADDR_BITS)-1] /* synthesis syn_ramstyle="block_ram" */;
+     reg [1:0] wr_rst = 2'b11, rd_rst = 2'b11;
+     always @(posedge wr_clk or posedge reset)
+         if (reset) wr_rst <= 2'b11; else wr_rst <= {wr_rst[0],1'b0};
+@@ -57,8 +58,8 @@
+             if (rd_en && !empty) begin rd_bin <= rd_next; rd_gray <= (rd_next>>1)^rd_next; end
+         end
+     end
+-    always @(posedge wr_clk)
+-        if (!wr_reset_busy && wr_en && !full) ram[wr_bin[ADDR_BITS-1:0]] <= wr_data;
+-    always @(posedge rd_clk)
+-        if (!rd_reset_busy && rd_en && !empty) rd_data <= ram[rd_bin[ADDR_BITS-1:0]];
++    assign wr_addr = wr_bin[ADDR_BITS-1:0];
++    assign rd_addr = rd_bin[ADDR_BITS-1:0];
++    assign wr_accept = !wr_reset_busy && wr_en && !full;
++    assign rd_accept = !rd_reset_busy && rd_en && !empty;
+ endmodule

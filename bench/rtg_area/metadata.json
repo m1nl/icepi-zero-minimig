@@ -1,0 +1,17 @@
+{
+  "yosys": "Yosys 0.69 (git sha1 9f75ca1f9-dirty, GNU /bin/c++ 15.2.0)",
+  "git_head": "58d2d6abe4af23aa1f9a589e636f5f99a46e75e6",
+  "top": "rtg_video",
+  "parameters": {
+    "H_ACTIVE": 1024,
+    "V_ACTIVE": 768,
+    "H_TOTAL": 1344,
+    "V_TOTAL": 806,
+    "PREPARE_DELAY": 4096
+  },
+  "source_sha256": {
+    "rtl/rtg/rtg_video.v": "b96382b10a6579872d4f16648b18daebf3fdb9aca291f139fe7aeabf52a46513",
+    "rtl/rtg/rtg_async_fifo.v": "252b3e512d65e07f7fe51036d65bc2cdcc4a5713fc9a659d3365f6c9086bfd47"
+  },
+  "synthesis": "synth_ecp5 -top rtg_video (default options)"
+}

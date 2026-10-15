@@ -1,0 +1,24 @@
+    machine 68020
+    org 0
+    dc.l $2000,$100
+    dcb.b $100-*,0
+start:
+    move.w $b8010e,d0
+    cmp.w #$8321,d0
+    bne fail
+    move.w $b8010c,d0
+    tst.w d0
+    bne fail
+    move.l #$00123450,$b80100
+    move.l #$00567890,$b80108
+    move.l #$00123456,$b80400
+    move.l #$00654321,$b80404
+    move.w $b8010e,d0
+    cmp.w #$8321,d0
+    bne fail
+    move.w #$600d,$1000
+loop:
+    bra loop
+fail:
+    move.w #$dead,$1000
+    bra fail
