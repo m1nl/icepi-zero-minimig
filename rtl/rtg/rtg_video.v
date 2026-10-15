@@ -663,8 +663,13 @@ wire word_empty = selected_bottom ? empty_bottom : empty_top;
 wire valid_req = display_req && in_source_window &&
                  (!source_request || !need_word || !word_empty);
 
-wire pop_top    = source_request && valid_req && need_word && !selected_bottom;
-wire pop_bottom = source_request && valid_req && need_word &&  selected_bottom;
+// With source_request && need_word, valid_req reduces to !word_empty.
+// Check each bank directly to avoid the selected-empty mux on FIFO enables.
+wire pop_top = source_request && need_word &&
+               !selected_bottom && !empty_top;
+
+wire pop_bottom = source_request && need_word &&
+                  selected_bottom && !empty_bottom;
 
 // A reset of either interface clears both FIFO pointers. The FIFO
 // synchronizes release independently in its write and read domains.
@@ -793,7 +798,9 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
             horizontal_phase <= horizontal_phase + 1'b1;
         end
 
-        if (source_request && valid_req)
+        // Track source-pixel parity independently of FIFO availability.
+        // Blanking resets parity; underflow blanks the rest of the frame.
+        if (in_source_window && horizontal_phase == 0)
           byte_phase <= ~byte_phase;
       end
       if (start_display) begin
