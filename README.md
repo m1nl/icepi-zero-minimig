@@ -53,6 +53,10 @@ The build produces these files in `amiga_sw/rtg/`:
 
 Serial debug logging is disabled by default. Build with `make -C amiga_sw/rtg DEBUG=1` to enable it, or `DEBUG=0` to disable it again. Changing this option rebuilds the driver and ADF without requiring `make clean`.
 
+Run the driver callbacks on the simulated TG68K/RTG core with
+`make -C amiga_sw/rtg test`. Both raster profiles are checked; see
+[driver test coverage and requirements](amiga_sw/rtg/tests/README.md).
+
 ### Installing the RTG driver
 
 1. Install Picasso96 on the Amiga. The driver works with P96 2.0. If the installer requires a board choice, select PicassoIV to obtain a monitor executable.
