@@ -196,8 +196,9 @@ module serializer
 
         logic phase_locked  = 1'b0;
         logic [2:0] bit_cnt = 3'd0;
+        logic periodic_load = 1'b0;
 
-        wire load_word = phase_locked ? (bit_cnt == 3'd4) : pixel_event;
+        wire load_word = phase_locked ? periodic_load : pixel_event;
 
         // Capture about 2-3 fast ticks after the pixel edge.
         // Once acquired, keep exactly five ticks per word.
@@ -205,11 +206,18 @@ module serializer
             if (reset_x5) begin
                 phase_locked <= 1'b0;
                 bit_cnt <= 3'd0;
-            end else if (load_word) begin
-                phase_locked <= 1'b1;
-                bit_cnt <= 3'd0;
-            end else if (phase_locked)
-                bit_cnt <= bit_cnt + 3'd1;
+                periodic_load <= 1'b0;
+            end else begin
+                // Decode one tick early so the shift-register load path
+                // starts at a flip-flop, preserving the count-4 load edge.
+                periodic_load <= phase_locked && (bit_cnt == 3'd3);
+
+                if (load_word) begin
+                    phase_locked <= 1'b1;
+                    bit_cnt <= 3'd0;
+                end else if (phase_locked)
+                    bit_cnt <= bit_cnt + 3'd1;
+            end
         end
 
         // ----------------------------------------------------
