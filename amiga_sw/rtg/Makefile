@@ -20,6 +20,7 @@ else ifneq ($(RTG_720P),0)
 $(error RTG_720P must be 0 or 1)
 endif
 RASTER_CONFIG := .deps/driver-raster.cfg
+TEST_PROFILE ?= all
 
 TARGET := minimig.card
 SOURCE := minimig.card.asm
@@ -31,9 +32,15 @@ INCLUDES := $(P96_PRIVATE)/boardinfo.i $(P96_PRIVATE)/settings.i \
             $(P96_PUBLIC)/libraries/Picasso96.i \
             $(wildcard $(INC_ASM)/*/*.i) $(LVO_FILES)
 
-.PHONY: all adf deps clean FORCE
+.PHONY: all adf deps clean test FORCE
 all: $(TARGET) $(DIAGNOSTIC) $(ADF)
 adf: $(ADF)
+
+test: $(INCLUDES)
+	python3 tests/run.py --profile "$(TEST_PROFILE)" --vasm "$(AS)" \
+		--inc-asm "$(INC_ASM)" --p96-private "$(P96_PRIVATE)" \
+		--p96-public "$(P96_PUBLIC)" \
+		$(if $(CPU_NETLIST),--cpu-netlist "$(CPU_NETLIST)",)
 
 $(TARGET): $(SOURCE) Makefile $(INCLUDES) $(DEBUG_CONFIG) $(RASTER_CONFIG)
 	$(AS) $(SOURCE) -o $@ -L $(LISTFILE) $(VASM_FLAGS) $(DEBUG_FLAGS) $(RASTER_FLAGS) \

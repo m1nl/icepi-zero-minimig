@@ -73,6 +73,49 @@ Run make adf to generate just the image (building the driver if needed), or
 make minimig.card to build only the driver. Override XDFTOOL to select a
 different xdftool executable.
 
+Driver tests on the simulated core
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    make -C amiga_sw/rtg test
+
+This downloads missing headers using the normal dependency rules, then runs
+MMIO tests and both driver profiles (1024x768 and 1280x720). The test target
+does not rebuild or replace minimig.card or the ADF. Select one profile with:
+
+    make -C amiga_sw/rtg test TEST_PROFILE=1280x720
+
+Requirements: installed vasm, Python 3, GHDL with Verilog synthesis output,
+and Icarus Verilog (iverilog/vvp). Driver build include-path/VBCC overrides
+also apply to tests. No FPGA build, Amiga ROM, AmigaOS or P96 runtime is needed.
+
+The test source is in tests/. It translates the current TG68K VHDL wrapper
+and kernel to Verilog once per suite, then runs actual driver callback code
+as a 68020 test ROM against the current RTG and Akiko Verilog modules. ROM
+and RAM responders are behavioral. The shared hardware/MMIO bench and its
+assembly test ROM are in ../../bench/rtg_hdmi/.
+
+Each driver profile checks 26 exact, fallback, zero and oversized mode cases
+in CLUT, RGB565 and RGB555, plus split limits for all vertical repeat factors.
+Checks include repeat selection, pixel clocks, blanking/sync values, display
+switching, aligned stride, native fallback and split-register writes. MMIO
+checks include ID reads, address decode, longword base/palette writes and
+register readback through the actual CPU bus handshake.
+
+This tests callback routines extracted from minimig.card.asm, not the complete
+.card library lifecycle or Picasso96Mode. Scanout stays inactive; these tests
+do not boot Workbench, render HDMI, exercise SDRAM arbitration or test CDC.
+The corresponding pixel, SDRAM, IRQ and serializer benches remain in bench/.
+
+To reuse a CPU netlist you generated yourself, pass CPU_NETLIST=/path/cpu.v.
+Otherwise the suite always translates the current sources. Run directly with:
+
+    python3 amiga_sw/rtg/tests/run.py
+    python3 amiga_sw/rtg/tests/run.py --mmio-only
+
+Generated ROMs, CPU netlists and executables go into automatically removed
+temporary directories. tests/archive/ preserves earlier driver reproductions;
+these target older interfaces and are not part of the current passing suite.
+
 Library vector offsets are generated from the NDK FD files with Python 3. Override
 VBCC, NDK_DIR, P96_PRIVATE or P96_PUBLIC on the make command line to use
 other installations. The output requires a 68020 or newer CPU.
