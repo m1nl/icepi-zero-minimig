@@ -349,8 +349,8 @@ sel_kick        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downt
 sel_kickram     <= '1' when sel_kick='1' and turbokick_d='1' else '0';
 sel_slow        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 20)=X"C" and ((cpuaddr(19)='0' and slow_config_d/="00") or (cpuaddr(19)='1' and slow_config_d(1)='1'))) or (cpuaddr(23 downto 19)=X"D"&'0' and slow_config_d="11")) else '0'; -- $C00000 - $D7FFFF
 sel_slowram     <= '1' when sel_slow='1' and turboslow_d='1' else '0';
-sel_cart        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 20)="1010") else '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
-sel_audio       <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 18)="111011") else '0'; -- $EC0000 - $EFFFFF
+sel_cart        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 20)="1010") and havecart=1 else '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
+sel_audio       <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 18)="111011") and haveaudio=1 else '0'; -- $EC0000 - $EFFFFF
 --	sel_undecoded   <= '1' when sel_32='1' and (sel_z3ram and z3ram_ena)='0' and (sel_z3ram2 and z3ram2_ena)='0' and (sel_z3ram3 and z3ram3_ena)='0' else '0';
 sel_ram         <= '1' when (
 	(sel_z2ram='1' and z2ram_ena='1') or
