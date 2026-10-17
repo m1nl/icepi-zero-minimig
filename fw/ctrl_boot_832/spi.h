@@ -9,6 +9,10 @@
 #define HW_SPI_DATA 0x03 /* Blocks on both reads and writes, making BUSY signal redundant. */
 #define HW_SPI_SPEED 0x0b
 
+/* A complete transfer; both register accesses block until the engine is ready. */
+#define SPI(x) (HW_SPI(HW_SPI_DATA)=(unsigned char)(x), HW_SPI(HW_SPI_DATA)&255)
+#define HW_TIMER ((*(volatile unsigned long *)0x0fffffd0) << 8)
+
 #define EnableOsd()   HW_SPI(HW_SPI_CS)=0x20
 #define DisableOsd()  HW_SPI(HW_SPI_CS)=0x21
 
@@ -40,8 +44,7 @@
 
 
 
-int spi_init();
+int spi_init(void);
 int sd_read_sector(unsigned long lba,unsigned char *buf);
-int sd_write_sector(unsigned long lba,unsigned char *buf); // FIXME - stub
 
 #endif

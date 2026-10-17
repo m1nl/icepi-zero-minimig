@@ -1,335 +1,168 @@
+/* Bootstrap SD reader from Alastair M. Robinson's MinimigAGA TC64 port.
+ * SPI/FAT ancestry: Minimig, Dennis van Weeren and Jakub Bednarski.
+ * Keep only initialization and single-sector reads used by the loader.
+ */
 #include "spi.h"
-#include "uart.h"
-//#include "small_printf.h"
-#include <stdio.h>
-int SDHCtype;
 
-// #define SPI_WAIT(x) while(HW_PER(PER_SPI_CS)&(1<<PER_SPI_BUSY));
-// #define SPI(x) {while((HW_PER(PER_SPI_CS)&(1<<PER_SPI_BUSY))); HW_PER(PER_SPI)=(x);}
-// #define SPI_READ(x) (HW_PER(PER_SPI)&255)
+/* 0: unavailable, 1: byte-addressed SDSC/MMC, 2: block-addressed SDHC/SDXC. */
+static int card_type;
 
-#define SPI(x) HW_SPI(HW_SPI_DATA)=(x)
-// #define SPI_PUMP(x) HW_SPI(HW_SPI_PUMP)
-#define SPI_READ(x) (HW_SPI(HW_SPI_DATA)&255)
-
-#define SPI_CS(x) {while((HW_SPI(HW_SPI_CS)&(1<<HW_SPI_BUSY))); HW_SPI(HW_SPI_CS)=(x);}
-
-#define cmd_reset(x) cmd_write(0x950040,0) // Use SPI mode
-#define cmd_init(x) cmd_write(0xff0041,0)
-#define cmd_read(x) cmd_write(0xff0051,x)
-
-#define cmd_CMD8(x) cmd_write(0x870048,0x1AA)
-#define cmd_CMD16(x) cmd_write(0xFF0050,x)
-#define cmd_CMD41(x) cmd_write(0x870069,0x40000000)
-#define cmd_CMD55(x) cmd_write(0xff0077,0)
-#define cmd_CMD58(x) cmd_write(0xff007A,0)
-
-//#define DBG(x) puts(x)
-#define SPI_DEBUG 0
-#define DBG(X)
-
-
-unsigned char SPI_R1[6];
-
-
-int SPI_PUMP()
+static void sd_release(void)
 {
-	int r=0;
-	SPI(0xFF);
-	r=SPI_READ();
-	SPI(0xFF);
-	r=(r<<8)|SPI_READ();
-	SPI(0xFF);
-	r=(r<<8)|SPI_READ();
-	SPI(0xFF);
-	r=(r<<8)|SPI_READ();
-	return(r);
+	DisableCard();
+	SPI(0xff); /* eight completion clocks before stopping SCK */
 }
 
-int cmd_write(unsigned long cmd, unsigned long lba)
+static int sd_expired(unsigned long started)
 {
-	int ctr;
-	int result=0xff;
+	/* Same free-running 44.1 kHz timer as ctrl_832, scaled by 256. */
+	return (unsigned long)(HW_TIMER-started) >= 11290000UL; /* one second */
+}
 
-	DBG("In cmd_write\n");
+static int sd_command(unsigned char cmd, unsigned long arg)
+{
+	unsigned long started=HW_TIMER;
+	unsigned int count=500000;
+	unsigned char r;
 
-	SPI(cmd & 255);
-
-	DBG("Command sent\n");
-
-	if(!SDHCtype)	// If normal SD then we have to use byte offset rather than LBA offset.
-		lba<<=9;
-
-	DBG("Sending LBA!\n");
-
-	SPI((lba>>24)&255);
-	DBG("Sent 1st byte\n");
-	SPI((lba>>16)&255);
-	DBG("Sent 2nd byte\n");
-	SPI((lba>>8)&255);
-	DBG("Sent 3rd byte\n");
-	SPI(lba&255);
-	DBG("Sent 4th byte\n");
-
-	DBG("Sending CRC - if any\n");
-
-	SPI((cmd>>16)&255); // CRC, if any
-
-	ctr=40000;
-
-	result=SPI_READ();
-	while(--ctr && (result==0xff))
-	{
+	/* CMD0 can reset a busy card. No other command may be sent during busy.
+	 * The byte budget also bounds recovery if the hardware timer stops. */
+	if(cmd==0x40)
 		SPI(0xff);
-		result=SPI_READ();
-	}
-	if(SPI_DEBUG) {
-		putchar('0'+(result>>4));
-		putchar('0'+(result&15));
-	}
+	else
+		while(SPI(0xff)!=0xff)
+			if(!--count || sd_expired(started))
+				return 0xff;
 
-	return(result);
+	SPI(cmd);
+	SPI(arg>>24);
+	SPI(arg>>16);
+	SPI(arg>>8);
+	SPI(arg);
+	/* CRC is disabled in SPI mode, except for CMD0 and CMD8. Every command
+	 * still needs an end bit of one. Arguments here are never LBA-scaled. */
+	SPI(cmd==0x40 ? 0x95 : cmd==0x48 ? 0x87 : 0xff);
+	for(count=0;count<9;++count)
+	{
+		r=SPI(0xff); /* clock a new byte; do not sample the command CRC byte */
+		if(!(r&0x80))
+			return r;
+	}
+	return 0xff;
 }
 
-
-void spi_spin()
+int spi_init(void)
 {
-//	puts("SPIspin\n");
-	int i;
-	for(i=0;i<200;++i)
-		SPI(0xff);
-//	puts("Done\n");
-}
+	int i,r,v2,mmc=0;
+	unsigned long started,ocr;
 
-
-int wait_initV2()
-{
-	int i=20000;
-	int r;
-	spi_spin();
-	while(--i)
-	{
-		if((r=cmd_CMD55())==1)
-		{
-			if(SPI_DEBUG)
-				printf("CMD55 %d\n",r);
-			SPI(0xff);
-			if((r=cmd_CMD41())==0)
-			{
-				if(SPI_DEBUG)
-					printf("CMD41 %d\n",r);
-				SPI(0xff);
-				return(1);
-			}
-			else
-				if(SPI_DEBUG)
-					printf("CMD41 %d\n",r);
-			spi_spin();
-		}
-		else
-			if(SPI_DEBUG)
-				printf("CMD55 %d\n",r);
-	}
-	return(0);
-}
-
-
-int wait_init()
-{
-	int i=20;
-	int r;
-	SPI(0xff);
-	puts("Cmd_init\n");
-	while(--i)
-	{
-		if((r=cmd_init())==0)
-		{
-			if(SPI_DEBUG)
-				printf("init %d\n  ",r);
-			SPI(0xff);
-			return(1);
-		}
-		else
-			if(SPI_DEBUG)
-				printf("init %d\n  ",r);
-		spi_spin();
-	}
-	return(0);
-}
-
-
-int is_sdhc()
-{
-	int i,r;
-
-	spi_spin();
-
-	r=cmd_CMD8();		// test for SDHC capability
-	printf("cmd_CMD8 response: %d\n",r);
-	if(r!=1)
-	{
-		wait_init();
-		return(0);
-	}
-
-	r=SPI_PUMP();
-	if((r&0xffff)!=0x01aa)
-	{
-		if(SPI_DEBUG)
-			printf("CMD8_4 response: %d\n",r);
-		wait_init();
-		return(0);
-	}
-
-	SPI(0xff);
-
-	// If we get this far we have a V2 card, which may or may not be SDHC...
-
-	i=50;
-	while(--i)
-	{
-		if(wait_initV2())
-		{
-			if((r=cmd_CMD58())==0)
-			{
-				if(SPI_DEBUG)
-					printf("CMD58 %d\n  ",r);
-				SPI(0xff);
-				r=SPI_READ();
-				if(SPI_DEBUG)
-					printf("CMD58_2 %d\n  ",r);
-				SPI(0xff);
-				SPI(0xff);
-				SPI(0xff);
-				SPI(0xff);
-				if(r&0x40)
-					return(1);
-				else
-					return(0);
-			}
-			else
-				if(SPI_DEBUG)
-					printf("CMD58 %d\n  ",r);
-		}
-		if(i==2)
-		{
-			if(SPI_DEBUG)
-				printf("SDHC Initialization error!\n");
-			return(0);
-		}
-	}
-	return(0);
-}
-
-
-int spi_init()
-{
-	int i;
-	int r;
-	SDHCtype=1;
-	SPI_slow();
-	i=8;
-	while(--i)
+	card_type=0;
+	SPI_slow(); /* ~119 kHz; keep both selected/deselected clocks below 400 kHz */
+	for(i=0;i<7;++i)
 	{
 		DisableCard();
-	//	SPI_CS(0);	// Disable CS
-		spi_spin();
-		DBG("Activating CS\n");
-	//	SPI_CS(1);
+		/* Preserve the loader's long startup preamble, with CS/MOSI high. */
+		for(r=0;r<200;++r)
+			SPI(0xff);
 		EnableCard();
-		SPI(0xff);
-		if(cmd_reset()==1) // Enable SPI mode
-			i=1;
-		DBG("Sent reset command\n");
-		if(i==2)
+		if(sd_command(0x40,0)==1)
+			break;
+		sd_release();
+	}
+	if(i==7)
+		goto fail;
+
+	r=sd_command(0x48,0x1aa);
+	v2=(r==1);
+	if(v2)
+	{
+		ocr=0;
+		for(i=0;i<4;++i)
+			ocr=(ocr<<8)|SPI(0xff);
+		if((ocr&0xffff)!=0x1aa)
+			goto fail;
+	}
+	else if(r!=5) /* idle + illegal command is the legacy-card response */
+		goto fail;
+
+	started=HW_TIMER;
+	for(i=0;i<10000;++i)
+	{
+		if(!mmc)
 		{
-			DBG("SD card initialization error!\n");
-			return(0);
+			r=sd_command(0x77,0); /* CMD55 */
+			if(!v2 && r==5)
+				mmc=1;
+			else if(r!=1)
+				goto fail;
+		}
+		r=sd_command(mmc ? 0x41 : 0x69,v2 ? 0x40000000UL : 0);
+		if(!r) /* accept the very first successful ACMD41/CMD1 */
+			break;
+		if(r!=1 || sd_expired(started))
+			goto fail;
+	}
+	if(i==10000)
+		goto fail;
+
+	if(v2)
+	{
+		if(sd_command(0x7a,0)) /* CMD58 */
+			goto fail;
+		ocr=0;
+		for(i=0;i<4;++i)
+			ocr=(ocr<<8)|SPI(0xff);
+		if(!(ocr&0x80000000UL)) /* OCR valid only after power-up completes */
+			goto fail;
+		if(ocr&0x40000000UL)
+		{
+			card_type=2;
+			sd_release();
+			return 1;
 		}
 	}
-	DBG("Card responded to reset\n");
-	SDHCtype=is_sdhc();
-	if(SDHCtype)
-	{
-		DBG("SDHC card detected\n");
-	}
-	else
-	{
-		DBG("Sending cmd16\n");
-		cmd_CMD16(1);
-	}
-	SPI(0xFF);
-	DisableCard();
-//	SPI_CS(0);
-	SPI(0xFF);
-	DBG("Init done\n");
-
-	return(1);
+	/* CMD16 takes a byte count, including on byte-addressed cards. */
+	if(sd_command(0x50,512))
+		goto fail;
+	card_type=1;
+	sd_release();
+	return 1;
+fail:
+	sd_release();
+	return 0;
 }
-
-
-int sd_write_sector(unsigned long lba,unsigned char *buf) // FIXME - Stub
-{
-	return(0);
-}
-
-
-extern void spi_readsector(long *buf);
-
 
 int sd_read_sector(unsigned long lba,unsigned char *buf)
 {
+	unsigned long started;
+	unsigned int i;
+	unsigned char token;
 	int result=0;
-	int i;
-	int r;
-//	printf("sd_read_sector %d, %d\n",lba,buf);
-	SPI(0xff);
 
+	if(!card_type || (card_type==1 && lba>0x7fffffUL))
+		return 0;
 	EnableCard();
-	SPI_fast();
-
-//	SPI_CS(1|(1<<HW_SPI_FAST));
-	SPI(0xff);
-
-	r=cmd_read(lba);
-	if(r!=0)
+	SPI_fast(); /* ~3.36 MHz; bootstrap does not need high-speed mode */
+	if(sd_command(0x51,card_type==2 ? lba : lba<<9))
+		goto out;
+	started=HW_TIMER;
+	for(i=0;i<1500000;++i)
 	{
-		if(SPI_DEBUG)
-			printf("Read command failed at %d (%d)\n",lba,r);
-		return(result);
-	}
-
-	i=1500000;
-	while(--i)
-	{
-		int v;
-		SPI(0xff);
-//		SPI_WAIT();
-		v=SPI_READ();
-		if(v==0xfe)
+		token=SPI(0xff);
+		if(token==0xfe)
 		{
-//			puts("Reading sector data\n");
-//			spi_readsector((long *)buf);
-			int j;
-//			SPI(0xff);
-
-			for(j=0;j<128;++j)
-			{
-				int t,v;
-
-				t=SPI_PUMP();
-				*(int *)buf=t;
-//				printf("%d: %d\n",buf,t);
-				buf+=4;
-			}
-
-			i=1; // break out of the loop
+			/* Byte stores preserve card byte order without alignment assumptions. */
+			for(i=0;i<512;++i)
+				buf[i]=SPI(0xff);
+			SPI(0xff); /* both bytes of CRC16 must be consumed while selected */
+			SPI(0xff);
 			result=1;
+			break;
 		}
+		if((token && !(token&0xf0)) || sd_expired(started))
+			break;
 	}
-	SPI(0xff);
-	DisableCard();
-//	SPI_CS(0);
-	return(result);
+out:
+	sd_release(); /* including command rejection, error tokens and timeouts */
+	return result;
 }
-
