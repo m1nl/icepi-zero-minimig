@@ -158,15 +158,16 @@ module serializer
 
         assign tmds_clock = clk_pixel;
     `elsif LATTICE
-        (* ASYNC_REG = "TRUE" *) reg [1:0] reset_x5_sync = 2'b11;
+        // Flush all three marker-history registers before releasing control.
+        (* ASYNC_REG = "TRUE" *) reg [2:0] reset_x5_sync = 3'b111;
 
-        wire reset_x5 = reset_x5_sync[1];
+        wire reset_x5 = reset_x5_sync[2];
 
         always_ff @(posedge clk_pixel_x5, posedge reset) begin
             if (reset)
-                reset_x5_sync <= 2'b11;
+                reset_x5_sync <= 3'b111;
             else
-                reset_x5_sync <= {reset_x5_sync[0], 1'b0};
+                reset_x5_sync <= {reset_x5_sync[1:0], 1'b0};
         end
 
         // Acquire the word phase from a pixel edge after every reset.
@@ -181,15 +182,11 @@ module serializer
         (* ASYNC_REG = "TRUE" *) logic [1:0] pixel_toggle_sync = 2'b00;
         logic pixel_toggle_prev = 1'b0;
 
-        // Start synchronizing while reset_x5 is still being released.
-        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
-            if (reset_x5) begin
-                pixel_toggle_sync <= 2'b00;
-                pixel_toggle_prev <= 1'b0;
-            end else begin
-                pixel_toggle_sync <= {pixel_toggle_sync[0], pixel_toggle};
-                pixel_toggle_prev <= pixel_toggle_sync[1];
-            end
+        // Keep the marker pipeline running during reset so phase acquisition
+        // sees a fresh pixel edge after reset_x5 releases.
+        always_ff @(posedge clk_pixel_x5) begin
+            pixel_toggle_sync <= {pixel_toggle_sync[0], pixel_toggle};
+            pixel_toggle_prev <= pixel_toggle_sync[1];
         end
 
         wire pixel_event = pixel_toggle_sync[1] ^ pixel_toggle_prev;
@@ -203,21 +200,22 @@ module serializer
         // Capture about 2-3 fast ticks after the pixel edge.
         // Once acquired, keep exactly five ticks per word.
         always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
-            if (reset_x5) begin
+            if (reset_x5)
                 phase_locked <= 1'b0;
-                bit_cnt <= 3'd0;
-                periodic_load <= 1'b0;
-            end else begin
-                // Decode one tick early so the shift-register load path
-                // starts at a flip-flop, preserving the count-4 load edge.
-                periodic_load <= phase_locked && (bit_cnt == 3'd3);
+            else if (load_word)
+                phase_locked <= 1'b1;
+        end
 
-                if (load_word) begin
-                    phase_locked <= 1'b1;
-                    bit_cnt <= 3'd0;
-                end else if (phase_locked)
-                    bit_cnt <= bit_cnt + 3'd1;
-            end
+        // Acquisition initializes the counter, and the unlocked phase forces
+        // the registered load low before it is selected. Neither needs reset.
+        always_ff @(posedge clk_pixel_x5) begin
+            // Decode one tick early so the shift-register load path
+            // starts at a flip-flop, preserving the count-4 load edge.
+            periodic_load <= phase_locked && (bit_cnt == 3'd3);
+            bit_cnt <= bit_cnt + 3'd1;
+
+            if (load_word)
+                bit_cnt <= 3'd0;
         end
 
         // ----------------------------------------------------
@@ -229,10 +227,10 @@ module serializer
             logic [9:0] shift;
             logic [1:0] out;
 
-            always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
-                if (reset_x5)
-                    shift <= 10'b0;
-                else if (load_word)
+            // The first word load overwrites every bit; startup contents
+            // are irrelevant while acquiring the serializer phase.
+            always_ff @(posedge clk_pixel_x5) begin
+                if (load_word)
                     shift <= tmds_internal[i];
                 else
                     shift <= {2'b0, shift[9:2]}; // shift by 2: DDR outputs 2 bits per cycle
@@ -257,10 +255,8 @@ module serializer
         logic [9:0] clk_shift;
         logic [1:0] clk_out;
 
-        always_ff @(posedge clk_pixel_x5, posedge reset_x5) begin
-            if (reset_x5)
-                clk_shift <= 10'b0;
-            else if (load_word)
+        always_ff @(posedge clk_pixel_x5) begin
+            if (load_word)
                 clk_shift <= 10'b0000011111;
             else
                 clk_shift <= {2'b0, clk_shift[9:2]};
