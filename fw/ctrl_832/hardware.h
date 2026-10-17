@@ -80,7 +80,10 @@ static inline void KeyboardSend(unsigned short event) {
 #define EnableRTC() HW_SPI(HW_SPI_CS) = 0x80
 #define DisableRTC() HW_SPI(HW_SPI_CS) = 0x81
 
-#define SPI_slow() HW_SPI(HW_SPI_SPEED) = 0x3f
+/* cfide at 114.28 MHz: divider 72 gives ~389 kHz selected, ~394 kHz
+ * deselected. Both must stay below the 400 kHz initialization limit. */
+#define SPI_SLOW_DIVIDER 0x48
+#define SPI_slow() HW_SPI(HW_SPI_SPEED) = SPI_SLOW_DIVIDER
 #define SPI_fast() HW_SPI(HW_SPI_SPEED) = 0x1
 
 // Yuk.  The following monstrosity does a dummy read from the timer register, writes, then reads from

@@ -73,14 +73,41 @@
 #define     CMD63       0x7f        /*--*/
 
 unsigned char MMC_Init(void);
-unsigned char MMC_Read(unsigned long lba, unsigned char *pReadBuffer);
-unsigned char MMC_Write(unsigned long lba, unsigned char *pWriteBuffer);
-unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount);
 unsigned long MMC_GetSectorCount(void); // Cached capacity; no SD command
 unsigned long MMC_GetCapacity(); // Returns the capacity in 512 byte blocks
 
-unsigned char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count);
-unsigned char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer);
-unsigned char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer);
+unsigned char MMC_ReadImpl(unsigned long lba, unsigned char *pReadBuffer, int quiet);
+unsigned char MMC_ReadMultipleImpl(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount, int quiet);
+unsigned char MMC_WriteImpl(unsigned long lba, unsigned char *pWriteBuffer, int quiet);
+
+unsigned inline char MMC_Read(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_ReadImpl(lba, buffer, 0);
+}
+
+unsigned inline char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_ReadImpl(lba, buffer, 1);
+}
+
+unsigned inline char MMC_ReadMultiple(unsigned long lba, unsigned char *buffer, unsigned long count)
+{
+    return MMC_ReadMultipleImpl(lba, buffer, count, 0);
+}
+
+unsigned inline char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count)
+{
+    return MMC_ReadMultipleImpl(lba, buffer, count, 1);
+}
+
+unsigned inline char MMC_Write(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_WriteImpl(lba, buffer, 0);
+}
+
+unsigned inline char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer)
+{
+    return MMC_WriteImpl(lba, buffer, 1);
+}
 
 #endif

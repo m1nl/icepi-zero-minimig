@@ -13,14 +13,24 @@
 void FatalError(int errortype,const char *msg,int y,int z);
 void SetError(int errortype,const char *msg,int y,int z);
 
+#define ERROR_DETAIL_WIDTH 32
+#define ERROR_DETAIL_ROWS 4
+
+void SetErrorDetails(int category, const char (*lines)[ERROR_DETAIL_WIDTH], unsigned int count);
+unsigned int ErrorPageCount(int category);
+void DrawErrorPage(int category, unsigned int page);
+
 extern int ErrorMask;
 extern int ErrorFatal;
 extern char *ErrorMessages[ERROR_MAX+1];
+
 struct Error
 {
 	char *string;
 	int a;
 	int b;
+	const char (*details)[ERROR_DETAIL_WIDTH];
+	unsigned int detail_count;
 };
 extern struct Error Errors[ERROR_MAX+1];
 

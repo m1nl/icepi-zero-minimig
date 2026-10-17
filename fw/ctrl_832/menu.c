@@ -49,6 +49,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DIRSIZE 8 // number of items in directory display window
 
 signed char errorpage;
+static unsigned int error_detail_page;
 unsigned char menustate = MENU_NONE1;
 unsigned char parentstate;
 unsigned char parentsub;
@@ -2198,45 +2199,38 @@ void HandleUI(void)
 		menumask=0x01;
 		parentstate=MENU_MAIN1;
 
- 		OsdSetTitle("Error",OSD_ARROW_LEFT|OSD_ARROW_RIGHT);
-        OsdWrite(0, ErrorFatal ? "      *** FATAL ERROR ***" : "         *** ERROR ***", 1,0);
-	    OsdWrite(1, "", 0,!(ErrorMask&(1<<errorpage)));
-		snprintf(s,32," %s",ErrorMessages[errorpage]);
-        OsdWrite(2, s, 0,!(ErrorMask&(1<<errorpage)));
-		snprintf(s,32," %s",Errors[errorpage].string);
-        OsdWrite(3, s, 0,!(ErrorMask&(1<<errorpage)));
-		snprintf(s,32," %x",Errors[errorpage].a);
-        OsdWrite(4, s, 0,!(ErrorMask&(1<<errorpage)));
-		snprintf(s,32," %x",Errors[errorpage].b);
-        OsdWrite(5, s, 0,!(ErrorMask&(1<<errorpage)));
-	    OsdWrite(6, "", 0,0);
-	    OsdWrite(7, ErrorFatal ? "           Reboot" : "             OK", 1,0);
-
-        ClearError(ERROR_ALL);
+		DrawErrorPage(errorpage,error_detail_page);
 
 		menustate = MENU_ERROR2;
 		break;
 
 	case MENU_ERROR2 :
-		if(left)
-		{
-			--errorpage;
-			if(errorpage<0)
-				errorpage=ERROR_MAX;
-		}
-		if(right)
-		{
-			++errorpage;
-			if(errorpage>ERROR_MAX)
-				errorpage=0;
-		}
-        if (select)
-		{
-			OsdHide();
-			if(ErrorFatal)
-	            ColdBoot();
-			menustate = MENU_NONE1;
-		}
+        if (left) {
+            if (error_detail_page) --error_detail_page;
+            else {
+                do {
+                    if (--errorpage<0) errorpage=ERROR_MAX;
+                } while (ErrorMask && !(ErrorMask & (1<<errorpage)));
+                error_detail_page=ErrorPageCount(errorpage)-1;
+            }
+            menustate=MENU_ERROR;
+        }
+        if (right) {
+            if (++error_detail_page>=ErrorPageCount(errorpage)) {
+                error_detail_page=0;
+                do {
+                    if (++errorpage>ERROR_MAX) errorpage=0;
+                } while (ErrorMask && !(ErrorMask & (1<<errorpage)));
+            }
+            menustate=MENU_ERROR;
+        }
+        if (select) {
+            int fatal=ErrorFatal;
+            ClearError(ERROR_ALL);
+            OsdHide();
+            if (fatal) ColdBoot();
+            menustate=MENU_NONE1;
+        }
         break;
 
         /******************************************************************/
@@ -2521,6 +2515,9 @@ void InsertFloppy(adfTYPE *drive)
 void ShowError()
 {
 	int t=ErrorMask>>1;
+	if (menustate==MENU_ERROR || menustate==MENU_ERROR2) return;
+	error_detail_page=0;
+	menusub=0;
 	errorpage=0;
 	while(t)
 	{

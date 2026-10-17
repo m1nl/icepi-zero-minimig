@@ -210,22 +210,23 @@ int main(void) {
 
 	ClearError(ERROR_ALL);
 
-	if (!Init())
-		FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
+	if (!Init()) {
+        if (ErrorMask & (1<<ERROR_SDCARD)) ErrorFatal=1;
+        else FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
+    }
 
 	if (clockport && cartridge)
 		FatalError(ERROR_GENERAL,"C64: use non-clockport core",0,0);
 
 	if (ErrorFatal) {
-		ShowError();
-		HandleUI();
-		while(1)
-			;
+		while (ErrorFatal) {
+			ShowError();
+			HandleUI(); // Allow diagnostic pages and reboot after startup failures.
+		}
+	} else {
+		DISKLED_ON;
+		ColdBoot();
 	}
-
-	DISKLED_ON;
-
-	ColdBoot();
 
 	while(1)
 	{
