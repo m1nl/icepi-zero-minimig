@@ -347,7 +347,7 @@ sel_chip        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto
 sel_chipram     <= '1' when sel_chip='1' and turbochip_d='1' else '0';
 sel_kick        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 19)="11111") or (cpuaddr(23 downto 19)="11100")) and cpu_write='0' else '0'; -- $F8xxxx, $E0xxxx
 sel_kickram     <= '1' when sel_kick='1' and turbokick_d='1' else '0';
-sel_slow        <= '1' when (cpuaddr(31 downto 24)=X"00") and ((cpuaddr(23 downto 20)=X"C" and ((cpuaddr(19)='0' and slow_config_d/="00") or (cpuaddr(19)='1' and slow_config_d(1)='1'))) or (cpuaddr(23 downto 19)=X"D"&'0' and slow_config_d="11")) else '0'; -- $C00000 - $D7FFFF
+sel_slow        <= '1' when cpuaddr(31 downto 21) = X"00" & "110" and cpuaddr(20 downto 19) /= "11" else '0'; -- $C00000 - $D7FFFF
 sel_slowram     <= '1' when sel_slow='1' and turboslow_d='1' else '0';
 sel_cart        <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 20)="1010") and havecart=1 else '0'; -- $A00000 - $A7FFFF (actually matches up to $AFFFFF)
 sel_audio       <= '1' when (cpuaddr(31 downto 24)=X"00") and (cpuaddr(23 downto 18)="111011") and haveaudio=1 else '0'; -- $EC0000 - $EFFFFF
@@ -498,7 +498,14 @@ process (clk) begin
 			overclock_d <= overclock and turbokick and turbochipram;
 			turbochip_d <= turbochipram;
 			turbokick_d <= turbokick;
-			turboslow_d <= turbochipram;
+
+			-- ensure turbo for slowram is enabled
+			-- only when full 1.5MiB is selected
+			if slow_config_d = "11" then
+				turboslow_d <= turbochipram;
+			else
+				turboslow_d <= '0';
+			end if;
 		end if;
 
 		cacheline_clr <= (turbochipram xor turbochip_d) or (turbokick xor turbokick_d);
