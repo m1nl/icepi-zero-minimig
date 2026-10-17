@@ -225,6 +225,12 @@ FREQUENCY NET "clk_sys" 114.3 MHz;
 FREQUENCY NET "clk_142m" 142.9 MHz;
 FREQUENCY NET "virtual_top/sck" 28.6 MHz;
 
+# Select changes occur during video reset; exclude select-to-clock propagation.
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL1" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL1" ;
+
 # Explicit constraints on the DCSC output clocks.
 FREQUENCY NET "clk_pixel" 66.0 MHz;
 FREQUENCY NET "clk_tmds" 330.0 MHz;
@@ -233,9 +239,13 @@ FREQUENCY NET "clk_tmds" 330.0 MHz;
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[0]";
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[1]";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_pixel";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_tmds";
 BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "clk_c";
 BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_c";
 BLOCK PATH FROM CLKNET "auxclks[1]" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_pixel" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_tmds" TO CLKNET "clk_c";
 
 # Block Path Constraints
 BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_28m";

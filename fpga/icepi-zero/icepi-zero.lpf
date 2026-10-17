@@ -275,6 +275,43 @@ FREQUENCY NET "clk_sys" 114.3 MHz;
 FREQUENCY NET "clk_142m" 142.9 MHz;
 FREQUENCY NET "virtual_top/sck" 28.6 MHz;
 
+# Select changes occur during video reset; exclude select-to-clock propagation.
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL1" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL1" ;
+
+# HDMI serializer output-register placement.
+# Keep passing lanes near their current sites; move red toward IOL_R35A.
+# Regions permit local placement changes and do not reserve exclusive space.
+REGION "tmds_blue_out_region" "R41C28D" 4 6 DEVSIZE ;
+UGROUP "tmds_blue_out"
+    BBOX 4 6
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[0].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[0].out[1]" ;
+LOCATE UGROUP "tmds_blue_out" REGION "tmds_blue_out_region" ;
+
+REGION "tmds_green_out_region" "R38C57D" 3 7 DEVSIZE ;
+UGROUP "tmds_green_out"
+    BBOX 3 7
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[1].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[1].out[1]" ;
+LOCATE UGROUP "tmds_green_out" REGION "tmds_green_out_region" ;
+
+REGION "tmds_red_out_region" "R32C58D" 7 12 DEVSIZE ;
+UGROUP "tmds_red_out"
+    BBOX 2 2
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[2].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[2].out[1]" ;
+LOCATE UGROUP "tmds_red_out" REGION "tmds_red_out_region" ;
+
+REGION "tmds_clock_out_region" "R43C50D" 3 9 DEVSIZE ;
+UGROUP "tmds_clock_out"
+    BBOX 3 9
+    BLKNAME "genvideo.hdmi_inst/serializer/clk_out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/clk_out[1]" ;
+LOCATE UGROUP "tmds_clock_out" REGION "tmds_clock_out_region" ;
+
 # Explicit constraints on the DCSC output clocks.
 FREQUENCY NET "clk_pixel" 66.0 MHz;
 FREQUENCY NET "clk_tmds" 330.0 MHz;
@@ -283,9 +320,13 @@ FREQUENCY NET "clk_tmds" 330.0 MHz;
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[0]";
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[1]";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_pixel";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_tmds";
 BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "clk_c";
 BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_c";
 BLOCK PATH FROM CLKNET "auxclks[1]" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_pixel" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_tmds" TO CLKNET "clk_c";
 
 # Block Path Constraints
 BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_28m";

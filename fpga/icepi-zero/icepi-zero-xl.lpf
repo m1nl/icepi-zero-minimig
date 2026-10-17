@@ -1,0 +1,425 @@
+SYSCONFIG CONFIG_IOVOLTAGE=3.3 COMPRESS_CONFIG=ON MCCLK_FREQ=62 MASTER_SPI_PORT=ENABLE SLAVE_SPI_PORT=DISABLE SLAVE_PARALLEL_PORT=DISABLE ;
+# Clock
+LOCATE COMP "clk" SITE "M1" ;
+IOBUF PORT "clk" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+FREQUENCY PORT "clk" 50MHz ;
+# FTDI
+LOCATE COMP "usb_tx" SITE "K15" ;# Transmit to ftdi
+IOBUF PORT "usb_tx" PULLMODE=UP IO_TYPE=LVCMOS33 ;
+LOCATE COMP "usb_rx" SITE "K16" ;# Transmit from ftdi
+IOBUF PORT "usb_rx" PULLMODE=UP IO_TYPE=LVCMOS33 ;
+LOCATE COMP "usb_rtsn" SITE "L16" ;
+IOBUF PORT "usb_rtsn" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "usb_dtrn" SITE "L15" ;
+IOBUF PORT "usb_dtrn" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+# GPIOs
+LOCATE COMP "joya[4]" SITE "G3" ;# 27 (GPIO0)
+IOBUF PORT "joya[4]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joya[2]" SITE "K3" ;# 28 (GPIO1)
+IOBUF PORT "joya[2]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joya[3]" SITE "T2" ;# 3  (GPIO2)
+IOBUF PORT "joya[3]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joya[0]" SITE "R2" ;# 5  (GPIO3)
+IOBUF PORT "joya[0]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joya[1]" SITE "R1" ;# 7  (GPIO4)
+IOBUF PORT "joya[1]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joya[5]" SITE "E1" ;# 29 (GPIO5)
+IOBUF PORT "joya[5]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[4]" SITE "F3" ;# 31 (GPIO6)
+IOBUF PORT "joyb[4]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[2]" SITE "G1" ;# 26 (GPIO7)
+IOBUF PORT "joyb[2]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[3]" SITE "H2" ;# 24 (GPIO8)
+IOBUF PORT "joyb[3]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[0]" SITE "J1" ;# 21 (GPIO9)
+IOBUF PORT "joyb[0]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[1]" SITE "L2" ;# 19 (GPIO10)
+IOBUF PORT "joyb[1]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "joyb[5]" SITE "G2" ;# 23 (GPIO11)
+IOBUF PORT "joyb[5]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpio[12]" SITE "J3" ;# 32
+IOBUF PORT "gpio[12]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led_g" SITE "E3" ;# 33 (GPIO13)
+IOBUF PORT "led_g" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led_y" SITE "P1" ;# 8  (GPIO14)
+IOBUF PORT "led_y" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led_r" SITE "N1" ;# 10 (GPIO15)
+IOBUF PORT "led_r" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "slave_tx" SITE "H3" ;# 36 (GPIO16)
+IOBUF PORT "slave_tx" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpio[17]" SITE "R3" ;# 11
+IOBUF PORT "gpio[17]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "aux_spi_csn" SITE "N4" ;# 12 (GPIO18)
+IOBUF PORT "aux_spi_csn" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "slave_button[0]" SITE "E4" ;# 35 (GPIO19)
+IOBUF PORT "slave_button[0]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "slave_rx" SITE "F1" ;# 38 (GPIO20)
+IOBUF PORT "slave_rx" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "aux_spi_miso" SITE "F2" ;# 40 (GPIO21)
+IOBUF PORT "aux_spi_miso" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "aux_spi_irqn" SITE "P2" ;# 15 (GPIO22)
+IOBUF PORT "aux_spi_irqn" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpio[23]" SITE "M2" ;# 16
+IOBUF PORT "gpio[23]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "aux_spi_clk" SITE "L1" ;# 18 (GPIO24)
+IOBUF PORT "aux_spi_clk" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "aux_spi_mosi" SITE "J2" ;# 22 (GPIO25)
+IOBUF PORT "aux_spi_mosi" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "slave_button[1]" SITE "D4" ;# 37 (GPIO26)
+IOBUF PORT "slave_button[1]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpio[27]" SITE "P3" ;# 13
+IOBUF PORT "gpio[27]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[28]" SITE "N1" ;
+IOBUF PORT "gpio[28]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[29]" SITE "P1" ;
+IOBUF PORT "gpio[29]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[30]" SITE "G3" ;# 27
+IOBUF PORT "gpio[30]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[31]" SITE "J1" ;
+IOBUF PORT "gpio[31]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[32]" SITE "L2" ;
+IOBUF PORT "gpio[32]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[33]" SITE "G2" ;
+IOBUF PORT "gpio[33]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[34]" SITE "H2" ;
+IOBUF PORT "gpio[34]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "gpio[35]" SITE "J2" ;# GPIO 25
+IOBUF PORT "gpio[35]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+# LEDs
+LOCATE COMP "led[0]" SITE "E13" ;
+IOBUF PORT "led[0]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led[1]" SITE "D14" ;
+IOBUF PORT "led[1]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led[2]" SITE "E12" ;
+IOBUF PORT "led[2]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led[3]" SITE "C13" ;
+IOBUF PORT "led[3]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "led[4]" SITE "D13" ;
+IOBUF PORT "led[4]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+# Buttons
+LOCATE COMP "button[0]" SITE "C4" ;
+IOBUF PORT "button[0]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "button[1]" SITE "C5" ;
+IOBUF PORT "button[1]" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+# GPDI
+LOCATE COMP "gpdi_dp[0]" SITE "R13" ;# Blue
+IOBUF PORT "gpdi_dp[0]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+#LOCATE COMP "gpdi_dn[0]" SITE "T14";
+#IOBUF  PORT "gpdi_dn[0]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+LOCATE COMP "gpdi_dp[1]" SITE "R15" ;# Green
+IOBUF PORT "gpdi_dp[1]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+#LOCATE COMP "gpdi_dn[1]" SITE "T15";
+#IOBUF  PORT "gpdi_dn[1]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+LOCATE COMP "gpdi_dp[2]" SITE "P16" ;# Red
+IOBUF PORT "gpdi_dp[2]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+#LOCATE COMP "gpdi_dn[2]" SITE "R16";
+#IOBUF  PORT "gpdi_dn[2]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+LOCATE COMP "gpdi_dp[3]" SITE "R12" ;# Clock
+IOBUF PORT "gpdi_dp[3]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+#LOCATE COMP "gpdi_dn[3]" SITE "T13";
+#IOBUF  PORT "gpdi_dn[3]" IO_TYPE=LVCMOS33D DRIVE=8 SLEWRATE=FAST ;
+LOCATE COMP "gpdi_cec" SITE "R5" ;
+IOBUF PORT "gpdi_cec" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpdi_sck" SITE "T3" ;
+IOBUF PORT "gpdi_sck" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpdi_sda" SITE "T4" ;
+IOBUF PORT "gpdi_sda" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpdi_util" SITE "P5" ;
+IOBUF PORT "gpdi_util" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "gpdi_hpd" SITE "L14" ;
+IOBUF PORT "gpdi_hpd" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+# SD Card
+LOCATE COMP "sd_clk" SITE "P15" ;
+IOBUF PORT "sd_clk" IO_TYPE=LVCMOS33 PULLMODE=NONE DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_mosi" SITE "N16" ;
+IOBUF PORT "sd_mosi" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_miso" SITE "P14" ;
+IOBUF PORT "sd_miso" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_csn" SITE "M14" ;
+IOBUF PORT "sd_csn" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_cmd" SITE "N16" ;
+IOBUF PORT "sd_cmd" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_det" SITE "M16" ;
+IOBUF PORT "sd_det" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_dat[0]" SITE "P14" ;
+IOBUF PORT "sd_dat[0]" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_dat[1]" SITE "R14" ;
+IOBUF PORT "sd_dat[1]" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_dat[2]" SITE "M15" ;
+IOBUF PORT "sd_dat[2]" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+LOCATE COMP "sd_dat[3]" SITE "M14" ;
+IOBUF PORT "sd_dat[3]" IO_TYPE=LVCMOS33 PULLMODE=UP DRIVE=8 SLEWRATE=SLOW ;
+# USB
+LOCATE COMP "usb_dp[0]" SITE "F15" ;
+IOBUF PORT "usb_dp[0]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE SLEWRATE=SLOW ;
+LOCATE COMP "usb_dn[0]" SITE "E16" ;
+IOBUF PORT "usb_dn[0]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE SLEWRATE=SLOW ;
+LOCATE COMP "usb_pull_dp[0]" SITE "G15" ;
+IOBUF PORT "usb_pull_dp[0]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE ;
+LOCATE COMP "usb_pull_dn[0]" SITE "H14" ;
+IOBUF PORT "usb_pull_dn[0]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE ;
+LOCATE COMP "usb_dp[1]" SITE "J16" ;
+IOBUF PORT "usb_dp[1]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE SLEWRATE=SLOW ;
+LOCATE COMP "usb_dn[1]" SITE "J15" ;
+IOBUF PORT "usb_dn[1]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE SLEWRATE=SLOW ;
+LOCATE COMP "usb_pull_dp[1]" SITE "E14" ;
+IOBUF PORT "usb_pull_dp[1]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE ;
+LOCATE COMP "usb_pull_dn[1]" SITE "E11" ;
+IOBUF PORT "usb_pull_dn[1]" IO_TYPE=LVCMOS33 DRIVE=8 PULLMODE=NONE ;
+# SDRAM
+LOCATE COMP "sdram_a[0]" SITE "B10" ;
+IOBUF PORT "sdram_a[0]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[1]" SITE "A9" ;
+IOBUF PORT "sdram_a[1]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[2]" SITE "B9" ;
+IOBUF PORT "sdram_a[2]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[3]" SITE "A8" ;
+IOBUF PORT "sdram_a[3]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[4]" SITE "B8" ;
+IOBUF PORT "sdram_a[4]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[5]" SITE "A7" ;
+IOBUF PORT "sdram_a[5]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[6]" SITE "B7" ;
+IOBUF PORT "sdram_a[6]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[7]" SITE "A6" ;
+IOBUF PORT "sdram_a[7]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[8]" SITE "B6" ;
+IOBUF PORT "sdram_a[8]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[9]" SITE "A5" ;
+IOBUF PORT "sdram_a[9]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[10]" SITE "A10" ;
+IOBUF PORT "sdram_a[10]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[11]" SITE "B5" ;
+IOBUF PORT "sdram_a[11]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_a[12]" SITE "A4" ;
+IOBUF PORT "sdram_a[12]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[0]" SITE "B16" ;
+IOBUF PORT "sdram_dq[0]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[1]" SITE "C14" ;
+IOBUF PORT "sdram_dq[1]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[2]" SITE "C16" ;
+IOBUF PORT "sdram_dq[2]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[3]" SITE "C15" ;
+IOBUF PORT "sdram_dq[3]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[4]" SITE "D16" ;
+IOBUF PORT "sdram_dq[4]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[5]" SITE "A15" ;
+IOBUF PORT "sdram_dq[5]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[6]" SITE "B15" ;
+IOBUF PORT "sdram_dq[6]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[7]" SITE "A14" ;
+IOBUF PORT "sdram_dq[7]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[8]" SITE "A2" ;
+IOBUF PORT "sdram_dq[8]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[9]" SITE "B2" ;
+IOBUF PORT "sdram_dq[9]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[10]" SITE "E2" ;
+IOBUF PORT "sdram_dq[10]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[11]" SITE "D1" ;
+IOBUF PORT "sdram_dq[11]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[12]" SITE "C2" ;
+IOBUF PORT "sdram_dq[12]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[13]" SITE "C1" ;
+IOBUF PORT "sdram_dq[13]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[14]" SITE "C3" ;
+IOBUF PORT "sdram_dq[14]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dq[15]" SITE "B1" ;
+IOBUF PORT "sdram_dq[15]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_ba[0]" SITE "A11" ;
+IOBUF PORT "sdram_ba[0]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_ba[1]" SITE "B11" ;
+IOBUF PORT "sdram_ba[1]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dqm[0]" SITE "B14" ;
+IOBUF PORT "sdram_dqm[0]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_dqm[1]" SITE "B3" ;
+IOBUF PORT "sdram_dqm[1]" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_csn" SITE "B12" ;
+IOBUF PORT "sdram_csn" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_cke" SITE "B4" ;
+IOBUF PORT "sdram_cke" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_clk" SITE "A3" ;
+IOBUF PORT "sdram_clk" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_wen" SITE "A13" ;
+IOBUF PORT "sdram_wen" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_casn" SITE "B13" ;
+IOBUF PORT "sdram_casn" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+LOCATE COMP "sdram_rasn" SITE "A12" ;
+IOBUF PORT "sdram_rasn" IO_TYPE=LVCMOS33 PULLMODE=NONE ;
+# SPI Flash
+LOCATE COMP "flash_csn" SITE "N8" ;
+IOBUF PORT "flash_csn" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "flash_clk" SITE "N9" ;
+IOBUF PORT "flash_clk" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "flash_mosi" SITE "T8" ;
+IOBUF PORT "flash_mosi" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "flash_miso" SITE "T7" ;
+IOBUF PORT "flash_miso" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "flash_wpn" SITE "M7" ;
+IOBUF PORT "flash_wpn" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+LOCATE COMP "flash_resetn" SITE "N7" ;
+IOBUF PORT "flash_resetn" IO_TYPE=LVCMOS33 PULLMODE=UP ;
+# Testpoints
+LOCATE COMP "tp[0]" SITE "C7" ;
+IOBUF PORT "tp[0]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+LOCATE COMP "tp[1]" SITE "C8" ;
+IOBUF PORT "tp[1]" IO_TYPE=LVCMOS33 PULLMODE=DOWN ;
+# Constraints
+
+# Period Constraints
+FREQUENCY PORT "clk" 50.0 MHz;
+FREQUENCY NET "auxclks[0]" 330.0 MHz;
+FREQUENCY NET "auxclks[1]" 66.0 MHz;
+FREQUENCY NET "auxclks[2]" 60.0 MHz;
+FREQUENCY NET "clk_28m" 28.6 MHz;
+FREQUENCY NET "clk_sys" 114.3 MHz;
+FREQUENCY NET "clk_142m" 142.9 MHz;
+FREQUENCY NET "virtual_top/sck" 28.6 MHz;
+
+# Select changes occur during video reset; exclude select-to-clock propagation.
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_0" PIN "SEL1" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL0" ;
+BLOCK COMP "genvideo.clkmux_1" PIN "SEL1" ;
+
+# Explicit constraints on the DCSC output clocks.
+FREQUENCY NET "clk_pixel" 66.0 MHz;
+FREQUENCY NET "clk_tmds" 330.0 MHz;
+
+# Used to avoid timing failures for HDMI clock switch as we use clk to switch DCSC
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[0]";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "auxclks[1]";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_pixel";
+BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_tmds";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "auxclks[0]" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "auxclks[1]" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_pixel" TO CLKNET "clk_c";
+BLOCK PATH FROM CLKNET "clk_tmds" TO CLKNET "clk_c";
+
+# Block Path Constraints
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_28m";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "clk_142m";
+BLOCK PATH FROM CLKNET "auxclks[2]" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_sys" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_28m" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_28m" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "clk_142m" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "clk_142m" TO CLKNET "virtual_top/sck";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "auxclks[2]";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_28m";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_sys";
+BLOCK PATH FROM CLKNET "virtual_top/sck" TO CLKNET "clk_142m";
+
+MULTICYCLE FROM CLKNET "clk_28m" TO CLKNET "clk_sys" 4X;
+MULTICYCLE FROM CLKNET "clk_sys" TO CLKNET "clk_28m" 2X;
+
+BLOCK PATH TO PORT "led[*]";
+
+BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_0/typ[*]";
+BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_1/typ[*]";
+BLOCK PATH FROM CELL "virtual_top/mycfide/joystick_d*";
+
+BLOCK PATH FROM CELL "virtual_top/minimig/overclock*";
+BLOCK PATH FROM CELL "virtual_top/minimig/ide_config*";
+BLOCK PATH FROM CELL "virtual_top/minimig/floppy_config*";
+BLOCK PATH FROM CELL "virtual_top/minimig/chipset_config*";
+BLOCK PATH FROM CELL "virtual_top/minimig/memory_config*";
+BLOCK PATH FROM CELL "virtual_top/minimig/cpu_config*";
+
+BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/xoffset*";
+BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/yoffset*";
+BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/lr_filter*";
+BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/hr_filter*";
+BLOCK PATH FROM CELL "virtual_top/minimig/USERIO1/osd1/dither*";
+
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/beamcon0*";
+
+MAXDELAY FROM CELL "virtual_top/DVI_*" TO CELL "genvideo.hdmi_inst/*" 34.96 NS;
+
+BLOCK PATH TO CELL "genvideo.audio_sync/*sync*";
+BLOCK PATH TO CELL "genvideo.clock_control/reset_sync*";
+BLOCK PATH TO CELL "genvideo.hdmi_inst/true_hdmi_output.packet_picker_inst/audio_sample_word_buffer*";
+BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/reset_x5_sync*";
+
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_resetn_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_irq_28_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*fifo/*_sync*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/config_meta*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.osd_rtg/enable_sync*";
+
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray_w1[*]";
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/wr_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/wr_gray_r1[*]";
+
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/interlace_out*" TO CELL "genvideo.hdmi_inst/*";
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/displaypal_out*" TO CELL "genvideo.hdmi_inst/*";
+BLOCK PATH FROM CELL "virtual_top/minimig/AGNUS1/bc1/long_frame_r*" TO CELL "genvideo.hdmi_inst/*";
+
+BLOCK RESETPATHS ;
+BLOCK ASYNCPATHS ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/state*" TO CELL "virtual_top/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/memaddr*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/data_write*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/ALU/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/minimig/CPU1/*" 3X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/gen_rtg.rtg/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/mycfide/amiga_buffer*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_0[18:53]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" 2X ;
+
+MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "clk_sys" 2X ;
+
+MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genvideo.hdmi_inst/serializer/g_ser*.shift*" 2X ;
+BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
+
+CLOCK_TO_OUT PORT "sdram_csn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_a*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_dq*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_wen*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_rasn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_casn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_cke*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_ba*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
+CLOCK_TO_OUT PORT "sdram_dqm*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
