@@ -6,12 +6,13 @@ SANITIZE ?= -fsanitize=address,undefined
 CFLAGS := -std=c99 -g -Wall -Wextra -Wno-int-to-pointer-cast
 
 .PHONY: test
-test: $(BUILD_DIR)/atapi_test $(BUILD_DIR)/fat_test $(BUILD_DIR)/hdd_bounds_test $(BUILD_DIR)/hdd_bounds_read_unchecked_test $(BUILD_DIR)/mmc_error_test
+test: $(BUILD_DIR)/atapi_test $(BUILD_DIR)/fat_test $(BUILD_DIR)/hdd_bounds_test $(BUILD_DIR)/hdd_bounds_read_unchecked_test $(BUILD_DIR)/mmc_error_test $(BUILD_DIR)/boot_spi_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/atapi_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/fat_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/hdd_bounds_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/hdd_bounds_read_unchecked_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/mmc_error_test
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/boot_spi_test
 
 $(BUILD_DIR):
 	mkdir -p $@
@@ -30,5 +31,8 @@ $(BUILD_DIR)/hdd_bounds_test: hdd_bounds_test.c $(FW)/hdd.c $(wildcard $(FW)/*.h
 $(BUILD_DIR)/hdd_bounds_read_unchecked_test: hdd_bounds_test.c $(FW)/hdd.c $(wildcard $(FW)/*.h) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SANITIZE) -DHDD_DISABLE_READ_RANGE_CHECK -Wno-format -Wno-unused-parameter -Wno-unused-variable -ffunction-sections -fdata-sections -I$(FW) -I$(ROOT)/EightThirtyTwo/lib832 hdd_bounds_test.c -Wl,--gc-sections -o $@
 
-$(BUILD_DIR)/mmc_error_test: mmc_error_test.c $(FW)/mmc.c $(wildcard $(FW)/*.h) | $(BUILD_DIR)
+$(BUILD_DIR)/mmc_error_test: mmc_error_test.c $(FW)/mmc.c $(FW)/errors.c $(wildcard $(FW)/*.h) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SANITIZE) -Wno-format -Wno-unused-variable -Wno-unused-but-set-variable -ffunction-sections -fdata-sections -I$(FW) -I$(ROOT)/EightThirtyTwo/lib832 mmc_error_test.c -Wl,--gc-sections -o $@
+
+$(BUILD_DIR)/boot_spi_test: boot_spi_test.c ../../ctrl_boot_832/spi.c ../../ctrl_boot_832/spi.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Werror $(SANITIZE) boot_spi_test.c -o $@

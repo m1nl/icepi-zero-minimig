@@ -28,8 +28,26 @@ Override `SANITIZE=` only when the compiler lacks sanitizer support.
   and with the optional read-range-check bypass enabled for the test binary.
 - `mmc_error_test.c` exercises production SD I/O with scripted SPI responses:
   rejected commands/data, missing data tokens, stop-transmission failures,
-  busy timeouts and successful final-sector I/O. Quiet APIs return failures
+  busy timeouts and successful final-sector I/O. It verifies command end bits and
+  CRC7, CS-high startup/completion clocks, ready-before-command behavior, immediate
+  and delayed legacy ACMD41 success, SDHC initialization, and failed CMD9/CMD16/CMD58
+  propagation without stale capacity. It also checks immediate decoding
+  of all read-error tokens, physical versus command addresses, elapsed token waits,
+  unexpected bytes, and the failing sector within a multi-block read. Quiet APIs return failures
   without invoking `FatalError`; legacy APIs retain fatal error reporting.
+
+- `boot_spi_test.c` exercises the production bootstrap reader from
+  `fw/ctrl_boot_832/spi.c`: SDHC, v2/legacy SDSC and MMC initialization, immediate
+  and delayed ACMD41 completion, CMD0/CMD8 framing, CMD16/CMD58 failures, OCR/echo
+  validation, byte/block addressing, unaligned destinations, both CRC bytes,
+  completion clocks, card-ready waits, read-error tokens and timeout cleanup.
+  The bootstrap exports only `spi_init()` and `sd_read_sector()`; it has no write
+  or multi-block path. Its ROM is embedded in the FPGA: regenerate the boot ROM
+  with `make -C fw/ctrl_boot_832` before rebuilding the selected board's HDL.
+
+The SD SPI RTL simulation runs separately with `make -C bench/sd test`; see
+[the SD testbench README](../../../bench/sd/README.md). It checks the production
+engine against the current firmware divider settings.
 
 The IDE/FIFO RTL simulation runs separately with `make -C bench/ide test`; see
 [the IDE testbench README](../../../bench/ide/README.md).
@@ -64,3 +82,45 @@ and POSTGAP/extra INDEX points are rejected rather than guessed.
 firmware build skips command-level bounds validation for ATA reads only. Write
 validation and the hardfile seek-index guard stay enabled. Cached capacity is
 calculated when opening the device; it is not recalculated per read or write.
+
+## SD read diagnostics
+
+CMD17/CMD18 failures print details to the serial log: physical sector (decimal),
+command argument (hexadecimal), card type, received token, wait time in
+milliseconds, poll count, and first/last unexpected bytes. Card type 3 uses sector
+addresses (SDHC/SDXC); types 1/2 use byte addresses (MMC/SDSC). For CMD18, the
+physical sector identifies the failed block while the argument remains the
+stream's starting address. Read-error tokens decode general error, card-controller
+error, ECC failure and out-of-range flags; CMD12 cleanup failures are also logged.
+
+The OSD distinguishes missing tokens from card-reported data errors. Use the
+left/right arrows to browse three detail pages and any other pending error
+categories. They show the physical sector and command argument in hexadecimal,
+card type/addressing mode, token, elapsed milliseconds, poll count, first/last
+unexpected bytes, unexpected-byte count, decoded error flags, and CMD12 response
+for multi-block failures. All rows fit the 32-character OSD width. No serial
+output is needed. The first pending SD snapshot stays visible until OK/Reboot;
+drawing or browsing pages does not clear it or lose fatal severity.
+
+An all-`0xFF` or all-`0x00` wait retains the existing 1,000,001-byte polling limit.
+Quiet token failures raise a nonfatal OSD error and return failure; legacy calls
+remain fatal. The diagnostic polling limit is independent of SPI initialization speed;
+no automatic retries are added.
+The SD tests render the production error pages through a mocked OSD and check
+all fields, page clearing, snapshot lifetime and fatal/nonfatal handling.
+
+## SD transaction handling
+
+Initialization supplies 80 clocks with CS/MOSI high and uses divider `0x48`:
+about 389 kHz with CS low and 394 kHz with CS high at the supported boards' system
+clock. Normal selected transfers remain about 11.43 MHz. Transaction exits clock
+an extra `0xFF` byte with CS high after consuming the response/data CRC. Commands
+wait up to one second for ready before transmission; CMD0 can reset a busy card,
+and CMD12 interrupts a read stream through its dedicated path with valid CRC7
+and end bit. Capacity is invalidated before CMD9 and initialization fails if the
+CSD cannot be read. Malformed CSD fields cannot trigger an invalid block-size shift.
+
+No production HDL or bootstrap change is needed. Simulation does not establish
+SD pin setup/hold margins; the existing board constraints lack SD I/O delays.
+Electrical timing validation still needs card/board timing data and hardware
+measurement rather than assumed delay values.
