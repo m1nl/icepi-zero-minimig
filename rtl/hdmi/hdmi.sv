@@ -5,7 +5,7 @@
 // This version synchronizes to an external sync signal which is expected to
 // have exactly half the horizontal refresh rate.
 
-// RTG mode instead generates free-running 1024x768 timing.
+// RTG mode generates free-running timing from the RTG_* parameters.
 
 module hdmi
 #(
@@ -57,7 +57,8 @@ module hdmi
     parameter bit [10:0] RTG_HSYNC_PULSE_SIZE = 136,
     parameter bit [ 9:0] RTG_VSYNC_PULSE_START = 3,
     parameter bit [ 9:0] RTG_VSYNC_PULSE_SIZE = 6,
-    parameter bit [ 1:0] RTG_POLARITY_INVERT = 2'b11
+    parameter bit [ 1:0] RTG_POLARITY_INVERT = 2'b11,
+    parameter bit [ 7:0] RTG_CEA_MODE = 8'd0
 )
 (
     input logic clk_pixel_x5,
@@ -75,7 +76,7 @@ module hdmi
     output reg osd_pixel_request,
     output reg osd_frame_request,
 
-    input logic       rtg_en,      // 1 for free-running 1024x768 timing
+    input logic       rtg_en,      // 1 for free-running RTG timing
     input logic       pal_mode,    // 1 for pal timing
     input logic       long_frame,  // 1 if short frame has been detected
     input logic       interlace,   // 1 if interlace has been detected
@@ -109,7 +110,6 @@ logic [7:0] cea_pal    = 8'd17; // 720x576p @ 50Hz
 logic [7:0] cea_pal_i  = 8'd21; // 720(1440)x576i @ 50Hz
 logic [7:0] cea_ntsc   = 8'd02; // 720x480p @ 59.94/60Hz
 logic [7:0] cea_ntsc_i = 8'd06; // 720(1440)x480i @ 59.94/60Hz
-logic [7:0] cea_rtg    = 8'd0;  // 1024x768 (no CEA video identification code)
 
 logic [10:0] frame_width;
 logic [10:0] screen_width;
@@ -127,9 +127,8 @@ logic [10:0] cx;
 logic  [9:0] cy;
 
 // RTG-only request coordinates, RTG_REQUEST_LEAD pixels ahead.
-// Resolution maintenance: this request generator uses the fixed 1024x768
-// raster (1344x806 total). Another raster needs matching wrap/blank/window
-// constants here and matching RTG timing below, not just driver mode entries.
+// Request wrap and blanking derive from the configured RTG raster.
+// Keep the board PLL, clock constraints and driver profile consistent.
 localparam [10:0] REGISTERED_LEAD = RTG_REQUEST_LEAD + 1;
 
 localparam [10:0] SCAN_WRAP = RTG_FRAME_WIDTH - (RTG_REQUEST_LEAD + 1);
@@ -285,7 +284,7 @@ always_ff @(posedge clk_pixel) begin
 
         frame_height <= rtg_en ? RTG_FRAME_HEIGHT : 10'd626;
         screen_height <= rtg_en ? RTG_SCREEN_HEIGHT : 10'd576;
-        video_id_code <= rtg_en ? cea_rtg : cea_pal;
+        video_id_code <= rtg_en ? RTG_CEA_MODE : cea_pal;
 
         video_mode_d <= video_mode;
     end
@@ -298,7 +297,7 @@ always_ff @(posedge clk_pixel) begin
         begin
             frame_height <= RTG_FRAME_HEIGHT;
             screen_height <= RTG_SCREEN_HEIGHT;
-            video_id_code <= cea_rtg;
+            video_id_code <= RTG_CEA_MODE;
             offset_x_r <= 0;
             offset_y_r <= 0;
             sync_done <= 0;

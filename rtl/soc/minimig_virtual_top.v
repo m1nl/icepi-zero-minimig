@@ -44,7 +44,9 @@ module minimig_virtual_top #(
 	parameter haveaga = 1,
 	parameter haveusbhid = 0,
 	parameter haveauxspi = 0,
-	parameter haveuart = 0
+	parameter haveuart = 0,
+	parameter rtg_screen_width = 1024,
+	parameter rtg_screen_height = 768
 ) (
 	// JTAG inputs
 	output sys_tdo,
@@ -387,7 +389,10 @@ generate
 
 		assign rtg_irq_28 = rtg_irq_28_sync[1];
 
-		rtg_video rtg (
+		rtg_video #(
+			.H_ACTIVE(rtg_screen_width),
+			.V_ACTIVE(rtg_screen_height)
+		) rtg (
 			.clk_sys(CLK_114),
 			.resetn_sys(sdctl_rst && rtg_cpu_resetn),
 			.clk_rtg(CLK_RTG_IN),

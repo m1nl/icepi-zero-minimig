@@ -4,15 +4,14 @@
 `default_nettype none
 `timescale 1 ns / 1 ps
 module rtg_video #(
-  parameter PREPARE_DELAY = 4096,  // clk_sys cycles available to the vblank handler
-  // These describe the physical HDMI raster, not the requested P96 bitmap.
+  // clk_sys cycles available to the vblank handler
+  parameter PREPARE_DELAY = 4096,
+  // These describe the active HDMI raster, not the requested P96 bitmap.
   // For another raster, also update HDMI's timing/request decode, the board
   // PLL and clock constraints, and the driver's ModeRepeat/timing tables.
   // Changing these parameters alone does not change the HDMI output mode.
   parameter H_ACTIVE = 1024,
-  parameter V_ACTIVE = 768,
-  parameter H_TOTAL = 1344,
-  parameter V_TOTAL = 806
+  parameter V_ACTIVE = 768
 ) (
   input wire clk_sys,
   input wire resetn_sys,
@@ -642,7 +641,7 @@ reg [9:0] scan_row;
 reg scan_bottom;
 reg byte_phase;
 
-wire [9:0] next_scan_row = scan_row == V_TOTAL - 1 ? 10'd0 : scan_row + 1'b1;
+wire [9:0] next_scan_row = scan_row + 1'b1;
 reg  [9:0] split_vid;
 
 reg indexed_vid, rgb565_vid;

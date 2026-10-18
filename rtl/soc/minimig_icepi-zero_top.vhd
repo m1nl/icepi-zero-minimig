@@ -60,6 +60,34 @@ port (
 end entity;
 
 architecture rtl of minimig_icepizero_top is
+	-- RTG raster configuration. Match the driver profile and clock constraints.
+	constant RTG_PIXEL_HZ            : natural := 66000000;
+	constant RTG_PIXELX5_HZ          : natural := 5 * RTG_PIXEL_HZ;
+
+	constant RTG_FRAME_WIDTH         : natural := 1344;
+	constant RTG_FRAME_HEIGHT        : natural := 806;
+	constant RTG_SCREEN_WIDTH        : natural := 1024;
+	constant RTG_SCREEN_HEIGHT       : natural := 768;
+	constant RTG_HSYNC_PULSE_START   : natural := 24;
+	constant RTG_HSYNC_PULSE_SIZE    : natural := 136;
+	constant RTG_VSYNC_PULSE_START   : natural := 3;
+	constant RTG_VSYNC_PULSE_SIZE    : natural := 6;
+	-- Bit 0 inverts HSync; bit 1 inverts VSync. CEA mode 0 is unspecified.
+	constant RTG_POLARITY_INVERT     : std_logic_vector(1 downto 0) := "11";
+	constant RTG_CEA_MODE            : natural := 0;
+
+	-- constant RTG_FRAME_WIDTH       : natural := 1650;
+	-- constant RTG_FRAME_HEIGHT      : natural := 750;
+	-- constant RTG_SCREEN_WIDTH      : natural := 1280;
+	-- constant RTG_SCREEN_HEIGHT     : natural := 720;
+	-- constant RTG_HSYNC_PULSE_START : natural := 110;
+	-- constant RTG_HSYNC_PULSE_SIZE  : natural := 40;
+	-- constant RTG_VSYNC_PULSE_START : natural := 5;
+	-- constant RTG_VSYNC_PULSE_SIZE  : natural := 5;
+	-- -- Bit 0 inverts HSync; bit 1 inverts VSync. CEA mode 0 is unspecified.
+	-- constant RTG_POLARITY_INVERT   : std_logic_vector(1 downto 0) := "00";
+	-- constant RTG_CEA_MODE          : natural := 0;
+
 	-- Internal signals
 	signal audio_l	:	std_logic_vector(15 downto 0);
 	signal audio_r	:	std_logic_vector(15 downto 0);
@@ -173,9 +201,9 @@ begin
 	auxpll	:	entity work.ecp5pll
 	generic map (
 		in_hz => natural(base_frequency),
-		out0_hz => natural(330e6),
+		out0_hz => RTG_PIXELX5_HZ,
 		out0_tol_hz => 1e4,
-		out1_hz => natural(66e6),
+		out1_hz => RTG_PIXEL_HZ,
 		out1_tol_hz => 1e4,
 		out2_hz => natural(60e6),
 		out2_tol_hz => 1e4
@@ -210,7 +238,9 @@ begin
 		haveaga => 1,
 		haveusbhid => 1,
 		haveauxspi => 1,
-		haveuart => 0
+		haveuart => 0,
+		rtg_screen_width => RTG_SCREEN_WIDTH,
+		rtg_screen_height => RTG_SCREEN_HEIGHT
 	)
 	port map (
 		CLK_IN => clk,
@@ -358,7 +388,17 @@ begin
 			AUDIO_BIT_WIDTH	:	integer := 16;
 			VENDOR_NAME	:	std_logic_vector(8*8-1 downto 0) := x"4100000000000000";  -- "A" + zero padding
 			PRODUCT_DESCRIPTION	:	std_logic_vector(8*16-1 downto 0) := x"41000000000000000000000000000000"; -- "FPGA" + padding
-			SOURCE_DEVICE_INFORMATION	:	std_logic_vector(7 downto 0) := x"09"
+			SOURCE_DEVICE_INFORMATION	:	std_logic_vector(7 downto 0) := x"09";
+			RTG_FRAME_WIDTH	:	std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(1344, 11));
+			RTG_FRAME_HEIGHT	:	std_logic_vector(9 downto 0) := std_logic_vector(to_unsigned(806, 10));
+			RTG_SCREEN_WIDTH	:	std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(1024, 11));
+			RTG_SCREEN_HEIGHT	:	std_logic_vector(9 downto 0) := std_logic_vector(to_unsigned(768, 10));
+			RTG_HSYNC_PULSE_START	:	std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(24, 11));
+			RTG_HSYNC_PULSE_SIZE	:	std_logic_vector(10 downto 0) := std_logic_vector(to_unsigned(136, 11));
+			RTG_VSYNC_PULSE_START	:	std_logic_vector(9 downto 0) := std_logic_vector(to_unsigned(3, 10));
+			RTG_VSYNC_PULSE_SIZE	:	std_logic_vector(9 downto 0) := std_logic_vector(to_unsigned(6, 10));
+			RTG_POLARITY_INVERT	:	std_logic_vector(1 downto 0) := "11";
+			RTG_CEA_MODE	:	std_logic_vector(7 downto 0) := x"00"
 		);
 		port (
 			clk_pixel_x5	:	in  std_logic;
@@ -493,7 +533,17 @@ begin
 		hdmi_inst : component hdmi
 		generic map (
 			VIDEO_RATE => 28571400,
-			RTG_VIDEO_RATE => 66000000,
+			RTG_VIDEO_RATE => RTG_PIXEL_HZ,
+			RTG_FRAME_WIDTH => std_logic_vector(to_unsigned(RTG_FRAME_WIDTH, 11)),
+			RTG_FRAME_HEIGHT => std_logic_vector(to_unsigned(RTG_FRAME_HEIGHT, 10)),
+			RTG_SCREEN_WIDTH => std_logic_vector(to_unsigned(RTG_SCREEN_WIDTH, 11)),
+			RTG_SCREEN_HEIGHT => std_logic_vector(to_unsigned(RTG_SCREEN_HEIGHT, 10)),
+			RTG_HSYNC_PULSE_START => std_logic_vector(to_unsigned(RTG_HSYNC_PULSE_START, 11)),
+			RTG_HSYNC_PULSE_SIZE => std_logic_vector(to_unsigned(RTG_HSYNC_PULSE_SIZE, 11)),
+			RTG_VSYNC_PULSE_START => std_logic_vector(to_unsigned(RTG_VSYNC_PULSE_START, 10)),
+			RTG_VSYNC_PULSE_SIZE => std_logic_vector(to_unsigned(RTG_VSYNC_PULSE_SIZE, 10)),
+			RTG_POLARITY_INVERT => RTG_POLARITY_INVERT,
+			RTG_CEA_MODE => std_logic_vector(to_unsigned(RTG_CEA_MODE, 8)),
 			RTG_REQUEST_LEAD => 2,
 			AUDIO_RATE => 48000,
 			AUDIO_BIT_WIDTH => 16

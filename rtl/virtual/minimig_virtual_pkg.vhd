@@ -26,7 +26,9 @@ package minimig_virtual_pkg is
 	  haveaga : integer := 1;
 	  haveusbhid : integer := 0;
 	  haveauxspi : integer := 0;
-	  haveuart : integer := 1
+	  haveuart : integer := 1;
+	  rtg_screen_width : integer := 1024;
+	  rtg_screen_height : integer := 768
 	);
 	PORT
 	(
