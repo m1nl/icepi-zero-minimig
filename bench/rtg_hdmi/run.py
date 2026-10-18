@@ -22,6 +22,9 @@ TESTS = {
     'osd': ('rtg_osd_tb', ['rtl/rtg/rtg_osd.v']),
     'audio': ('audio_cdc_tb', ['rtl/hdmi/audio_cdc.v']),
     'reset': ('hdmi_reset_tb', HDMI),
+    'config': ('hdmi_config_tb', HDMI + ['bench/rtg_hdmi/hdmi_reset_tb.sv']),
+    'top_config': ('rtg_top_config_tb', RTG + ['rtl/soc/minimig_virtual_top.v',
+                                            'rtl/rtg/rtg_osd.v']),
     'video': ('rtg_video_tb', RTG),
     'contention': ('rtg_sdram_contention_tb', RTG + SDRAM),
     'addresses': ('rtg_sdram_address_tb', RTG + SDRAM),
@@ -31,8 +34,8 @@ TESTS = {
     'serializer': ('serializer_lattice_tb', ['rtl/hdmi/serializer.sv']),
     'clocks': ('video_clock_control_tb', ['rtl/hdmi/video_clock_control.v']),
 }
-QUICK = ('fifo', 'registers', 'vblank', 'audio', 'osd', 'reset', 'video')
-LONG = ('reset', 'video', 'repeat', 'priority', 'contention', 'addresses', 'integrated')
+QUICK = ('fifo', 'registers', 'vblank', 'audio', 'osd', 'reset', 'config', 'top_config', 'video')
+LONG = ('config', 'reset', 'video', 'repeat', 'priority', 'contention', 'addresses', 'integrated')
 
 
 def main():
@@ -71,6 +74,8 @@ def main():
                 continue
             command = ['iverilog', '-g2012', '-DSOC_SIM', '-s', top,
                        '-o', str(Path(folder) / name)]
+            if name == 'top_config':
+                command += ['-i', '-I', 'fpga/icepi-zero', '-I', 'rtl/soc']
             if name in ('serializer', 'clocks'):
                 if args.lattice_models is None:
                     parser.error(name + ' requires --lattice-models or LATTICE_MODELS')

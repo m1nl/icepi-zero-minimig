@@ -42,7 +42,7 @@ module rtg_video_tb;
     wire [25:0] addr; wire req,pri;
     reg [15:0] data=0; reg ack=0,fill=0;
     wire [7:0] r,g,b; wire pixel,de;
-    rtg_video #(.PREPARE_DELAY(32),.H_ACTIVE(W),.V_ACTIVE(H),.H_TOTAL(HT),.V_TOTAL(VT)) dut (
+    rtg_video #(.PREPARE_DELAY(32),.H_ACTIVE(W),.V_ACTIVE(H)) dut (
         .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),

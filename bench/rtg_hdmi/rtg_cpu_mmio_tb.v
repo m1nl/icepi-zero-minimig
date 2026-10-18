@@ -6,9 +6,7 @@ module rtg_cpu_mmio_tb #(
  parameter VERBOSE=1,
  parameter TIMEOUT_NS=2000000,
  parameter H_ACTIVE=1024,
- parameter V_ACTIVE=768,
- parameter H_TOTAL=1344,
- parameter V_TOTAL=806
+ parameter V_ACTIVE=768
 );
 reg clk=0; always #5 clk=~clk;
 reg reset_n=0;
@@ -54,7 +52,7 @@ TG68K cpu(.clk(clk),.reset(reset_n),.clkena_in(phase[1:0]==0),.IPL(3'b111),.dtac
 .addr(addr),.data_read(dr),.data_read2(dr),.data_write(dw),.rw(rw),.as(as_n),.ena7RDreg(phase==7),.ena7WRreg(phase==15),
 .fromram(fromram),.toram(toram),.ramready(ramready),.overclock(1'b0),.cpu(2'b11),.ziiram_active(1'b0),.ziiiram_active(1'b0),.ziiiram2_active(1'b0),.ziiiram3_active(1'b0),.eth_en(1'b0),.frometh(16'b0),.ethready(1'b0),.chip_config(2'b11),.slow_config(2'b00),.aga(1'b1),.turbochipram(1'b1),.turbokick(1'b1),.ramaddr(ramaddr),.cpustate(cpustate),.ramlds(ramlds),.ramuds(ramuds),
 .rtg_reg_addr(reg_addr),.rtg_reg_d(reg_d),.rtg_reg_wr(reg_wr),.rtg_reg_req(reg_req),.rtg_reg_ack(reg_ack),.rtg_reg_q(reg_q),.audio_buf(1'b0),.host_addr(8'd0),.host_ack(1'b0),.host_q(16'b0));
-rtg_video #(.H_ACTIVE(H_ACTIVE),.V_ACTIVE(V_ACTIVE),.H_TOTAL(H_TOTAL),.V_TOTAL(V_TOTAL))
+rtg_video #(.H_ACTIVE(H_ACTIVE),.V_ACTIVE(V_ACTIVE))
 rtg(.clk_sys(clk),.clk_rtg(clk),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(1'b0),.video_reset(1'b1),.frame_start_toggle(1'b0),.vblank_start_toggle(1'b0),.pixel_request(1'b0),.frame_request(1'b0),.line_prepare(1'b0),.reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(reg_ack),.reg_q(reg_q),.fetch_d(16'd0),.fetch_ack(1'b0),.fetch_fill(1'b0));
 integer i;
 reg [1023:0] image_path;

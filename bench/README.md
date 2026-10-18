@@ -30,6 +30,7 @@ make -C bench/input test
 make -C bench/ide test
 make -C bench/sd test
 python3 bench/rtg_hdmi/run.py
+python3 bench/rtg_hdmi/run.py reset config top_config
 python3 bench/rtg_hdmi/run.py repeat priority
 python3 bench/rtg_hdmi/run.py contention addresses integrated
 python3 bench/cpu_cache_fsm/run.py
@@ -74,6 +75,12 @@ CCACHE_DISABLE=1 verilator --binary --timing -Wno-fatal -DSOC_SIM \
 ```
 
 ## Testbench assumptions
+
+The `config` case checks 1280x720 totals, sync widths/polarities, CEA code,
+request alignment and native fallback. The `reset` case checks the default
+1024x768 profile. `top_config` checks forwarding of custom active dimensions
+and the fixed 4096-cycle preparation delay; unrelated VHDL
+peripherals are intentionally unbound in that elaboration check.
 
 RTG frame requests arrive during blanking, one cycle before the first pixel
 request. Standalone raster generators follow the same timing as HDMI so frame

@@ -142,3 +142,36 @@ python3 bench/rtg_area/assess_countdown.py --output /tmp/rtg-countdown-check
 Use `--skip-synthesis` for just the cycle comparisons. The golden controller
 is generated from Git revision `58d2d6a` plus the measured change 2, so the
 comparison remains reproducible after edits to the working RTL.
+
+## Frame-total parameter assessment
+
+`assess_totals.py` compares temporary variants of the pre-removal RTL, including
+both FIFOs and palette RAM. It leaves production sources unchanged. The default
+Git baseline is `5603d14da7e703b238aa377265c61cf815cf5148`; use `--baseline-ref`
+to select another revision that still has the total parameters.
+
+```sh
+python3 bench/rtg_area/assess_totals.py --simulate
+```
+
+The default output directory `/tmp/rtg-totals-assessment` contains source
+snapshots, patches, hashes, tool version, mapped netlists, logs and results.
+`--simulate` runs the current pixel/format/split/starvation/restart regression
+against each variant, removing obsolete parameter overrides only in temporary
+bench copies. Requires Yosys and, for simulation, Verilator and a C++ compiler.
+
+Measured with Yosys 0.69 for ECP5, default 1024x768 parameters, 2026-10-18:
+
+| Variant | LUT4 | CCU2C | Flip-flops | EBR | PFUMX | L6MUX21 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current RTL | 845 | 121 | 622 | 3 | 159 | 11 |
+| Remove unused H_TOTAL | 845 | 121 | 622 | 3 | 159 | 11 |
+| Remove both totals and vertical wrap mux | 834 | 121 | 622 | 3 | 159 | 11 |
+| Also count rows only while frame_active | 835 | 121 | 622 | 3 | 160 | 11 |
+
+All four variants passed simulation. The free-running variant resets its row
+counter on HDMI's frame request; it increments through blanking without a
+total-height comparison. The active-row variant stops at V_ACTIVE instead.
+The measured baseline RTG SHA-256 is
+`14932943e3da87e5a9aa4f0e8ca103d58775d7677fdc07bfeae91b8bb8e81661`.
+These are isolated synthesis counts, not Diamond routed slice/timing results.

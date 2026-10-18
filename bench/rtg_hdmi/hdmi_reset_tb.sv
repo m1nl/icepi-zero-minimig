@@ -1,6 +1,11 @@
 `timescale 1ns/1ps
 module hdmi_reset_tb;
     parameter LEAD=2;
+    parameter FW=1344,FH=806,SW=1024,SH=768;
+    parameter HS_START=24,HS_SIZE=136,VS_START=3,VS_SIZE=6;
+    parameter [1:0] POLARITY=2'b11;
+    parameter [7:0] CEA_MODE=0;
+    parameter PIXEL_HZ=66000000;
     reg clk = 0, reset = 1, rtg = 0;
     reg pal = 1, long_frame = 1, interlace = 0;
     reg [1:0] screen = 0;
@@ -8,9 +13,14 @@ module hdmi_reset_tb;
     wire [10:0] x = dut.cx;
     wire [9:0] y = dut.cy;
     wire frame_start = x==0 && y==0 && !reset;
-    wire vblank_start = x==0 && y==768 && !reset;
+    wire vblank_start = x==0 && y==SH && !reset;
     wire frame_toggle,blank_toggle,scan_pixel,scan_frame,scan_line,osd_pixel,osd_frame;
-    hdmi #(.DVI_OUTPUT(1), .AUDIO_BIT_WIDTH(16),.RTG_REQUEST_LEAD(LEAD)) dut (
+    hdmi #(.DVI_OUTPUT(1),.AUDIO_BIT_WIDTH(16),.RTG_REQUEST_LEAD(LEAD),
+        .RTG_VIDEO_RATE(PIXEL_HZ),.RTG_FRAME_WIDTH(FW),.RTG_FRAME_HEIGHT(FH),
+        .RTG_SCREEN_WIDTH(SW),.RTG_SCREEN_HEIGHT(SH),
+        .RTG_HSYNC_PULSE_START(HS_START),.RTG_HSYNC_PULSE_SIZE(HS_SIZE),
+        .RTG_VSYNC_PULSE_START(VS_START),.RTG_VSYNC_PULSE_SIZE(VS_SIZE),
+        .RTG_POLARITY_INVERT(POLARITY),.RTG_CEA_MODE(CEA_MODE)) dut (
         .clk_pixel(clk), .clk_pixel_x5(clk), .reset(reset), .rtg_en(rtg),
         .pal_mode(pal), .long_frame(long_frame), .interlace(interlace),
         .screen_mode(screen), .offset_x(8'd0), .offset_y(7'd0),
@@ -33,27 +43,34 @@ module hdmi_reset_tb;
         if (dut.screen_width !== 720 || dut.screen_height !== 576)
             $fatal(1, "Timing registers changed asynchronously");
         @(negedge clk);
-        if (x !== 0 || y !== 0 || dut.screen_width !== 1024 || dut.screen_height !== 768 ||
-            dut.frame_width !== 1344 || dut.frame_height !== 806 || dut.video_id_code !== 0)
+        if (x !== 0 || y !== 0 || dut.screen_width !== SW || dut.screen_height !== SH ||
+            dut.frame_width !== FW || dut.frame_height !== FH || dut.video_id_code !== CEA_MODE)
             $fatal(1, "RTG reset configuration incorrect");
         reset = 0;
         blanks = 0;
-        for (cycles = 1; cycles <= 1344*806; cycles = cycles + 1) begin
+        for (cycles = 1; cycles <= FW*FH; cycles = cycles + 1) begin
             @(negedge clk);
-            expected_x = cycles % 1344;
-            expected_y = (cycles / 1344) % 806;
+            expected_x = cycles % FW;
+            expected_y = (cycles / FW) % FH;
             if (x !== expected_x || y !== expected_y)
                 $fatal(1, "RTG coordinates %0d,%0d expected %0d,%0d", x, y, expected_x, expected_y);
+            if (dut.hsync !== (POLARITY[0] ^ (x>=SW+HS_START && x<SW+HS_START+HS_SIZE)))
+                $fatal(1,"RTG HSync width/polarity");
+            // The existing VSync edges align to HSync start, one line early.
+            if (dut.vsync !== (POLARITY[1] ^
+                (expected_y*FW+expected_x >= (SH+VS_START-1)*FW+SW+HS_START &&
+                 expected_y*FW+expected_x < (SH+VS_START+VS_SIZE-1)*FW+SW+HS_START)))
+                $fatal(1,"RTG VSync width/polarity");
             // Toggles describe the coordinate before the edge; the first
             // frame edge toggles SOF, and the first blank edge toggles vblank.
-            if (frame_toggle !== 1'b1 || blank_toggle !== (cycles>1344*768))
+            if (frame_toggle !== 1'b1 || blank_toggle !== (cycles>FW*SH))
                 $fatal(1, "RTG toggle alignment at %0d,%0d", x, y);
-            expected_request_x = (cycles + LEAD) % 1344;
-            expected_request_y = ((cycles + LEAD) / 1344) % 806;
-            if (scan_pixel !== (expected_request_x<1024 && expected_request_y<768) ||
+            expected_request_x = (cycles + LEAD) % FW;
+            expected_request_y = ((cycles + LEAD) / FW) % FH;
+            if (scan_pixel !== (expected_request_x<SW && expected_request_y<SH) ||
                 // Frame setup precedes the first pixel request by one cycle.
-                scan_frame !== (expected_request_x==1343 && expected_request_y==805) ||
-                scan_line !== (expected_request_x==1024))
+                scan_frame !== (expected_request_x==FW-1 && expected_request_y==FH-1) ||
+                scan_line !== (expected_request_x==SW))
                 $fatal(1,"RTG event alignment at %0d,%0d",x,y);
             if (osd_pixel !== (expected_request_x>=640 && expected_request_x<896 && expected_request_y>=512 && expected_request_y<640) ||
                 osd_frame !== (expected_request_x==640 && expected_request_y==512))

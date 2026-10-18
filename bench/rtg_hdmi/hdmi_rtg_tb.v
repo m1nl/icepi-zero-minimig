@@ -29,7 +29,7 @@ module hdmi_rtg_tb;
     wire [25:0] addr; wire req,pri,extend_ok;
     wire [15:0] data; wire ack,fill;
     wire pixel,de;
-    rtg_video #(.H_ACTIVE(W),.V_ACTIVE(H),.H_TOTAL(HT),.V_TOTAL(VT)) dut (
+    rtg_video #(.H_ACTIVE(W),.V_ACTIVE(H)) dut (
         .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),
