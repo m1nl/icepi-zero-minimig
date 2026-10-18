@@ -364,6 +364,13 @@ MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "c
 MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genvideo.hdmi_inst/serializer/g_ser*.shift*" 2X ;
 BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
 
+# HDMI package-pin data-to-forwarded-clock skew target: +/- 300 ps.
+# 66 MHz pixels, 330 MHz DDR serializer clock, 660 Mb/s per data lane.
+# PCB skew and serial-eye/jitter requirements need separate budgeting.
+CLOCK_TO_OUT PORT "lvds_dp[0]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;
+CLOCK_TO_OUT PORT "lvds_dp[1]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;
+CLOCK_TO_OUT PORT "lvds_dp[2]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;
+
 CLOCK_TO_OUT PORT "sdram_csn*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
 CLOCK_TO_OUT PORT "sdram_a*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
 CLOCK_TO_OUT PORT "sdram_dq*" OUTPUT_DELAY 1.5 ns MIN 0.8 ns CLKNET "clk_sys" CLKOUT PORT "sdram_clk" CLK_OFFSET 0.5 X ;
