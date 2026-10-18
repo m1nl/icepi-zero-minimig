@@ -43,7 +43,9 @@ entity cfide is
 		haveaudio : integer := 0;
 		haveusbhid : integer := 0;
 		haveauxspi : integer := 0;
-		haveuart : integer := 0
+		haveuart : integer := 0;
+		-- keep SPI clock running even when all SPI devices are deselected
+		sck_free_running : integer := 1
 	);
 	port (
 		sysclk : in std_logic;
@@ -112,11 +114,23 @@ entity cfide is
 		-- 28Mhz signals
 		clk_28 : in std_logic;
 		tick_in : in std_logic	-- 44.1KHz - makes it easy to keep timer in lockstep with audio.
-);
+	);
 
 end cfide;
 
 architecture rtl of cfide is
+
+-- Only connected selects inhibit idle clocks. Bits 0/2/3 are unused;
+-- bit 7 is needed only when the SPI RTC is fitted.
+function get_spi_select_mask(rtc : integer) return std_logic_vector is
+begin
+	if rtc=1 then
+		return X"F2";
+	end if;
+	return X"72";
+end function;
+
+constant SPI_SELECT_MASK : std_logic_vector(7 downto 0) := get_spi_select_mask(havespirtc);
 
 signal reset : std_logic;
 
@@ -162,6 +176,8 @@ signal spi_div : unsigned(8 downto 0);
 signal spi_speed : unsigned(7 downto 0);
 signal spi_wait : std_logic;
 signal spi_wait_d : std_logic;
+signal spi_ready : std_logic;
+signal spi_idle_clock : std_logic;
 
 signal tick_in_t : std_logic;
 signal tick_in_r : std_logic;
@@ -283,7 +299,7 @@ begin
 		ack <= '0';
 		if req='1' then
 			if spi_select='1' then
-				if sd_busy='0' then
+				if spi_ready='1' then
 					ack <= '1';
 				end if;
 			elsif wr='0' then
@@ -613,13 +629,23 @@ end process;
 -----------------------------------------------------------------
 -- SPI-Interface
 -----------------------------------------------------------------
-sd_cs <= NOT scs;
+-- Unconnected/disabled selects stay inactive, so their state can be pruned
+-- even when cfide is synthesized as a separate module.
+sd_cs <= NOT (scs and SPI_SELECT_MASK);
+
 sd_clk <= NOT sck;
 sd_do <= sd_out(15);
 sd_busy <= shiftcnt(13);
 
+-- sd_clk is shared by SD, OSD, IDE/floppy and optional RTC. Free-run when
+-- all connected selects are inactive. Before a write, finish the idle high
+-- half-cycle, then park SCK high before asserting CS.
+spi_idle_clock <= '1' when sck_free_running/=0 and (scs and SPI_SELECT_MASK)=X"00" else '0';
+
+spi_ready <= '1' when sd_busy='0' and (spi_idle_clock='0' or wr='0' or (sck='0' and spi_div=0)) else '0';
+
 PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
-	IF scs(1)='0' and scs(7)='0' THEN
+	IF scs(1)='0' and (havespirtc/=1 or scs(7)='0') THEN
 		sd_di_in <= sd_di;
 	ELSE
 		sd_di_in <= sd_dimm;
@@ -630,9 +656,14 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 		spi_div <= (others => '0');
 		scs <= (others => '0');
 		sck <= '0';
-		spi_speed <= "00000000";
+		if sck_free_running/=0 then
+			spi_speed <= X"EF"; -- safe ~119 kHz before either firmware sets its divider
+		else
+			spi_speed <= "00000000";
+		end if;
 		spi_wait <= '0';
-		sd_out<=(others=>'0');
+		spi_wait_d <= '0';
+		sd_out<=(others=>'1');
 		sd_in_shift<=(others=>'0');
 
 	elsif rising_edge(sysclk) then
@@ -642,7 +673,7 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 			spi_wait<='0';
 		end if;
 
-		IF spi_select='1' AND req='1' and ack='0' and wr='1' AND sd_busy='0' THEN	 --SD write
+		IF spi_select='1' AND req='1' and ack='0' and wr='1' AND spi_ready='1' THEN	 --SD write
 			case addr(3 downto 2) is
 				when "10" => -- 8
 					spi_speed <= unsigned(d(7 downto 0));
@@ -715,6 +746,10 @@ PROCESS (sysclk, reset_n, scs, sd_di, sd_dimm) BEGIN
 						sck <='0';
 						sd_in_shift <= sd_in_shift(14 downto 0)&sd_di_in;
 					end if;
+				elsif spi_idle_clock='1' then
+					sck <= not sck;
+					sd_out <= (others=>'1'); -- no command start bit on idle MOSI
+					-- Do not shift receive data: idle clocks must not overwrite RDSPI.
 				end if;
 			elsif spi_wait='0' then
 				spi_div <= spi_div-1;
