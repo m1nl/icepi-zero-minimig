@@ -7,9 +7,20 @@ make -C amiga_sw/rtg test
 make -C amiga_sw/rtg test TEST_PROFILE=1280x720
 ```
 
-The default tests both profiles, independent of the RTG_720P build option.
-It leaves the installed/generated driver and ADF untouched. See the parent
+The default tests both profiles.
+It leaves both generated drivers and ADF files untouched. See the parent
 [driver README](../README) for dependencies, detailed coverage and limitations.
+
+Build and packaging checks are separate from the simulated-core suite:
+
+```sh
+python3 amiga_sw/rtg/tests/test_build.py
+```
+
+This rebuilds both profiles and ADFs, extracts and compares their driver,
+diagnostic and README files, checks distinct volume names, verifies no-op
+builds, and exercises DEBUG=1/0 rebuilds. It finishes with DEBUG=0 artifacts.
+Requires installed vasm, xdftool and the normal driver build dependencies.
 
 - `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM,
   then runs driver callbacks for the requested profile(s).

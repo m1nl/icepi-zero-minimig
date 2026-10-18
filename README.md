@@ -28,7 +28,7 @@ This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.or
 
 ## RTG video (Picasso96)
 
-RTG uses a framebuffer in Fast RAM and a fixed 1024x768 HDMI output at a 66 MHz pixel clock. Smaller source modes use pixel repetition; the physical HDMI timing stays the same. Native Amiga video is selected at boot and works without the RTG driver. RTG is enabled when Picasso96 requests it.
+RTG uses a framebuffer in Fast RAM and a fixed HDMI raster selected in the board top file. The current raster is 1024x768, with a 66 MHz pixel clock on IcePi Zero/XL and on FleaFPGA Ohm. Smaller source modes use pixel repetition; the physical HDMI timing stays the same. Native Amiga video is selected at boot and works without the RTG driver. RTG is enabled when Picasso96 requests it.
 
 Use an FPGA build with RTG support, the matching `minimig.card` driver, a 68020 CPU configuration and enough Fast RAM for both RTG and AmigaOS. The driver reserves 4 MiB by default, reducing its reservation if allocation fails. The optional `VIDEOMEMORY` monitor tooltype can request a different amount.
 
@@ -47,9 +47,17 @@ Missing Amiga NDK and public/private P96 headers are downloaded automatically in
 The build produces these files in `amiga_sw/rtg/`:
 
 * `minimig.card` - the Amiga driver library.
-* `minimig.card.lst` - the assembler listing.
+* `minimig.card.lst` - the 1024x768 assembler listing.
+* `minimig-720p.card` and `minimig-720p.card.lst` - the 1280x720 driver and listing.
 * `rtgcheck` - a read-only board/driver diagnostic.
-* `minimig-rtg.adf` - an 880 KiB OFS transfer floppy named `MinimigRTG`, containing the driver, diagnostic and driver README.
+* `minimig-rtg.adf` - the 1024x768 transfer floppy, volume `MinimigRTG`.
+* `minimig-rtg-720p.adf` - the 1280x720 transfer floppy, volume `MinimigRTG720p`.
+
+Gateware for 720p is not yet provided, so stick to regular `minimig-rtg.adf`.
+
+Both ADFs are 880 KiB OFS images containing the matching driver as
+`Libs/Picasso96/minimig.card`, the diagnostic and driver README. Every normal
+build produces both profiles.
 
 Serial debug logging is disabled by default. Build with `make -C amiga_sw/rtg DEBUG=1` to enable it, or `DEBUG=0` to disable it again. Changing this option rebuilds the driver and ADF without requiring `make clean`.
 
@@ -60,10 +68,11 @@ Run the driver callbacks on the simulated TG68K/RTG core with
 ### Installing the RTG driver
 
 1. Install Picasso96 on the Amiga. The driver works with P96 2.0. If the installer requires a board choice, select PicassoIV to obtain a monitor executable.
-2. Mount `amiga_sw/rtg/minimig-rtg.adf` as an Amiga floppy and copy the driver from an Amiga Shell:
+2. Mount `amiga_sw/rtg/minimig-rtg.adf` (1024x768) or `minimig-rtg-720p.adf` (1280x720) and copy the matching driver from an Amiga Shell:
 
    ```text
    Copy MinimigRTG:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
+   ; For 720p, use MinimigRTG720p: instead of MinimigRTG:
    ```
 
 3. Rename the installed monitor executable and its icon from `DEVS:Monitors/PicassoIV` and `PicassoIV.info` to `DEVS:Monitors/Minimig` and `Minimig.info`. The monitor executable comes from the P96 installer.

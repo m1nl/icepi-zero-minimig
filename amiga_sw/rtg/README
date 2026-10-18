@@ -16,11 +16,13 @@ Run from the repository root:
 
     make -C amiga_sw/rtg
 
-The default raster is 1024x768 at 66 MHz. To build the alternate driver:
+Every normal build produces both profiles in separate files:
 
-    make -C amiga_sw/rtg RTG_720P=1
+  1024x768: minimig.card, minimig.card.lst, minimig-rtg.adf
+  1280x720: minimig-720p.card, minimig-720p.card.lst, minimig-rtg-720p.adf
 
-This defines RTG_720P for the assembler and selects 1280x720 at 74.25 MHz,
+The 1024x768 driver describes a 66 MHz raster. The 720p build defines
+RTG_720P for the assembler and describes 1280x720 at 74.25 MHz,
 with totals 1650x750, horizontal front porch/sync 110/40 and vertical front
 porch/sync 5/5. HDMI, RTG scanout, the board PLL and clock constraints must
 be configured for the same raster. The driver does not change FPGA timing.
@@ -32,8 +34,7 @@ leaving a 16-pixel black border on each side. Noncanonical fallback modes
 use the selected profile's canvas thresholds and retain the same limitations.
 The .card file still does not install a Picasso96Mode mode list.
 
-Use RTG_720P=0 (or omit it) to restore 1024x768. Changing the option rebuilds
-the driver and floppy image without make clean; output filenames are unchanged.
+The Makefile always builds both profiles; no RTG_720P make option is needed.
 For direct assembly, define RTG_720P only for the 720p build. The raster
 constants and RepeatClocks in minimig.card.asm are the place to add profiles.
 
@@ -42,7 +43,7 @@ Serial debug logging is disabled by default. To include it in the driver:
     make -C amiga_sw/rtg DEBUG=1
 
 Use DEBUG=0 (or omit DEBUG) to return to the normal build. Changing this
-option rebuilds the driver and floppy image without requiring make clean.
+option rebuilds both drivers and floppy images without requiring make clean.
 The standalone rtgcheck diagnostic is available in both builds.
 
 Missing Amiga NDK and public/private P96 headers are downloaded into the
@@ -57,20 +58,27 @@ headers supply boardinfo.i and settings.i, while libraries/Picasso96.i
 supplies the RGB format constants. The old P96BoardInfo.i/P96CardStruct.i/
 P96ModeInfo.i dependencies are unused.
 
-This creates minimig.card, a minimig.card.lst assembler listing, and
-minimig-rtg.adf, an 880 KiB OFS floppy image named MinimigRTG. The disk
-contains Libs/Picasso96/minimig.card and this README. Insert it in a running
-Amiga and copy the driver with:
+Both ADF files are 880 KiB OFS transfer images. The standard disk is named
+MinimigRTG; the 720p disk is named MinimigRTG720p. Each contains its profile's
+driver at Libs/Picasso96/minimig.card so the installed name and BOARDTYPE=minimig
+stay the same. Insert the matching disk in a running Amiga and copy with:
 
     Copy MinimigRTG:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
+
+For the 720p FPGA configuration, use:
+
+    Copy MinimigRTG720p:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
+
+When installing directly from host files, rename minimig-720p.card to
+minimig.card at the destination. Install only the profile matching the core.
 
 P96 must already be installed; the floppy is a transfer disk, not a boot disk.
 The disk also includes the read-only rtgcheck diagnostic. Run
 MinimigRTG:rtgcheck from an Amiga Shell to print the RTG ID/status registers,
 available 24-bit Fast RAM, installed .card version and its FindCard result.
 It does not switch video modes or install interrupts.
-Run make adf to generate just the image (building the driver if needed), or
-make minimig.card to build only the driver. Override XDFTOOL to select a
+Run make adf to generate both images (building drivers if needed), or
+make minimig.card / make minimig-720p.card to build one driver. Override XDFTOOL to select a
 different xdftool executable.
 
 Driver tests on the simulated core
@@ -80,7 +88,7 @@ Driver tests on the simulated core
 
 This downloads missing headers using the normal dependency rules, then runs
 MMIO tests and both driver profiles (1024x768 and 1280x720). The test target
-does not rebuild or replace minimig.card or the ADF. Select one profile with:
+does not rebuild or replace either driver or ADF. Select one profile with:
 
     make -C amiga_sw/rtg test TEST_PROFILE=1280x720
 

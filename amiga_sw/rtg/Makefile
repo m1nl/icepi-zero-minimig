@@ -13,19 +13,15 @@ else ifneq ($(DEBUG),0)
 $(error DEBUG must be 0 or 1)
 endif
 DEBUG_CONFIG := .deps/driver-debug.cfg
-RTG_720P ?= 0
-ifeq ($(RTG_720P),1)
-RASTER_FLAGS := -DRTG_720P=1
-else ifneq ($(RTG_720P),0)
-$(error RTG_720P must be 0 or 1)
-endif
-RASTER_CONFIG := .deps/driver-raster.cfg
 TEST_PROFILE ?= all
 
 TARGET := minimig.card
+TARGET_720P := minimig-720p.card
 SOURCE := minimig.card.asm
 LISTFILE := minimig.card.lst
+LISTFILE_720P := minimig-720p.card.lst
 ADF := minimig-rtg.adf
+ADF_720P := minimig-rtg-720p.adf
 DIAGNOSTIC := rtgcheck
 LVO_FILES := $(addprefix .deps/lvo/,$(addsuffix _lib.i,exec intuition expansion graphics dos))
 INCLUDES := $(P96_PRIVATE)/boardinfo.i $(P96_PRIVATE)/settings.i \
@@ -33,8 +29,8 @@ INCLUDES := $(P96_PRIVATE)/boardinfo.i $(P96_PRIVATE)/settings.i \
             $(wildcard $(INC_ASM)/*/*.i) $(LVO_FILES)
 
 .PHONY: all adf deps clean test FORCE
-all: $(TARGET) $(DIAGNOSTIC) $(ADF)
-adf: $(ADF)
+all: $(TARGET) $(TARGET_720P) $(DIAGNOSTIC) $(ADF) $(ADF_720P)
+adf: $(ADF) $(ADF_720P)
 
 test: $(INCLUDES)
 	python3 tests/run.py --profile "$(TEST_PROFILE)" --vasm "$(AS)" \
@@ -42,8 +38,12 @@ test: $(INCLUDES)
 		--p96-public "$(P96_PUBLIC)" \
 		$(if $(CPU_NETLIST),--cpu-netlist "$(CPU_NETLIST)",)
 
-$(TARGET): $(SOURCE) Makefile $(INCLUDES) $(DEBUG_CONFIG) $(RASTER_CONFIG)
-	$(AS) $(SOURCE) -o $@ -L $(LISTFILE) $(VASM_FLAGS) $(DEBUG_FLAGS) $(RASTER_FLAGS) \
+$(TARGET): $(SOURCE) Makefile $(INCLUDES) $(DEBUG_CONFIG)
+	$(AS) $(SOURCE) -o $@ -L $(LISTFILE) $(VASM_FLAGS) $(DEBUG_FLAGS) \
+		-I "$(INC_ASM)/" -I "$(P96_PRIVATE)/" -I "$(P96_PUBLIC)/" -I .deps/
+
+$(TARGET_720P): $(SOURCE) Makefile $(INCLUDES) $(DEBUG_CONFIG)
+	$(AS) $(SOURCE) -o $@ -L $(LISTFILE_720P) $(VASM_FLAGS) $(DEBUG_FLAGS) -DRTG_720P=1 \
 		-I "$(INC_ASM)/" -I "$(P96_PRIVATE)/" -I "$(P96_PUBLIC)/" -I .deps/
 
 # Rebuild when DEBUG changes, retaining the timestamp for unchanged options.
@@ -51,13 +51,6 @@ $(DEBUG_CONFIG): FORCE
 	@mkdir -p .deps
 	@if ! test -f "$@" || ! test "$$(cat "$@")" = "$(DEBUG)"; then \
 		printf '%s\n' "$(DEBUG)" > "$@"; \
-	fi
-
-# Changing the raster also rebuilds the driver and its floppy image.
-$(RASTER_CONFIG): FORCE
-	@mkdir -p .deps
-	@if ! test -f "$@" || ! test "$$(cat "$@")" = "$(RTG_720P)"; then \
-		printf '%s\n' "$(RTG_720P)" > "$@"; \
 	fi
 
 FORCE:
@@ -72,11 +65,18 @@ $(ADF): $(TARGET) $(DIAGNOSTIC) README Makefile
 		+ write "$(TARGET)" Libs/Picasso96/$(TARGET) + write "$(DIAGNOSTIC)" + write README
 	mv "$@.tmp.adf" "$@"
 
+$(ADF_720P): $(TARGET_720P) $(DIAGNOSTIC) README Makefile
+	$(XDFTOOL) -f "$@.tmp.adf" create + format MinimigRTG720p ofs \
+		+ makedir Libs + makedir Libs/Picasso96 \
+		+ write "$(TARGET_720P)" Libs/Picasso96/$(TARGET) + write "$(DIAGNOSTIC)" + write README
+	mv "$@.tmp.adf" "$@"
+
 .deps/lvo/%_lib.i: $(NDK_DIR)/Include/fd/%_lib.fd fd_to_lvo.py
 	python3 fd_to_lvo.py $< $@
 
 clean:
-	$(RM) $(TARGET) $(DIAGNOSTIC) $(LISTFILE) $(ADF) $(ADF).tmp.adf
+	$(RM) $(TARGET) $(TARGET_720P) $(DIAGNOSTIC) $(LISTFILE) $(LISTFILE_720P) \
+		$(ADF) $(ADF_720P) $(ADF).tmp.adf $(ADF_720P).tmp.adf
 
 # Grouped targets prevent duplicate downloads during parallel builds (GNU make 4.3+).
 DEFAULT_NDK := $(CURDIR)/.deps/NDK_3.9
