@@ -93,7 +93,7 @@ end entity;
 
 architecture rtl of minimig_fleaohm_top is
 	-- RTG raster configuration. Match the driver profile and clock constraints.
-	constant RTG_PIXEL_HZ            : natural := 66000000;
+	constant RTG_PIXEL_HZ            : natural := 54000000;
 	constant RTG_PIXELX5_HZ          : natural := 5 * RTG_PIXEL_HZ;
 	constant RTG_FRAME_WIDTH         : natural := 1344;
 	constant RTG_FRAME_HEIGHT        : natural := 806;
