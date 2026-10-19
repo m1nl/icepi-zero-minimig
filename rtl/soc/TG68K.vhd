@@ -364,7 +364,7 @@ sel_ram         <= '1' when (
 
 req_enable <= '1' when (overclock_d='1' and slower(2)='0') or slower(1)='0' else '0';
 
-ramcs_n <= '0' when ram_req='1' and req_enable='1' and skipfetch='0' else '1';
+ramcs_n <= '0' when ram_req='1' and req_enable='1' and cpu_internal='0' else '1';
 ramlds <= lds_in;
 ramuds <= uds_in;
 
