@@ -96,8 +96,9 @@ set_false_path -to [get_cells {virtual_top.gen_rtg.rtg_resetn_sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg_irq_28_sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*fifo.*sync*}]
-set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.config_meta*}]
-set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.ready_vid*}]
+# These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
+set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.config_sys_*}]
+set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.ready_vid[0]}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.osd_rtg.enable_sync*}]
 
 set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.*fifo.rd_gray[*]}] -to [get_cells {virtual_top.gen_rtg.rtg.*fifo.rd_gray_w1[*]}]

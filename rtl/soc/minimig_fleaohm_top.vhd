@@ -257,9 +257,7 @@ generic map (
 	haveaga => 1,
 	haveusbhid => 1,
 	haveauxspi => 0,
-	haveuart => 0,
-	rtg_screen_width => RTG_SCREEN_WIDTH,
-	rtg_screen_height => RTG_SCREEN_HEIGHT
+	haveuart => 0
 )
 PORT map
 (

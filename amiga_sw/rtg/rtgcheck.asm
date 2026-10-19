@@ -1,4 +1,5 @@
 ; Read-only Amiga Shell diagnostic for Minimig P96 board detection.
+; Only ID/status MMIO reads, as used by the driver; configuration is write-only.
 ; No display switching, register writes, framebuffer allocation or IRQ setup.
     machine 68020
     include exec/exec.i
@@ -104,7 +105,7 @@ report:
     dc.b 'Status $B8010C: $%04lx (upper 12 bits must be zero)',10
     dc.b 'Available 24-bit Fast RAM: %ld bytes',10
     dc.b 'Installed .card opened: %ld (1=yes, 0=no)',10
-    dc.b 'Installed .card version: %ld.%ld (expected 1.5)',10
+    dc.b 'Installed .card version: %ld.%ld',10
     dc.b 'FindCard returned: $%08lx (FFFFFFFF=yes, 00000000=no)',10,0
 
     section data,bss

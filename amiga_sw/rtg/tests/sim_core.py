@@ -31,7 +31,7 @@ def assemble_rom(asm, folder, vasm, extra_args=()):
     return binary
 
 
-def run_rom(binary, folder, cpu, *, driver=False, raster=(1024, 768, 1344, 806)):
+def run_rom(binary, folder, cpu, *, driver=False):
     data = binary.read_bytes()
     if len(data) > 8192:
         raise RuntimeError('test ROM exceeds behavioral memory')
@@ -45,7 +45,6 @@ def run_rom(binary, folder, cpu, *, driver=False, raster=(1024, 768, 1344, 806))
         'CHECK_MMIO': int(not driver),
         'VERBOSE': 0,
         'TIMEOUT_NS': 20000000 if driver else 2000000,
-        **dict(zip(('H_ACTIVE', 'V_ACTIVE'), raster[:2])),
     }
     run('iverilog', '-g2012', '-s', top, '-o', str(folder / 'test'),
         *(f'-P{top}.{key}={value}' for key, value in parameters.items()),

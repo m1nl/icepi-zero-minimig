@@ -379,8 +379,9 @@ BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_resetn_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_irq_28_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*fifo/*_sync*";
-BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/config_meta*";
-BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid*";
+# These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/config_sys_*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid[0]";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.osd_rtg/enable_sync*";
 
 BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray_w1[*]";

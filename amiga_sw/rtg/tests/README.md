@@ -25,8 +25,12 @@ Requires installed vasm, xdftool and the normal driver build dependencies.
 - `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM,
   then runs driver callbacks for the requested profile(s).
 - `test_driver_fallback.py`: generates a 68020 ROM from real driver callbacks
-  and independent expected results for 26 cases in three formats. Also checks
-  sync widths and vertical split limits. Run standalone with `--rtg-720p` to
+  and independent expected results for 35 cases in three formats. Also checks
+  minimum 320x192 source dimensions, sync widths, viewport bounds, source fetch length and vertical split limits
+  with a nonzero origin. Checks initial full-width stride and preservation of
+  wider bitmap pitch across SetDAC. Configuration checks inspect accepted
+  writes through a test-only RAM trace; the harness rejects reads of write-only
+  registers. Run standalone with `--rtg-720p` to
   select that profile; default is 1024x768.
 - `sim_core.py`: assembles ROMs, generates the CPU model, and runs the shared
   real-RTL MMIO harness in `../../../bench/rtg_hdmi/`.

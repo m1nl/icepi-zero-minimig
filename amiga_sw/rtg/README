@@ -27,12 +27,47 @@ with totals 1650x750, horizontal front porch/sync 110/40 and vertical front
 porch/sync 5/5. HDMI, RTG scanout, the board PLL and clock constraints must
 be configured for the same raster. The driver does not change FPGA timing.
 
-The alternate exact source widths are 1280 (1x), 640 (2x), and 416 (3x);
-heights are 720 (1x), 360 (2x), and 240 (3x). All nine combinations support
-CLUT, RGB565 and RGB555. The 416-wide modes occupy 1248 output pixels,
-leaving a 16-pixel black border on each side. Noncanonical fallback modes
-use the selected profile's canvas thresholds and retain the same limitations.
-The .card file still does not install a Picasso96Mode mode list.
+Driver 1.15 requires explicit bitmap stride and write-only configuration in
+its matching core. Only status ($0c), ID ($0e) and display enable ($10) have
+readback. rtgcheck reads only ID/status. SetGC initializes the full aligned
+bitmap pitch; SetPanning may update it for a wider virtual bitmap. Zero stride
+no longer selects an automatic row size. Install core and driver together.
+
+Driver 1.14 requires the matching programmable-viewport FPGA core. Horizontal
+repetition supports 1x/2x/3x/4x, independently of vertical 1x/2x/3x. The driver
+chooses the largest factors that fit and programs black borders around the
+visible image. No FPGA source-size constants or division are needed.
+
+Maximum aligned source sizes for each factor:
+
+  1024x768: widths 1024 / 512 / 336 / unavailable; heights 768 / 384 / 256
+  1280x720: widths 1280 / 640 / 416 / 320; heights 720 / 352 / 240
+
+Smaller dimensions down to 320x192 work too. Horizontal 4x is available only
+in the 720p driver profile under this minimum. Width, height and viewport boundaries use units
+of 16 pixels. Nonaligned source dimensions are cropped down to multiples of
+16 while preserving the full bitmap byte stride. Borders are centered to the
+nearest lower 16-pixel boundary; any unmatched block stays right/bottom.
+For example, 1280x352 at 1x2 occupies 704 lines of 720p with 16 border lines
+below. Requesting 1280x360 crops its final eight source lines to achieve this.
+Source width below 320, source height below 192, or dimensions beyond the
+physical raster cannot enable scanout. The check follows 16-pixel rounding.
+Small offscreen bitmap allocations remain supported.
+The .card file does not install a Picasso96Mode mode list.
+
+Viewport registers, relative to $B80100:
+
+  $18 / $1a: horizontal start / exclusive stop, in 16 output pixels
+  $1c / $1e: vertical start / exclusive stop, in 16 output lines
+  $20: visible source row length, in 16-byte bursts
+
+$14 retains packed factor-minus-one repetition (H bits 1:0, V bits 3:2),
+$16 holds the explicit bitmap stride in 16-byte bursts.
+$12 remains the absolute output split row ($7ff disables). SetSplitPosition
+scales the source split and adds the viewport origin; sub-16-line splits
+remain supported. Settings are snapshotted for the next prepared frame.
+The driver validates geometry; hardware follows the programmed values.
+Older drivers do not initialize the viewport and are incompatible.
 
 The Makefile always builds both profiles; no RTG_720P make option is needed.
 For direct assembly, define RTG_720P only for the 720p build. The raster
@@ -102,10 +137,11 @@ as a 68020 test ROM against the current RTG and Akiko Verilog modules. ROM
 and RAM responders are behavioral. The shared hardware/MMIO bench and its
 assembly test ROM are in ../../bench/rtg_hdmi/.
 
-Each driver profile checks 26 exact, fallback, zero and oversized mode cases
+Each driver profile checks 35 aligned, cropped, fallback and invalid mode cases
 in CLUT, RGB565 and RGB555, plus split limits for all vertical repeat factors.
 Checks include repeat selection, pixel clocks, blanking/sync values, display
-switching, aligned stride, native fallback and split-register writes. MMIO
+switching, viewport bounds, fetch length, aligned stride, native fallback and
+split-register writes with a nonzero origin. MMIO
 checks include ID reads, address decode, longword base/palette writes and
 register readback through the actual CPU bus handshake.
 
@@ -148,8 +184,13 @@ of lower-res screenmodes suitable for games. (The scandoubler currently
 remains unavailable in RTG mode, however.)
 
 
-Installation
-~~~~~~~~~~~~
+Version history (older sizing rules are historical)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+V1.14 replaces fixed source canvases with a driver-programmed viewport,
+adds 4x horizontal repetition, and supplies source fetch lengths separately
+from bitmap stride. Viewport bounds use 16-pixel units, with black borders
+and one-line split precision. Install the matching updated FPGA core.
 
 V1.13 adds the optional RTG_720P build profile. Default builds retain the
 1024x768 mode set and register layout. Use the matching FPGA raster and
@@ -204,7 +245,7 @@ additional row RAM and does not reduce SDRAM traffic by itself.
 
 New registers relative to $B80100:
   $14: bits 1:0 horizontal, bits 3:2 vertical; 0=1x, 1=2x, 2=3x.
-  $16: source stride in 16-byte bursts; zero selects the visible row size.
+  $16: explicit source stride in 16-byte bursts (V1.15 and later).
 Changes take effect when the next frame is prepared.
 
 V1.8 restores BIF_VBLANKINTERRUPT and requires the matching FPGA update.
@@ -223,7 +264,7 @@ selected at reset and until P96 explicitly switches to RTG.
 
 The RTG-owned word registers are:
   $B80110: display switch, bit 0 (0 native / 1 RTG), read/write.
-  $B80112: secondary framebuffer's first display row, read/write;
+  $B80112: secondary framebuffer's first display row, write-only;
            $7ff disables the screen split. Rows are HDMI active-area rows.
 Framebuffer, pixel-format, palette and HDMI vblank registers retain their
 existing addresses. The clock controller resets HDMI during mode switching;

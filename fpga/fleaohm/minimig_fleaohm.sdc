@@ -10,8 +10,8 @@ create_clock -name {clk_28m} -period 35 [get_nets {virtual_top.amiga_clk.clk_28}
 create_clock -name {clk_142m} -period 7 [get_nets {virtual_top.amiga_clk.clk_142}]
 create_clock -name {clk_spi} -period 35 [get_nets {virtual_top.mycfide.sck}]
 
-create_clock -name {clk_rtg_5x} -period 3.03 [get_nets {auxclks[0]}]
-create_clock -name {clk_rtg} -period 15.15 [get_nets {auxclks[1]}]
+create_clock -name {clk_rtg_5x} -period 3.70 [get_nets {auxclks[0]}]
+create_clock -name {clk_rtg} -period 18.52 [get_nets {auxclks[1]}]
 create_clock -name {clk_usb} -period 16.67 [get_nets {auxclks[2]}]
 
 # DCSC outputs are synchronous to the selected parent, not independent clocks.
@@ -96,7 +96,8 @@ set_false_path -to [get_cells {virtual_top.gen_rtg.rtg_resetn_sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg_irq_28_sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*fifo.*sync*}]
-set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.config_meta*}]
+# These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
+set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.config_sys_*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.ready_vid*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.osd_rtg.enable_sync*}]
 

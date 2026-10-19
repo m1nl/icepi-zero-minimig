@@ -217,8 +217,8 @@ LOCATE COMP "usb_pull" SITE "N1" ;
 
 # Period Constraints
 FREQUENCY PORT "clk" 25.0 MHz;
-FREQUENCY NET "auxclks[0]" 330.0 MHz;
-FREQUENCY NET "auxclks[1]" 66.0 MHz;
+FREQUENCY NET "auxclks[0]" 270.0 MHz;
+FREQUENCY NET "auxclks[1]" 54.0 MHz;
 FREQUENCY NET "auxclks[2]" 60.0 MHz;
 FREQUENCY NET "clk_28m" 28.6 MHz;
 FREQUENCY NET "clk_sys" 114.3 MHz;
@@ -232,8 +232,8 @@ BLOCK COMP "genvideo.clkmux_1" PIN "SEL0" ;
 BLOCK COMP "genvideo.clkmux_1" PIN "SEL1" ;
 
 # Explicit constraints on the DCSC output clocks.
-FREQUENCY NET "clk_pixel" 66.0 MHz;
-FREQUENCY NET "clk_tmds" 330.0 MHz;
+FREQUENCY NET "clk_pixel" 54.0 MHz;
+FREQUENCY NET "clk_tmds" 270.0 MHz;
 
 # Used to avoid timing failures for HDMI clock switch as we use clk to switch DCSC
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
@@ -298,7 +298,8 @@ BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_resetn_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg_irq_28_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*fifo/*_sync*";
-BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/config_meta*";
+# These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
+BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/config_sys_*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.osd_rtg/enable_sync*";
 
@@ -365,7 +366,7 @@ MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genv
 BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
 
 # HDMI package-pin data-to-forwarded-clock skew target: +/- 300 ps.
-# 66 MHz pixels, 330 MHz DDR serializer clock, 660 Mb/s per data lane.
+# 54 MHz pixels, 270 MHz DDR serializer clock, 540 Mb/s per data lane.
 # PCB skew and serial-eye/jitter requirements need separate budgeting.
 CLOCK_TO_OUT PORT "lvds_dp[0]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;
 CLOCK_TO_OUT PORT "lvds_dp[1]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;

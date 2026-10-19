@@ -34,6 +34,9 @@
 CardData_IntEnabled = gbi_CardData+24
 CardData_ModeValid = gbi_CardData+26
 CardData_VRepeat = gbi_CardData+28
+CardData_VOrigin = gbi_CardData+30
+CardData_VStop = gbi_CardData+32
+CardData_SourceWidth = gbi_CardData+34
 
 ; HDMI-timed RTG registers, relative to $B80100.
 RTG_STATUS = $0c       ; read: blank, pending, enabled, active (bits 0..3)
@@ -41,7 +44,12 @@ RTG_IRQ_CONTROL = $0c  ; write: enable bit0, acknowledge bit1 (W1C)
 RTG_DISPLAY_SWITCH = $10 ; read/write bit0: 0 native, 1 RTG
 RTG_SPLIT_ROW = $12    ; first secondary-framebuffer row, $7ff disables
 RTG_REPEAT = $14       ; [1:0] horizontal, [3:2] vertical, encoded factor-1
-RTG_STRIDE = $16       ; source stride in 16-byte bursts, zero selects row size
+RTG_STRIDE = $16       ; explicit source stride in 16-byte bursts
+RTG_VIEW_HSTART = $18  ; viewport bounds in 16 output pixels/lines
+RTG_VIEW_HSTOP = $1a   ; stop is exclusive
+RTG_VIEW_VSTART = $1c
+RTG_VIEW_VSTOP = $1e
+RTG_ROW_BURSTS = $20   ; visible source row length in 16-byte bursts
 
 
 ; Build-time physical raster. Define RTG_720P for 1280x720; default is
@@ -69,12 +77,20 @@ RTG_VSTART EQU 3
 RTG_VSIZE EQU 6
 	ENDC
 
+; Keep a sensible minimum so each indexed row meets the fixed FIFO prefill
+; target after ModeRepeat selects the largest fitting horizontal factor.
+RTG_MIN_WIDTH EQU 320
+RTG_MIN_HEIGHT EQU 192
+
 RTG_HALF_WIDTH EQU RTG_WIDTH/2
-; Match RTL's burst-aligned 3x canvas: 320 or 416 source pixels.
-RTG_THIRD_WIDTH EQU (RTG_WIDTH/96)*32
-RTG_HALF_HEIGHT EQU RTG_HEIGHT/2
-RTG_THIRD_HEIGHT EQU RTG_HEIGHT/3
-RTG_THIRD_BORDER EQU (RTG_WIDTH-RTG_THIRD_WIDTH*3)/2
+; Logical canvases are aligned down to 16 source pixels. The driver owns
+; these limits; RTG hardware only follows its programmed viewport and pitch.
+RTG_THIRD_WIDTH EQU (RTG_WIDTH/48)*16
+RTG_QUARTER_WIDTH EQU (RTG_WIDTH/64)*16
+RTG_HALF_HEIGHT EQU (RTG_HEIGHT/32)*16
+RTG_THIRD_HEIGHT EQU (RTG_HEIGHT/48)*16
+RTG_THIRD_BORDER EQU ((RTG_WIDTH-RTG_THIRD_WIDTH*3)/32)*16
+RTG_QUARTER_BORDER EQU ((RTG_WIDTH-RTG_QUARTER_WIDTH*4)/32)*16
 
 ; Define RTG_DEBUG at assembly time to include serial logging.
 	; Write to serial console
@@ -177,7 +193,7 @@ MinimigCard:
 	dc.b	'minimig.card',0,0
 	dc.b	'$VER: '
 IDString:
-	dc.b	'minimig.card 1.13 (14.10.2026)',0
+	dc.b	'minimig.card 1.15 (19.10.2026)',0
 	dc.b	0
 expansionLibName:
 	dc.b	'expansion.library',0
@@ -202,7 +218,7 @@ DataTable:
 	INITLONG	LN_NAME,MinimigCard
 	INITBYTE	LIB_FLAGS,LIBF_SUMUSED|LIBF_CHANGED
 	INITWORD	LIB_VERSION,1
-	INITWORD	LIB_REVISION,13
+	INITWORD	LIB_REVISION,15
 	INITLONG	LIB_IDSTRING,IDString
 	INITLONG	card_Name,CardName
 	dc.w		0,0
@@ -511,8 +527,8 @@ InitCard:
 	move.l	#113440000,gbi_MemoryClock(a2)
 
 	move.l	#0,(gbi_PixelClockCount+0,a2)
-	move.l	#9,(gbi_PixelClockCount+4,a2)
-	move.l	#9,(gbi_PixelClockCount+8,a2)
+	move.l	#12,(gbi_PixelClockCount+4,a2)
+	move.l	#12,(gbi_PixelClockCount+8,a2)
 	move.l	#0,(gbi_PixelClockCount+12,a2)
 	move.l	#0,(gbi_PixelClockCount+16,a2)
 ;- Planar
@@ -546,8 +562,11 @@ InitCard:
 	move.w	#0,(gbi_MaxVerResolution+8,a2)
 
 	move.w	#0,(CardData_IntEnabled,a2)
-	move.w  #1,CardData_ModeValid(a2)
+	clr.w   CardData_ModeValid(a2)
 	move.w  #1,CardData_VRepeat(a2)
+	clr.w   CardData_VOrigin(a2)
+	clr.w   CardData_VStop(a2)
+	clr.w   CardData_SourceWidth(a2)
 	movea.l gbi_RegisterBase(a2),a1
 	clr.w   gbi_MoniSwitch(a2)
 	clr.w   RTG_DISPLAY_SWITCH(a1) ; native until explicitly selected
@@ -621,77 +640,139 @@ SetDAC:
 	move.w #$8000,d0
 .store_format:
 	move.w d0,(4,a1)
+	bsr ProgramRowLength
 .done
 	rts
 
 ;------------------------------------------------------------------------------
 SetGC:
-; a0: BoardInfo, a1: ModeInfo, d0: border. Physical HDMI timing stays fixed.
+; a0: BoardInfo, a1: ModeInfo, d0: border, d7: RGB format.
+; Physical HDMI timing stays fixed. Geometry is prepared here, not in scanout.
 	move.l a1,gbi_ModeInfo(a0)
 	move.w d0,gbi_Border(a0)
-	movem.l d1/a1,-(sp)
+	movem.l d1-d4/a1,-(sp)
 	bsr ModeRepeat
 	movea.l gbi_RegisterBase(a0),a1
 	clr.w CardData_ModeValid(a0)
 	tst.l d0
-	bmi.s .invalid
+	bmi .invalid
 	move.w #1,CardData_ModeValid(a0)
 	move.w d0,RTG_REPEAT(a1)
+	move.w d0,d4
+	andi.w #3,d4
+	addq.w #1,d4
 	lsr.w #2,d0
 	addq.w #1,d0
 	move.w d0,CardData_VRepeat(a0)
-	clr.w RTG_STRIDE(a1)
+
+	movea.l gbi_ModeInfo(a0),a1
+	moveq #0,d2
+	move.w gmi_Width(a1),d2
+	andi.w #$fff0,d2
+	move.w d2,CardData_SourceWidth(a0)
+	mulu.w d4,d2
+	moveq #0,d3
+	move.w gmi_Height(a1),d3
+	andi.w #$fff0,d3
+	mulu.w d0,d3
+	movea.l gbi_RegisterBase(a0),a1
+
+; Center to the nearest lower 16-pixel boundary. Any unmatched border block
+; stays at the right/bottom. Source cropping never changes the bitmap stride.
+	move.w #RTG_WIDTH,d4
+	sub.w d2,d4
+	lsr.w #5,d4
+	move.w d4,RTG_VIEW_HSTART(a1)
+	lsr.w #4,d2
+	add.w d4,d2
+	move.w d2,RTG_VIEW_HSTOP(a1)
+	move.w #RTG_HEIGHT,d4
+	sub.w d3,d4
+	lsr.w #5,d4
+	move.w d4,RTG_VIEW_VSTART(a1)
+	lsl.w #4,d4
+	move.w d4,CardData_VOrigin(a0)
+	add.w d4,d3
+	move.w d3,CardData_VStop(a0)
+	lsr.w #4,d3
+	move.w d3,RTG_VIEW_VSTOP(a1)
+	bsr ProgramRowLength
+; Seed the full bitmap pitch, including pixels cropped from the viewport.
+; SetPanning may later replace this with a larger virtual bitmap pitch.
+	movea.l gbi_ModeInfo(a0),a1
+	moveq #0,d0
+	move.w gmi_Width(a1),d0
+	bsr CalculateBytesPerRow
+	lsr.w #4,d0
+	movea.l gbi_RegisterBase(a0),a1
+	move.w d0,RTG_STRIDE(a1)
+	move.w gbi_YSplit(a0),d0
+	bsr SetSplitPosition
 	bra.s .done
 .invalid:
 	clr.w RTG_DISPLAY_SWITCH(a1)
 	clr.w gbi_MoniSwitch(a0)
 .done:
-	movem.l (sp)+,d1/a1
+	movem.l (sp)+,d1-d4/a1
+	rts
+
+; Source width is independent of pitch and output repetition. SetDAC may run
+; before or after SetGC, so both callbacks update this inexpensive register.
+ProgramRowLength:
+	move.w CardData_SourceWidth(a0),d0
+	lsr.w #3,d0
+	cmpi.l #RGBFB_CLUT,d7
+	bne.s .store
+	lsr.w #1,d0
+.store:
+	movea.l gbi_RegisterBase(a0),a1
+	move.w d0,RTG_ROW_BURSTS(a1)
 	rts
 
 ; a1: ModeInfo. Return d0=repeat encoding, d1=logical clock index, or d0=-1.
-; Choose the smallest hardware canvas that covers the requested dimensions.
-; Noncanonical modes may show adjacent framebuffer data outside their image.
-; P96 2.0 allocation callbacks cannot reserve missing rows automatically.
+; All visible source dimensions are rounded down to 16 pixels. This lets the
+; core omit low coordinate bits; nonaligned modes retain their full byte pitch.
 ModeRepeat:
-; Exact canvases follow the build-time raster and burst-aligned 3x width.
-; Update the raster constants together with RepeatClocks and HDL timing.
-; Dimensions outside the physical raster are rejected for scanout.
+	movem.l d2/d3,-(sp)
 	moveq #0,d0
 	moveq #0,d1
-	tst.w gmi_Width(a1)
-	beq.s .invalid
-	tst.w gmi_Height(a1)
-	beq.s .invalid
-	cmpi.w #RTG_WIDTH,gmi_Width(a1)
+	moveq #0,d2
+	moveq #0,d3
+	move.w gmi_Width(a1),d2
+	move.w gmi_Height(a1),d3
+	cmpi.w #RTG_WIDTH,d2
 	bhi.s .invalid
-	cmpi.w #RTG_HEIGHT,gmi_Height(a1)
+	cmpi.w #RTG_HEIGHT,d3
 	bhi.s .invalid
-	cmpi.w #RTG_HALF_WIDTH,gmi_Width(a1)
+	andi.w #$fff0,d2
+	cmpi.w #RTG_MIN_WIDTH,d2
+	bcs.s .invalid
+	andi.w #$fff0,d3
+	cmpi.w #RTG_MIN_HEIGHT,d3
+	bcs.s .invalid
+	cmpi.w #RTG_HALF_WIDTH,d2
 	bhi.s .height
-	cmpi.w #RTG_THIRD_WIDTH,gmi_Width(a1)
-	bhi.s .double_x
-	moveq #2,d0
-	moveq #2,d1
-	bra.s .height
-.double_x:
 	moveq #1,d0
-	moveq #1,d1
+	cmpi.w #RTG_THIRD_WIDTH,d2
+	bhi.s .height
+	moveq #2,d0
+	cmpi.w #RTG_QUARTER_WIDTH,d2
+	bhi.s .height
+	moveq #3,d0
 .height:
-	cmpi.w #RTG_HALF_HEIGHT,gmi_Height(a1)
+	cmpi.w #RTG_HALF_HEIGHT,d3
 	bhi.s .done
-	cmpi.w #RTG_THIRD_HEIGHT,gmi_Height(a1)
-	bhi.s .double_y
-	ori.w #8,d0
-	addq.w #6,d1
-	rts
-.double_y:
 	ori.w #4,d0
-	addq.w #3,d1
+	cmpi.w #RTG_THIRD_HEIGHT,d3
+	bhi.s .done
+	addi.w #4,d0
 .done:
-	rts
+	move.w d0,d1
+	bra.s .return
 .invalid:
 	moveq #-1,d0
+.return:
+	movem.l (sp)+,d2/d3
 	rts
 
 ;------------------------------------------------------------------------------
@@ -930,8 +1011,7 @@ ResolvePixelClock:
 	move.w d2,gmi_HorSyncStart(a1)
 	move.w RepeatHSize(pc,d0.w*2),gmi_HorSyncSize(a1)
 	move.w d1,d0
-	divu.w #3,d0
-	andi.l #$ffff,d0
+	lsr.w #2,d0
 	move.w RepeatVTotal(pc,d0.w*2),d2
 	move.w d2,gmi_VerTotal(a1)
 	sub.w gmi_Height(a1),d2
@@ -980,7 +1060,7 @@ GetPixelClock:
 .direct:
 	moveq #2,d1
 .clock:
-	cmpi.l #9,d0
+	cmpi.l #12,d0
 	bcc.s .invalid
 	move.l RepeatClocks(pc,d0.l*4),d0
 	rts
@@ -989,27 +1069,27 @@ GetPixelClock:
 ; (physical HTotal * physical VTotal), rounded to the nearest integer Hz.
 ; Entries are grouped by vertical factor, then horizontal factor. The default
 ; raster's 3x vertical total rounds to 269, so its clocks include that rounding.
-; PixelClockCount remains nine for either full 3-by-3 subset.
+; PixelClockCount is twelve: four horizontal by three vertical factors.
 RepeatClocks:
 	IFD RTG_720P
-	dc.l 74250000,37125000,24750000
-	dc.l 37125000,18562500,12375000
-	dc.l 24750000,12375000,8250000
+	dc.l 74250000,37125000,24750000,18585000
+	dc.l 37125000,18562500,12375000,9292500
+	dc.l 24750000,12375000,8250000,6195000
 	ELSE
-	dc.l 66000000,33000000,22000000
-	dc.l 33000000,16500000,11000000
-	dc.l 22027295,11013648,7342432
+	dc.l 66000000,33000000,22000000,16500000
+	dc.l 33000000,16500000,11000000,8250000
+	dc.l 22027295,11013648,7342432,5506824
 	ENDC
 RepeatCanvasWidth:
-	dc.w RTG_WIDTH,RTG_HALF_WIDTH,RTG_THIRD_WIDTH
+	dc.w RTG_WIDTH,RTG_HALF_WIDTH,RTG_THIRD_WIDTH,RTG_QUARTER_WIDTH
 RepeatCanvasHeight:
 	dc.w RTG_HEIGHT,RTG_HALF_HEIGHT,RTG_THIRD_HEIGHT
 RepeatHTotal:
-	dc.w RTG_HTOTAL,(RTG_HTOTAL+1)/2,(RTG_HTOTAL+2)/3
+	dc.w RTG_HTOTAL,(RTG_HTOTAL+1)/2,(RTG_HTOTAL+2)/3,(RTG_HTOTAL+3)/4
 RepeatHStart:
-	dc.w RTG_HSTART,(RTG_HSTART+1)/2,(RTG_HSTART+RTG_THIRD_BORDER+2)/3
+	dc.w RTG_HSTART,(RTG_HSTART+1)/2,(RTG_HSTART+RTG_THIRD_BORDER+2)/3,(RTG_HSTART+RTG_QUARTER_BORDER+3)/4
 RepeatHSize:
-	dc.w RTG_HSIZE,RTG_HSIZE/2,RTG_HSIZE/3
+	dc.w RTG_HSIZE,RTG_HSIZE/2,RTG_HSIZE/3,RTG_HSIZE/4
 RepeatVTotal:
 	dc.w RTG_VTOTAL,(RTG_VTOTAL+1)/2,(RTG_VTOTAL+2)/3
 RepeatVStart:
@@ -1080,7 +1160,11 @@ SetSplitPosition:
 	tst.w d0
 	beq.s .disable
 	mulu.w CardData_VRepeat(a0),d0
-	cmpi.l #RTG_HEIGHT,d0
+	moveq #0,d1
+	move.w CardData_VOrigin(a0),d1
+	add.l d1,d0
+	move.w CardData_VStop(a0),d1
+	cmp.l d1,d0
 	bcs.s .store
 .disable:
 	move.w #$7ff,d0

@@ -1,17 +1,11 @@
-// HDMI-timed RTG scanout. Register/fetch interfaces retain the Minimig P96 layout.
+// HDMI-timed RTG scanout with a driver-programmed, 16-pixel-aligned viewport.
 // Two FIFOs allow a prepared second framebuffer to start on an exact HDMI row.
 
 `default_nettype none
 `timescale 1 ns / 1 ps
 module rtg_video #(
   // clk_sys cycles available to the vblank handler
-  parameter PREPARE_DELAY = 4096,
-  // These describe the active HDMI raster, not the requested P96 bitmap.
-  // For another raster, also update HDMI's timing/request decode, the board
-  // PLL and clock constraints, and the driver's ModeRepeat/timing tables.
-  // Changing these parameters alone does not change the HDMI output mode.
-  parameter H_ACTIVE = 1024,
-  parameter V_ACTIVE = 768
+  parameter PREPARE_DELAY = 4096
 ) (
   input wire clk_sys,
   input wire resetn_sys,
@@ -119,12 +113,21 @@ wire irq_write = reg_write && reg_addr == 11'h10c;
 
 // $B80110: bit0 requests RTG instead of native video (read/write).
 // $B80112: first row of the secondary framebuffer; $7ff disables splitting.
-// $B80114: [1:0] horizontal, [3:2] vertical repetition (0=1x, 1=2x, 2=3x).
-// $B80116: source stride in 16-byte bursts; zero selects the visible row size.
-// Settings remain accessible while the RTG pixel clock is inactive.
+// $B80114: [1:0] horizontal, [3:2] vertical repetition, encoded factor minus one.
+// $B80116: explicit source stride in 16-byte bursts.
+// $B80118/$1a: horizontal start/stop in 16-pixel units (stop exclusive).
+// $B8011c/$1e: vertical start/stop in 16-line units (stop exclusive).
+// $B80120: visible source row length in 16-byte bursts, supplied by driver.
+// Horizontal repeat encodings 0..3 mean 1x..4x; vertical uses only 0..2.
+// The driver supplies valid bounds and row lengths; no geometry clamps here.
+// Configuration writes work while the RTG pixel clock is inactive.
+// Only status, ID and display enable have readback.
 reg [10:0] split_line;
 reg  [3:0] prescale;
 reg [11:0] stride;
+reg [6:0] h_start, h_stop;
+reg [5:0] v_start, v_stop;
+reg [7:0] source_bursts;
 
 always @(posedge clk_sys or negedge resetn_sys) begin
   if (!resetn_sys) begin
@@ -132,13 +135,23 @@ always @(posedge clk_sys or negedge resetn_sys) begin
     split_line <= 11'h7ff;
     prescale   <= 4'b0;
     stride     <= 0;
+    h_start <= 0;
+    h_stop <= 0;
+    v_start <= 0;
+    v_stop <= 0;
+    source_bursts <= 0;
 
   end else if (reg_write) begin
     case (reg_addr)
       11'h110: rtg_enable <= reg_d[0];
       11'h112: split_line <= reg_d[10:0];
-      11'h114: prescale   <= reg_d[3:0];
-      11'h116: stride     <= reg_d[11:0];
+      11'h114: prescale <= reg_d[3:0];
+      11'h116: stride <= reg_d[11:0];
+      11'h118: h_start <= reg_d[6:0];
+      11'h11a: h_stop <= reg_d[6:0];
+      11'h11c: v_start <= reg_d[5:0];
+      11'h11e: v_stop <= reg_d[5:0];
+      11'h120: source_bursts <= reg_d[7:0];
       default: ;
     endcase
   end
@@ -172,12 +185,10 @@ always @(posedge clk_sys or negedge resetn_sys) begin
 
     // We can set req_q regardless if we're writing or reading as
     // reading register does not clear any flag here
+    // Configuration is write-only; retain status, ID and display readback.
     case (reg_addr)
       11'h10c: reg_q <= {12'd0, ena_sys, irq_enabled, irq_pending, in_vblank};
       11'h110: reg_q <= {15'd0, rtg_enable};
-      11'h112: reg_q <= {5'd0, split_line};
-      11'h114: reg_q <= {12'd0, prescale};
-      11'h116: reg_q <= {4'd0, stride};
       default: reg_q <= 16'h8321;
     endcase
   end
@@ -218,57 +229,45 @@ end
 
 always @(posedge clk_sys or negedge resetn_sys) begin
   if (!resetn_sys) begin
-    rtg_base   <= 0;
-    rtg_base2  <= 0;
-    base_high  <= 0;
+    rtg_base <= 0;
+    rtg_base2 <= 0;
+    base_high <= 0;
     base2_high <= 0;
-    rtg_clut   <= 0;
-    rtg_16bit  <= 1;
-    clut_high  <= 0;
+    rtg_clut <= 0;
+    rtg_16bit <= 1;
+    clut_high <= 0;
 
   end else if (reg_write) begin
     if (reg_addr[10]) begin
       if (!reg_addr[1]) clut_high <= reg_d;
     end else
-      case (reg_addr[4:1])
+      case (reg_addr)
         // 68K move.l writes high then low: commit the address as a pair.
-        4'h0: base_high <= reg_d[9:0];
-        4'h1: rtg_base <= {base_high, reg_d[15:4]};
-        4'h2: rtg_clut <= reg_d[15];  // Legacy timing bits intentionally ignored.
-        4'h3: rtg_16bit <= reg_d[0];
-        4'h4: base2_high <= reg_d[9:0];
-        4'h5: rtg_base2 <= {base2_high, reg_d[15:4]};
+        11'h100: base_high <= reg_d[9:0];
+        11'h102: rtg_base <= {base_high, reg_d[15:4]};
+        11'h104: rtg_clut <= reg_d[15];  // Legacy timing bits intentionally ignored.
+        11'h106: rtg_16bit <= reg_d[0];
+        11'h108: base2_high <= reg_d[9:0];
+        11'h10a: rtg_base2 <= {base2_high, reg_d[15:4]};
         default: ;
       endcase
   end
 end
 
-reg [9:0] frame_split;
-reg [3:0] pixel_repeat;
+reg [9:0] config_sys_split;
+// config_sys_* registers feed only pixel-domain consumers, so the complete
+// prefix can be excluded from timing without hiding any clk_sys DMA paths.
+reg [1:0] config_sys_repeat;
+reg [1:0] vertical_repeat;
 
-// Match the driver's 3x source width, rounded down to 32 pixels. Rounding
-// only to 16 would select 336 at 1024, exceeding the driver's 320-pixel row.
-// 3x uses 320 pixels at 1024-wide output,
-// leaving 32 black output pixels at each side; no partial bursts are fetched.
-// With H_ACTIVE=1280 this becomes 416 source pixels and 16-pixel side borders.
-// The driver must advertise this exact width, alongside 1280 and 640.
-localparam H_TRIPLE = (H_ACTIVE / 96) * 32;
-localparam H_BORDER = (H_ACTIVE - H_TRIPLE * 3) / 2;
+// Coarse bounds eliminate the low four bits from viewport comparisons.
+// Boundary-minus-one is prepared here, never on the FIFO read-enable path.
+reg [6:0] config_sys_h_start_last, config_sys_h_stop_last;
+reg config_sys_h_zero;
+reg [5:0] config_sys_v_start, config_sys_v_stop;
 
-function [10:0] source_width;
-  input [1:0] scale;
-  begin
-    case (scale)
-      2'd1: source_width = H_ACTIVE / 2;
-      2'd2: source_width = H_TRIPLE;
-      default: source_width = H_ACTIVE;
-    endcase
-  end
-endfunction
-
-wire [10:0] initial_width = source_width(prescale[1:0]);
-wire  [7:0] initial_row_bursts = rtg_clut ? initial_width >> 4 : initial_width >> 3;
-wire [11:0] initial_stride = stride != 0 ? stride : {4'd0, initial_row_bursts};
+wire [9:0] viewport_top = {v_start, 4'd0};
+wire [9:0] viewport_bottom = {v_stop, 4'd0};
 
 reg  [7:0] row_bursts;
 reg [25:4] row_base_top;
@@ -284,19 +283,20 @@ reg [11:0] frame_stride;
 // Bound the amount of prefetched data by output time rather than source size.
 // 3x rounds the 256-word prefill up to eleven complete eight-word bursts.
 wire [5:0] prefill_limit = prescale[1:0] == 1 ? 6'd16 :
-                           prescale[1:0] == 2 ? 6'd11 : 6'd32;
+                           prescale[1:0] == 2 ? 6'd11 :
+                           prescale[1:0] == 3 ? 6'd8 : 6'd32;
 reg [9:0] fetch_limit;
 reg [8:0] priority_limit;
 
-reg frame_indexed;
-reg frame_565;
+reg config_sys_indexed;
+reg config_sys_rgb565;
 
 // Raw addresses are stored in 16-byte (eight-word burst) units. Advance
 // them on ACK so the SDRAM address path needs no base+offset adder.
 reg [25:4] addr_top, addr_bottom;
 
 // Count output rows; each vertical repetition completes another DMA row.
-localparam ROW_COUNT_BITS = $clog2(V_ACTIVE + 1);
+localparam ROW_COUNT_BITS = 10;
 
 reg [ROW_COUNT_BITS-1:0] rows_remaining_top;
 reg [ROW_COUNT_BITS-1:0] rows_remaining_bottom;
@@ -304,10 +304,12 @@ reg [ROW_COUNT_BITS-1:0] rows_remaining_bottom;
 reg has_bottom;
 
 reg [5:0] prefill_left;
-reg [8:0] top_prefill_words;
-reg [8:0] bottom_prefill_words;
+reg [8:0] prefill_words;
 
-wire split_valid = split_line != 11'h7ff && split_line > 0 && split_line < V_ACTIVE;
+wire split_valid = !split_line[10];
+// Only $7ff (disabled) or a split strictly inside the viewport is programmed.
+wire [9:0] top_rows = (split_valid ? split_line[9:0] : viewport_bottom) - viewport_top;
+wire [9:0] bottom_rows = viewport_bottom - split_line[9:0];
 
 reg frame_ready;
 reg fifo_reset = 1;
@@ -402,7 +404,7 @@ wire [21:0] selected_row_base = owner ? row_base_bottom : row_base_top;
 wire  [7:0] selected_row_left = owner ? row_left_bottom : row_left_top;
 wire  [1:0] selected_repeat   = owner ? repeat_bottom   : repeat_top;
 
-wire repeat_row = selected_repeat != pixel_repeat[3:2];
+wire repeat_row = selected_repeat != vertical_repeat;
 
 wire [21:0] next_row_base = selected_row_base + frame_stride;
 wire [21:0] next_addr     = selected_row_left != 1 ? linear_addr :
@@ -424,10 +426,16 @@ always @(posedge clk_sys or negedge resetn_sys) begin
     quiet <= 0;
     reset_count <= 0;
     prepare_count <= 0;
-    frame_split <= V_ACTIVE;
-    frame_indexed <= 0;
-    frame_565 <= 1;
-    pixel_repeat <= 0;
+    config_sys_split <= 0;
+    config_sys_h_start_last <= 0;
+    config_sys_h_stop_last <= 0;
+    config_sys_h_zero <= 0;
+    config_sys_v_start <= 0;
+    config_sys_v_stop <= 0;
+    config_sys_indexed <= 0;
+    config_sys_rgb565 <= 1;
+    config_sys_repeat <= 0;
+    vertical_repeat <= 0;
     row_bursts <= 0;
     frame_stride <= 0;
     row_base_top <= 0;
@@ -444,8 +452,7 @@ always @(posedge clk_sys or negedge resetn_sys) begin
     rows_remaining_bottom <= 0;
     has_bottom <= 0;
     prefill_left <= 0;
-    top_prefill_words <= 0;
-    bottom_prefill_words <= 0;
+    prefill_words <= 0;
 
   end else begin
     if (!ena_sys || vreset_sys) begin
@@ -510,7 +517,7 @@ always @(posedge clk_sys or negedge resetn_sys) begin
       else if (quiet != 32) quiet <= quiet + 1'b1;
 
       if (!frame_ready && (state == RUN_TOP || state == DRAIN_TOP || state == RUN_BOTTOM) &&
-        used_top >= top_prefill_words && (!has_bottom || used_bottom >= bottom_prefill_words))
+        used_top >= prefill_words && (!has_bottom || used_bottom >= prefill_words))
         frame_ready <= 1;
 
       case (state)
@@ -531,34 +538,38 @@ always @(posedge clk_sys or negedge resetn_sys) begin
             addr_top <= rtg_base;
             addr_bottom <= rtg_base2;
 
-            frame_indexed <= rtg_clut;
-            frame_565 <= rtg_16bit;
+            config_sys_indexed <= rtg_clut;
+            config_sys_rgb565 <= rtg_16bit;
 
-            rows_remaining_top <= split_valid ? split_line : V_ACTIVE;
-            rows_remaining_bottom <= split_valid ? V_ACTIVE - split_line : 0;
+            rows_remaining_top <= top_rows;
+            rows_remaining_bottom <= split_valid ? bottom_rows : 0;
 
             has_bottom <= split_valid;
-            frame_split <= split_valid ? split_line[9:0] : V_ACTIVE;
+            config_sys_split <= split_valid ? split_line[9:0] : viewport_bottom;
+            config_sys_h_start_last <= h_start - 1'b1;
+            config_sys_h_stop_last <= h_stop - 1'b1;
+            config_sys_h_zero <= h_start == 0;
+            config_sys_v_start <= v_start;
+            config_sys_v_stop <= v_stop;
 
-            // Reserved encoding 3 falls back to 1x independently per axis.
-            pixel_repeat[1:0] <= prescale[1:0] == 3 ? 2'd0 : prescale[1:0];
-            pixel_repeat[3:2] <= prescale[3:2] == 3 ? 2'd0 : prescale[3:2];
+            config_sys_repeat <= prescale[1:0];
+            vertical_repeat <= prescale[3:2];
 
-            row_bursts <= initial_row_bursts;
-            frame_stride <= initial_stride;
+            row_bursts <= source_bursts;
+            frame_stride <= stride;
             row_base_top <= rtg_base;
             row_base_bottom <= rtg_base2;
-            row_left_top <= initial_row_bursts;
-            row_left_bottom <= initial_row_bursts;
+            row_left_top <= source_bursts;
+            row_left_bottom <= source_bursts;
 
             repeat_top <= 0;
             repeat_bottom <= 0;
 
-            // At production widths, even one indexed row contains at least
-            // the 32/16/11-burst target. No short-section clamp is required.
+            // The driver selects maximal repetition for source sizes >=320x192.
+            // Even one indexed row meets these targets, including a one-line
+            // split section. No short-section accumulator/clamp is required.
             prefill_left <= prefill_limit;
-            top_prefill_words <= {prefill_limit, 3'd0};
-            bottom_prefill_words <= {prefill_limit, 3'd0};
+            prefill_words <= {prefill_limit, 3'd0};
 
             case (prescale[1:0])
               2'd1: begin
@@ -568,6 +579,10 @@ always @(posedge clk_sys or negedge resetn_sys) begin
               2'd2: begin
                 fetch_limit <= 160;
                 priority_limit <= 88;
+              end
+              2'd3: begin
+                fetch_limit <= 120;
+                priority_limit <= 64;
               end
               default: begin
                 fetch_limit <= 480;
@@ -632,9 +647,12 @@ wire video_reset_rtg = video_reset_sync[1];
 
 (* ASYNC_REG = "TRUE" *) reg [1:0] ready_vid;
 
-// Bundled data is held from FIFO reset through the entire frame. Ready crosses later.
-reg [13:0] config_meta;
-reg [13:0] config_vid;
+// Configuration is snapshotted in clk_sys during FIFO reset and held until
+// the next frame preparation. No wide synchronizer banks are needed here.
+// ready_vid still synchronizes readiness; mode-change frames may be invalid.
+// Format, split and horizontal repeat use these clk_sys registers directly;
+// no pixel-domain copies are needed, including pixel format pipeline copies.
+// SDC/LPF false-path the pixel-only config_sys_* source registers.
 
 reg [9:0] scan_row;
 
@@ -642,28 +660,34 @@ reg scan_bottom;
 reg byte_phase;
 
 wire [9:0] next_scan_row = scan_row + 1'b1;
-reg  [9:0] split_vid;
 
-reg indexed_vid, rgb565_vid;
 reg frame_active, frame_fault;
 
-reg [1:0] repeat_vid;
 reg [1:0] horizontal_phase;
 
-// This counter advances only during active pixels, then resets in blank.
-localparam COLUMN_BITS = H_ACTIVE > 1 ? $clog2(H_ACTIVE) : 1;
+// Only the subcounter tracks individual pixels; bounds use seven-bit blocks.
+reg [3:0] scan_subpixel;
+reg [6:0] scan_block;
 
-reg [COLUMN_BITS-1:0] scan_column;
+// Bounds come directly from the held clk_sys frame configuration. The
+// pixel-domain window registers keep comparators off the FIFO enable path.
+wire [6:0] h_start_last_vid = config_sys_h_start_last;
+wire [6:0] h_stop_last_vid = config_sys_h_stop_last;
 
-wire [1:0] repeat_now = repeat_vid;
+wire h_zero_vid = config_sys_h_zero;
 
-wire in_source_window = repeat_now != 2 ||
-    (scan_column >= H_BORDER && scan_column < H_ACTIVE - H_BORDER);
+wire [5:0] v_start_vid = config_sys_v_start;
+wire [5:0] v_stop_vid = config_sys_v_stop;
+
+reg horizontal_window, vertical_window;
+
+wire [1:0] repeat_now = config_sys_repeat;
+wire in_source_window = horizontal_window && vertical_window;
 
 wire source_request = display_req && in_source_window && horizontal_phase == 0;
 
 // Frame request arrives during blanking, one cycle before the first pixel.
-// Latch frame state there so FIFO reads need no first-pixel bypass muxes.
+// Arm scanout and initialize window state before any FIFO read is requested.
 wire start_display = frame_request && ready_vid[1] && !reset_top_r && !reset_bottom_r;
 
 wire display_req = rtg_active && !video_reset_rtg && !reset_top_r && !reset_bottom_r &&
@@ -672,7 +696,7 @@ wire display_req = rtg_active && !video_reset_rtg && !reset_top_r && !reset_bott
 
 wire selected_bottom = scan_bottom;
 
-wire indexed_now = indexed_vid;
+wire indexed_now = config_sys_indexed;
 
 wire need_word = !indexed_now || !byte_phase;
 
@@ -723,7 +747,7 @@ rtg_async_fifo bottom_fifo (
     .rd_reset_busy(reset_bottom_r)
 );
 
-reg valid_1, valid_2, bottom_1, low_byte_1, indexed_1, indexed_2, rgb565_1;
+reg valid_1, valid_2, bottom_1, low_byte_1;
 reg source_1, source_2;
 
 reg [23:0] palette_rgb, direct_rgb;
@@ -734,7 +758,7 @@ wire  [7:0] palette_index = low_byte_1 ? word_1[7:0] : word_1[15:8];
 // Stage 1: FIFO synchronous read. Stage 2: palette/direct decode. Stage 3: RGB.
 always @(posedge clk_rtg) begin
   palette_rgb <= clut[palette_index];
-  direct_rgb  <= rgb565_1 ?
+  direct_rgb  <= config_sys_rgb565 ?
           {word_1[15:11], word_1[15:13], word_1[10:5], word_1[10:9], word_1[4:0], word_1[4:2]} :
           {word_1[14:10], word_1[14:12], word_1[ 9:5], word_1[ 9:7], word_1[4:0], word_1[4:2]};
 end
@@ -742,19 +766,16 @@ end
 always @(posedge clk_rtg or negedge resetn_rtg) begin
   if (!resetn_rtg) begin
     ready_vid <= 0;
-    config_meta <= 0;
-    config_vid <= 0;
     frame_active <= 0;
     frame_fault <= 0;
     scan_row <= 0;
     scan_bottom <= 0;
     byte_phase <= 0;
-    split_vid <= V_ACTIVE;
-    indexed_vid <= 0;
-    rgb565_vid <= 1;
-    repeat_vid <= 0;
     horizontal_phase <= 0;
-    scan_column <= 0;
+    scan_subpixel <= 0;
+    scan_block <= 0;
+    horizontal_window <= 0;
+    vertical_window <= 0;
     source_1 <= 0;
     source_2 <= 0;
     valid_1 <= 0;
@@ -762,17 +783,12 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
 
     bottom_1 <= 0;
     low_byte_1 <= 0;
-    indexed_1 <= 0;
-    indexed_2 <= 0;
-    rgb565_1 <= 1;
     red <= 0;
     green <= 0;
     blue <= 0;
 
   end else begin
     ready_vid   <= {ready_vid[0], frame_ready};
-    config_meta <= {pixel_repeat[1:0], frame_split, frame_indexed, frame_565};
-    config_vid  <= config_meta;
 
     if (!rtg_active || video_reset_rtg || reset_top_r || reset_bottom_r) begin
       frame_active <= 0;
@@ -781,7 +797,10 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       scan_bottom <= 0;
       byte_phase <= 0;
       horizontal_phase <= 0;
-      scan_column <= 0;
+      scan_subpixel <= 0;
+      scan_block <= 0;
+      horizontal_window <= 0;
+      vertical_window <= 0;
       source_1 <= 0;
       source_2 <= 0;
       valid_1 <= 0;
@@ -794,8 +813,11 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       // any pixel of the next line is requested.
       if (line_prepare) begin
         scan_row <= next_scan_row;
-        if (next_scan_row == split_vid) scan_bottom <= 1;
-        if (next_scan_row == V_ACTIVE) frame_active <= 0;
+        if (next_scan_row == config_sys_split) scan_bottom <= 1;
+        if (next_scan_row[3:0] == 0) begin
+          if (next_scan_row[9:4] == v_start_vid) vertical_window <= 1;
+          if (next_scan_row[9:4] == v_stop_vid) vertical_window <= 0;
+        end
       end
       if (frame_request) begin
         scan_row <= 0;
@@ -804,10 +826,17 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       if (!pixel_request) begin
         byte_phase <= 0;
         horizontal_phase <= 0;
-        scan_column <= 0;
+        scan_subpixel <= 0;
+        scan_block <= 0;
+        horizontal_window <= h_zero_vid;
 
       end else begin
-        scan_column <= scan_column + 1'b1;
+        scan_subpixel <= scan_subpixel + 1'b1;
+        if (scan_subpixel == 15) begin
+          scan_block <= scan_block + 1'b1;
+          if (scan_block == h_start_last_vid) horizontal_window <= 1;
+          if (scan_block == h_stop_last_vid) horizontal_window <= 0;
+        end
 
         if (display_req && in_source_window) begin
           if (horizontal_phase == repeat_now)
@@ -824,10 +853,8 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       if (start_display) begin
         frame_active <= 1;
         frame_fault <= 0;
-        split_vid <= config_vid[11:2];
-        indexed_vid <= config_vid[1];
-        rgb565_vid <= config_vid[0];
-        repeat_vid <= config_vid[13:12];
+        horizontal_window <= config_sys_h_zero;
+        vertical_window <= config_sys_v_start == 0;
       end
       if (source_request && need_word && word_empty)
         frame_fault <= 1;
@@ -841,15 +868,12 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
 
       bottom_1 <= selected_bottom;
       low_byte_1 <= byte_phase;
-      indexed_1 <= indexed_now;
-      indexed_2 <= indexed_1;
-      rgb565_1 <= rgb565_vid;
 
       // Hold the decoded RGB through repetitions, with unchanged latency.
       if (!valid_2)
         {red, green, blue} <= 24'd0;
       else if (source_2)
-        {red, green, blue} <= indexed_2 ? palette_rgb : direct_rgb;
+        {red, green, blue} <= config_sys_indexed ? palette_rgb : direct_rgb;
     end
   end
 end

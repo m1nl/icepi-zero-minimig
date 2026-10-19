@@ -27,23 +27,22 @@ def main():
     args = parser.parse_args()
     source = (DRIVER / 'minimig.card.asm').read_text()
     # Expectations are independent of the assembly tables.
-    if args.rtg_720p:
-        widths, heights = (1280, 640, 416), (720, 360, 240)
-        htotals, vtotals = (1650, 825, 550), (750, 375, 250)
-        hstarts, vstarts = (110, 55, 42), (5, 3, 2)
-        hsizes, vsizes = (40, 20, 13), (5, 3, 2)
-        clocks = (74250000, 37125000, 24750000, 37125000, 18562500,
-                  12375000, 24750000, 12375000, 8250000)
-    else:
-        widths, heights = (1024, 512, 320), (768, 384, 256)
-        htotals, vtotals = (1344, 672, 448), (806, 403, 269)
-        hstarts, vstarts = (24, 12, 19), (3, 2, 1)
-        hsizes, vsizes = (136, 68, 45), (6, 3, 2)
-        clocks = (66000000, 33000000, 22000000, 33000000, 16500000,
-                  11000000, 22027295, 11013648, 7342432)
+    width, height, ht, vt, pc, hs, hsz, vs, vsz = (
+        (1280, 720, 1650, 750, 74250000, 110, 40, 5, 5) if args.rtg_720p else
+        (1024, 768, 1344, 806, 66000000, 24, 136, 3, 6))
+    widths = tuple(width // (factor * 16) * 16 for factor in (1, 2, 3, 4))
+    heights = tuple(height // (factor * 16) * 16 for factor in (1, 2, 3))
+    htotals = tuple((ht + factor - 1) // factor for factor in (1, 2, 3, 4))
+    vtotals = tuple((vt + factor - 1) // factor for factor in (1, 2, 3))
+    hstarts = tuple((hs + ((width-widths[factor-1]*factor)//32*16 if factor>=3 else 0)
+                     + factor-1)//factor for factor in (1, 2, 3, 4))
+    vstarts = tuple((vs+factor-1)//factor for factor in (1, 2, 3))
+    hsizes = tuple(hsz//factor for factor in (1, 2, 3, 4))
+    vsizes = tuple((vsz+factor-1)//factor for factor in (1, 2, 3))
+    clocks = tuple((pc*h*v + ht*vt//2)//(ht*vt) for v in vtotals for h in htotals)
     dimensions = [(w, h) for w in widths for h in heights]
     dimensions += [
-        (320, 240), (800, 600), (960, 384), (640, 480), (1, 1),
+        (320, 240), (1280, 360), (1280, 352), (16, 16), (319, 192), (320, 191), (320, 192), (800, 600), (960, 384), (640, 480), (1, 1),
         (widths[2]-1, heights[2]-1), (widths[2]+1, heights[2]+1),
         (widths[1]-1, heights[1]-1), (widths[1]+1, heights[1]+1),
         (widths[0], 1), (1, heights[0]),
@@ -53,16 +52,16 @@ def main():
     ]
     cases = []
     for w, h in dimensions:
-        if w == 0 or h == 0 or w > widths[0] or h > heights[0]:
+        if w < 320 or h < 192 or w > widths[0] or h > heights[0]:
             hx, vy = 0, 0
         else:
-            hx = 3 if w <= widths[2] else 2 if w <= widths[1] else 1
-            vy = 3 if h <= heights[2] else 2 if h <= heights[1] else 1
+            hx = max(factor for factor in (1, 2, 3, 4) if (w & ~15)*factor <= width)
+            vy = max(factor for factor in (1, 2, 3) if (h & ~15)*factor <= height)
         cases.append((w, h, hx, vy))
     records = []
     for w, h, hx, vy in cases:
         if hx:
-            index = hx - 1 + 3 * (vy - 1)
+            index = hx - 1 + 4 * (vy - 1)
             encoding = hx - 1 + 4 * (vy - 1)
             canvas_w = widths[hx - 1]
             canvas_h = heights[vy - 1]
@@ -76,20 +75,32 @@ def main():
             ht, vt = htotals[0], vtotals[0]
             hb, vb = ht - widths[0], vt - heights[0]
             hs, vs = hstarts[0], vstarts[0]
+        sw, sh = w & ~15, h & ~15
+        left = (width-sw*hx)//32 if hx else 0
+        top = (height-sh*vy)//32 if vy else 0
         records.append(f'    dc.w {w},{h},{encoding},{index}\n'
                        f'    dc.l {clocks[index]}\n'
                        f'    dc.w {ht},{vt},{hb},{vb},{hs},{vs}\n'
                        f'    dc.w {hsizes[hx-1] if hx else hsizes[0]},'
-                       f'{vsizes[vy-1] if vy else vsizes[0]}\n')
+                       f'{vsizes[vy-1] if vy else vsizes[0]}\n'
+                       f'    dc.w {left},{left+sw*hx//16},{top},{top+sh*vy//16},{sw}\n')
     rom = '''    machine 68020
     include libraries/Picasso96.i
     include boardinfo.i
     include settings.i
 CardData_ModeValid = gbi_CardData+26
 CardData_VRepeat = gbi_CardData+28
+CardData_VOrigin = gbi_CardData+30
+CardData_VStop = gbi_CardData+32
+CardData_SourceWidth = gbi_CardData+34
 RTG_DISPLAY_SWITCH = $10
 RTG_REPEAT = $14
 RTG_STRIDE = $16
+RTG_VIEW_HSTART = $18
+RTG_VIEW_HSTOP = $1a
+RTG_VIEW_VSTART = $1c
+RTG_VIEW_VSTOP = $1e
+RTG_ROW_BURSTS = $20
 RTG_SPLIT_ROW = $12
 RTG_RGB_FORMATS EQU (RGBFF_CLUT|RGBFF_R5G6B5|RGBFF_R5G5B5)
 BUG macro
@@ -105,13 +116,19 @@ start:
     move.l #$800000,gbi_MemoryBase(a0)
 '''
     for factor in (1, 2, 3):
-        last = heights[factor - 1] - 1
+        last = 15
         rom += f'''    move.w #{factor},CardData_VRepeat(a0)
+    move.w #16,CardData_VOrigin(a0)
+    move.w #{16+16*factor},CardData_VStop(a0)
     move.w #{last},d0
     bsr SetSplitPosition
-    cmpi.w #{last * factor},$b80112
+    cmpi.w #{16 + last * factor},$b80112
     bne fail
     move.w #{last+1},d0
+    bsr SetSplitPosition
+    cmpi.w #$7ff,$b80112
+    bne fail
+    move.w #21846,d0
     bsr SetSplitPosition
     cmpi.w #$7ff,$b80112
     bne fail
@@ -179,8 +196,54 @@ format_loop:
     move.w $b80110,d0
     cmpi.w #1,d0
     bne fail
+    ; SetGC must seed full, aligned pitch even before SetPanning is called.
+    move.w (a3),d3
+    tst.w d6
+    beq .initial_bytes
+    add.w d3,d3
+.initial_bytes:
+    addi.w #15,d3
+    andi.w #$fff0,d3
+    lsr.w #4,d3
+    cmp.w $1216,d3
+    bne fail
     move.w $b80114,d0
     cmp.w 4(a3),d0
+    bne fail
+    move.w 28(a3),d0
+    cmp.w $b80118,d0
+    bne fail
+    move.w 30(a3),d0
+    cmp.w $b8011a,d0
+    bne fail
+    move.w 32(a3),d0
+    cmp.w $b8011c,d0
+    bne fail
+    move.w 34(a3),d0
+    cmp.w $b8011e,d0
+    bne fail
+    move.l d7,-(sp)
+    moveq #RGBFB_CLUT,d7
+    bsr SetDAC
+    move.w 36(a3),d0
+    lsr.w #4,d0
+    cmp.w $b80120,d0
+    bne fail
+    moveq #RGBFB_R5G6B5,d7
+    bsr SetDAC
+    move.w 36(a3),d0
+    lsr.w #3,d0
+    cmp.w $b80120,d0
+    bne fail
+    move.l (sp)+,d7
+    bsr SetDAC
+    move.w 36(a3),d0
+    lsr.w #4,d0
+    tst.w d6
+    beq .fetch_bytes
+    add.w d0,d0
+.fetch_bytes:
+    cmp.w $b80120,d0
     bne fail
     moveq #0,d0
     move.w (a3),d0
@@ -199,6 +262,26 @@ format_loop:
     move.w $b80116,d0
     cmp.w d3,d0
     bne fail
+    ; A wider virtual bitmap pitch must survive a subsequent SetDAC callback.
+    moveq #0,d0
+    move.w (a3),d0
+    addi.w #32,d0
+    moveq #0,d1
+    moveq #0,d2
+    movea.l #$800000,a1
+    bsr SetPanning
+    bsr SetDAC
+    move.w (a3),d3
+    addi.w #32,d3
+    tst.w d6
+    beq .virtual_bytes
+    add.w d3,d3
+.virtual_bytes:
+    addi.w #15,d3
+    andi.w #$fff0,d3
+    lsr.w #4,d3
+    cmp.w $1216,d3
+    bne fail
     moveq #0,d0
     bsr SetSwitch
     bra .next
@@ -212,7 +295,7 @@ format_loop:
     addq.w #1,d6
     cmpi.w #3,d6
     bne format_loop
-    adda.w #28,a3
+    adda.w #38,a3
     dbra d4,case_loop
     move.w #$600d,$1000
 loop:
@@ -222,9 +305,12 @@ fail:
     bra fail
 cases:
 '''
+    # RAM mirrors accepted MMIO writes; production configuration is write-only.
+    for offset in ('12', '14', '16', '18', '1a', '1c', '1e', '20'):
+        rom = rom.replace('$b801' + offset, '$12' + offset)
     rom += ''.join(records)
     rom += source[source.index('; Build-time physical raster.'):source.index('; Define RTG_DEBUG')]
-    rom += source[source.index('SetSwitch:'):source.index('SetDAC:')]
+    rom += source[source.index('SetSwitch:'):source.index('SetGC:')]
     rom += source[source.index('SetGC:'):source.index('CalculateMemory:')]
     rom += source[source.index('ResolvePixelClock:'):source.index('SetInterrupt:')]
     rom += source[source.index('SetSplitPosition:'):source.index('ProgEnd:')]
@@ -240,10 +326,9 @@ cases:
         if binary.stat().st_size >= 0x1000:
             raise RuntimeError('ROM overlaps test status/BoardInfo RAM')
         cpu = args.cpu_netlist.resolve() if args.cpu_netlist else build_cpu(folder)
-        raster = (1280, 720, 1650, 750) if args.rtg_720p else (1024, 768, 1344, 806)
-        run_rom(binary, folder, cpu, driver=True, raster=raster)
+        run_rom(binary, folder, cpu, driver=True)
         print(f'PASS: {len(cases)} mode cases, three formats, clocks, timing, '
-              'RTG switch, stride and split bounds', flush=True)
+              'viewport bounds, source fetch length, RTG switch, stride and split bounds', flush=True)
 
 
 
