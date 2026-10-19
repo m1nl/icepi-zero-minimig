@@ -101,6 +101,8 @@ module hdmi
 
 localparam int NUM_CHANNELS = 3;
 
+localparam [10:0] NATIVE_FRAME_WIDTH = 11'd908;
+
 logic hsync;
 logic vsync;
 
@@ -111,7 +113,6 @@ logic [7:0] cea_pal_i  = 8'd21; // 720(1440)x576i @ 50Hz
 logic [7:0] cea_ntsc   = 8'd02; // 720x480p @ 59.94/60Hz
 logic [7:0] cea_ntsc_i = 8'd06; // 720(1440)x480i @ 59.94/60Hz
 
-logic [10:0] frame_width;
 logic [10:0] screen_width;
 logic [10:0] hsync_pulse_start;
 logic [10:0] hsync_pulse_size;
@@ -125,6 +126,11 @@ logic [7:0] video_id_code;
 
 logic [10:0] cx;
 logic  [9:0] cy;
+
+// Subtract from each fixed width before selecting the mode, so the counter
+// wrap comparison does not need a runtime subtraction after the width mux.
+wire [10:0] last_pixel_x = rtg_en ? RTG_FRAME_WIDTH - 11'd1 : NATIVE_FRAME_WIDTH - 11'd1;
+wire last_pixel = cx == last_pixel_x;
 
 // RTG-only request coordinates, RTG_REQUEST_LEAD pixels ahead.
 // Request wrap and blanking derive from the configured RTG raster.
@@ -218,8 +224,6 @@ end
 always_comb begin
     invert = rtg_en ? RTG_POLARITY_INVERT : 2'b11;
 
-    frame_width = rtg_en ? RTG_FRAME_WIDTH : 11'd908;
-
     hsync_pulse_start = rtg_en ? RTG_HSYNC_PULSE_START : 11'd24;
 
     vsync_pulse_start = rtg_en ? RTG_VSYNC_PULSE_START : 10'd5;
@@ -290,8 +294,8 @@ always_ff @(posedge clk_pixel) begin
     end
     else
     begin
-        cx <= cx == frame_width-1'b1 ? 11'd0 : cx + 1'b1;
-        cy <= cx == frame_width-1'b1 ? cy == frame_height-1'b1 ? 10'd0 : cy + 1'b1 : cy;
+        cx <= last_pixel ? 11'd0 : cx + 1'b1;
+        cy <= last_pixel ? cy == frame_height-1'b1 ? 10'd0 : cy + 1'b1 : cy;
 
         if (rtg_en)
         begin
@@ -396,6 +400,11 @@ generate
     begin: true_hdmi_output
         logic video_guard = 1;
         logic video_preamble = 0;
+
+        wire [10:0] video_guard_start = rtg_en ? RTG_FRAME_WIDTH - 11'd2 : NATIVE_FRAME_WIDTH - 11'd2;
+        wire [10:0] video_preamble_start = rtg_en ? RTG_FRAME_WIDTH - 11'd10 : NATIVE_FRAME_WIDTH - 11'd10;
+        wire [10:0] frame_width = rtg_en ? RTG_FRAME_WIDTH : NATIVE_FRAME_WIDTH;
+
         always_ff @(posedge clk_pixel, posedge reset)
         begin
             if (reset)
@@ -405,8 +414,8 @@ generate
             end
             else
             begin
-                video_guard <= cx >= frame_width - 2 && cx < frame_width && (cy == frame_height - 1 || cy < screen_height - 1 /* no VG at end of last line */);
-                video_preamble <= cx >= frame_width - 10 && cx < frame_width - 2 && (cy == frame_height - 1 || cy < screen_height - 1 /* no VP at end of last line */);
+                video_guard <= cx >= video_guard_start && cx < frame_width && (cy == frame_height - 1 || cy < screen_height - 1 /* no VG at end of last line */);
+                video_preamble <= cx >= video_preamble_start && cx < video_guard_start && (cy == frame_height - 1 || cy < screen_height - 1 /* no VP at end of last line */);
             end
         end
 
@@ -421,13 +430,13 @@ generate
                 max_num_packets_alongside = (RTG_FRAME_WIDTH - RTG_SCREEN_WIDTH - 2 - 8 - 4 - 2 - 2 - 8 - 4) / 32;
             else case (screen_mode)
                 default: begin
-	                max_num_packets_alongside = (frame_width - 720 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+	                max_num_packets_alongside = (NATIVE_FRAME_WIDTH - 720 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
                 end
                 2'b01: begin
-	                max_num_packets_alongside = (frame_width - 768 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+	                max_num_packets_alongside = (NATIVE_FRAME_WIDTH - 768 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
                 end
                 2'b10: begin
-	                max_num_packets_alongside = (frame_width - 832 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
+	                max_num_packets_alongside = (NATIVE_FRAME_WIDTH - 832 /* VD period */ - 2 /* V guard */ - 8 /* V preamble */ - 4 /* Min V control period */ - 2 /* DI trailing guard */ - 2 /* DI leading guard */ - 8 /* DI premable */ - 4 /* Min DI control period */) / 32;
                 end
             endcase
 
@@ -531,7 +540,17 @@ generate
         end
 
         localparam integer AUDIO_CLOCK_COUNTER_WIDTH = $clog2((RTG_VIDEO_RATE > VIDEO_RATE ? RTG_VIDEO_RATE : VIDEO_RATE) + AUDIO_RATE + 1);
+
         wire [AUDIO_CLOCK_COUNTER_WIDTH-1:0] selected_video_rate = rtg_en ? RTG_VIDEO_RATE : VIDEO_RATE;
+
+        // Precompute wrap corrections modulo the counter width. Select the
+        // increment before the adder to avoid a runtime video-rate subtraction.
+        localparam [AUDIO_CLOCK_COUNTER_WIDTH-1:0] AUDIO_STEP = AUDIO_CLOCK_COUNTER_WIDTH'(AUDIO_RATE);
+        localparam [AUDIO_CLOCK_COUNTER_WIDTH-1:0] NATIVE_AUDIO_WRAP_STEP = AUDIO_CLOCK_COUNTER_WIDTH'(AUDIO_RATE - VIDEO_RATE);
+        localparam [AUDIO_CLOCK_COUNTER_WIDTH-1:0] RTG_AUDIO_WRAP_STEP = AUDIO_CLOCK_COUNTER_WIDTH'(AUDIO_RATE - RTG_VIDEO_RATE);
+
+        wire [AUDIO_CLOCK_COUNTER_WIDTH-1:0] audio_clock_step = !audio_sample_en ? AUDIO_STEP :
+            rtg_en ? RTG_AUDIO_WRAP_STEP : NATIVE_AUDIO_WRAP_STEP;
 
         reg [AUDIO_CLOCK_COUNTER_WIDTH-1:0] audio_clock_counter;
 
@@ -544,11 +563,7 @@ generate
             end
             else
             begin
-                audio_clock_counter <= audio_clock_counter + AUDIO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0];
-
-                if (audio_sample_en)
-                    audio_clock_counter <= audio_clock_counter + AUDIO_RATE[AUDIO_CLOCK_COUNTER_WIDTH-1:0] -
-                        selected_video_rate;
+                audio_clock_counter <= audio_clock_counter + audio_clock_step;
             end
         end
     end
