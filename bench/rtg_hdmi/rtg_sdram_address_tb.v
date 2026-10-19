@@ -163,7 +163,7 @@ module rtg_sdram_address_tb #(
             end
         end
     end
-    localparam SOURCE_WIDTH=REPEAT_CODE%4==2 ? 320 : REPEAT_CODE%4==1 ? 512 : 1024;
+    localparam SOURCE_WIDTH=(1024/((REPEAT_CODE%4+1)*16))*16;
     localparam ROW_BURSTS=INDEXED ? SOURCE_WIDTH/16 : SOURCE_WIDTH/8;
     localparam V_REPEAT=REPEAT_CODE/4+1;
     integer burst_column=0, repeat_row_index=0, source_row=0;
@@ -177,7 +177,7 @@ module rtg_sdram_address_tb #(
         end else if(ack && rtg.keep_fill) begin
             expected_address=26'h800000+source_row*ROW_BURSTS*16+burst_column*16;
             if((mem.sdram_state==4 ? mem.slot1_addr : mem.slot2_addr)!==expected_address)
-                $fatal(1,"wrong SDRAM accepted address got=%h expected=%h state=%d burst=%d vphase=%d pixel_repeat=%h row_bursts=%d clut=%b addr=%h left=%d repeat=%d base=%h",mem.sdram_state==4 ? mem.slot1_addr : mem.slot2_addr,expected_address,rtg.state,burst_column,repeat_row_index,rtg.pixel_repeat,rtg.row_bursts,rtg.frame_indexed,addr,rtg.row_left_top,rtg.repeat_top,rtg.row_base_top);
+                $fatal(1,"wrong SDRAM accepted address got=%h expected=%h state=%d burst=%d vphase=%d config_sys_repeat=%h row_bursts=%d clut=%b addr=%h left=%d repeat=%d base=%h",mem.sdram_state==4 ? mem.slot1_addr : mem.slot2_addr,expected_address,rtg.state,burst_column,repeat_row_index,rtg.config_sys_repeat,rtg.row_bursts,rtg.config_sys_indexed,addr,rtg.row_left_top,rtg.repeat_top,rtg.row_base_top);
             address_checks=address_checks+1;
             if(burst_column==ROW_BURSTS-1) begin
                 burst_column=0;
@@ -192,6 +192,10 @@ module rtg_sdram_address_tb #(
         #50;reset_n=1;wait(mem_ready && mem.cache.cache_init_done);
         write_reg(11'h100,16'h0080);write_reg(11'h102,0);
         write_reg(11'h104,INDEXED?16'h8000:0);write_reg(11'h106,1);
+        write_reg(11'h118,0);write_reg(11'h11a,SOURCE_WIDTH*(REPEAT_CODE%4+1)/16);
+        write_reg(11'h11c,0);write_reg(11'h11e,48);
+        write_reg(11'h120,SOURCE_WIDTH*(INDEXED?1:2)/16);
+        write_reg(11'h116,SOURCE_WIDTH*(INDEXED?1:2)/16);
         write_reg(OLD_MAP?11'h116:11'h114,REPEAT_CODE);
         traffic=1;ena=1;video_reset=0;
         repeat(6500000) @(negedge sys);

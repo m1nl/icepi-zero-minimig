@@ -31,16 +31,23 @@ make -C bench/ide test
 make -C bench/sd test
 python3 bench/rtg_hdmi/run.py
 python3 bench/rtg_hdmi/run.py reset config top_config
-python3 bench/rtg_hdmi/run.py repeat priority
+python3 bench/rtg_hdmi/run.py audio_counter
+python3 bench/rtg_hdmi/run.py audio_stream
+python3 bench/rtg_hdmi/run.py avi_checksum
+python3 bench/rtg_hdmi/run.py repeat repeat720 priority viewport
 python3 bench/rtg_hdmi/run.py contention addresses integrated
+python3 bench/rtg_area/check_config_paths.py
 python3 bench/cpu_cache_fsm/run.py
 bash bench/rtg_hdmi/run_cpu_mmio.sh
 make -C amiga_sw/rtg test
 ```
 
 The default RTG runner checks FIFO reset, register transactions, RTG/native
-interrupt isolation, audio CDC, OSD, HDMI reset/events and native-width RTG pixels. The repetition and priority tests exercise all nine repeat
-combinations and all three pixel formats. The CPU/driver tests additionally
+interrupt isolation, audio CDC, OSD, HDMI reset/events and native-width RTG pixels. The repetition and priority tests exercise all twelve repeat
+combinations and all three pixel formats. The viewport test covers minimum
+320x192 source viewports, black borders, single-line split sections and exact FIFO
+consumption. `repeat720` repeats the pixel checks at 1280-wide/74.25 MHz.
+The CPU/driver tests additionally
 require GHDL and installed vasm. The driver test target downloads missing
 headers and translates the current CPU once for both raster profiles. Driver
 test source lives under `amiga_sw/rtg/tests/`; the old entry point in
@@ -89,6 +96,23 @@ configuration is registered before FIFO consumption starts.
 The audio CDC module has no reset input or HDL initialization. Its bench seeds
 handshake state once at simulation startup and checks capture, hold and clock
 switching afterward; it does not establish FPGA power-up behavior.
+The separate `audio_counter` case checks the HDMI sample-enable accumulator
+against its original recurrence at native, 66 MHz and 74.25 MHz pixel rates,
+including 44.1/48 kHz audio, asynchronous reset and live native/RTG switching.
+The optional `audio_queue` case tests the saved LUTRAM experiment in
+`rtl/hdmi/packet_picker.sv.bak`, rather than the restored production picker.
+It requires that reference file and is excluded from the default quick suite.
+Run it explicitly with `python3 bench/rtg_hdmi/run.py audio_queue`.
+It checks 16/24-bit sample ordering and stability through
+the real packet assembler, including serialized payload/header BCH, consecutive
+packets, simultaneous capture/completion, full-queue overrun, field-end retry,
+reset and bank/IEC frame wrap.
+The longer `audio_stream` case checks continuous 48 kHz audio across two frames
+using the real HDMI scheduler in native wide mode and both RTG raster profiles;
+it verifies ordered delivery without sample loss while active pixels defer
+audio transmission. It uses Verilator by default.
+The `avi_checksum` case checks the transmitted AVI header/body sum for all 256
+VICs, with module defaults, core defaults and custom fields including bar bytes.
 
 OSD enable latches on its start-request edge. The first requested pixel uses
 the previous frame's enable, and the bench checks that transition explicitly.

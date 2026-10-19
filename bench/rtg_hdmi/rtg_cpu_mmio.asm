@@ -28,7 +28,7 @@ start:
     bne fail
     move.w #384,$b80112
     move.w $b80112,d0
-    cmp.w #384,d0
+    cmp.w #$8321,d0
     bne fail
     move.w #0,$b80110
     move.w $b80110,d0

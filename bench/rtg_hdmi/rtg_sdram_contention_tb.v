@@ -113,6 +113,10 @@ module rtg_sdram_contention_tb;
         #50;reset_n=1;wait(mem_ready && mem.cache.cache_init_done);
         write_reg(11'h100,16'h0080);write_reg(11'h102,0); // CPU $800000 maps to SDRAM $800000
         write_reg(11'h104,0);write_reg(11'h106,1);
+        write_reg(11'h118,0);write_reg(11'h11a,64);
+        write_reg(11'h11c,0);write_reg(11'h11e,48);
+        write_reg(11'h120,128);
+        write_reg(11'h116,128);
         traffic=1;ena=1;video_reset=0;
         // Initial prefill waits for the following HDMI frame origin. Include
         // that entire first frame and active scanout in the second frame.

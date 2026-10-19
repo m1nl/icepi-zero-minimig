@@ -4,9 +4,7 @@
 module rtg_cpu_mmio_tb #(
  parameter CHECK_MMIO=1,
  parameter VERBOSE=1,
- parameter TIMEOUT_NS=2000000,
- parameter H_ACTIVE=1024,
- parameter V_ACTIVE=768
+ parameter TIMEOUT_NS=2000000
 );
 reg clk=0; always #5 clk=~clk;
 reg reset_n=0;
@@ -37,10 +35,17 @@ always @(posedge clk) begin
  if(!as_n && !rw && phase==15) mem[addr[12:1]]<=dw;
  if(reg_req && !(reg_addr[10] || reg_addr[9:8]==2'b01))
   $fatal(1,"TG68K asserted an unqualified RTG request");
+ // Test-only write trace in RAM at $1200 + register offset. Driver ROMs
+ // inspect this trace instead of reading write-only configuration from RTG.
+ if(reg_ack && reg_wr && reg_addr[10:8]==3'b001)
+  mem['h900+reg_addr[7:1]]<=reg_d;
+ if(!CHECK_MMIO && reg_ack && !reg_wr &&
+    reg_addr!=11'h10c && reg_addr!=11'h10e && reg_addr!=11'h110)
+  $fatal(1,"driver ROM read a write-only RTG register %h",reg_addr);
  if(VERBOSE && reg_ack) $display("RTG %s %h %h",reg_wr?"W":"R",reg_addr,reg_wr?reg_d:reg_q);
  if(mem['h800]==16'h600d) begin
   if(CHECK_MMIO) begin
-   if({rtg.rtg_base,4'b0}!==26'h123450 || {rtg.rtg_base2,4'b0}!==26'h567890 || rtg.clut[0]!==24'h123456 || rtg.clut[1]!==24'h654321) $fatal(1,"wrong registers");
+   if({rtg.rtg_base,4'b0}!==26'h123450 || {rtg.rtg_base2,4'b0}!==26'h567890 || rtg.clut[0]!==24'h123456 || rtg.clut[1]!==24'h654321 || rtg.split_line!==384) $fatal(1,"wrong registers");
    $display("PASS: actual 68020 CPU RTG MMIO reads and longword writes");
   end else
    $display("PASS: driver callback ROM completed on TG68K/RTG hardware");
@@ -52,7 +57,7 @@ TG68K cpu(.clk(clk),.reset(reset_n),.clkena_in(phase[1:0]==0),.IPL(3'b111),.dtac
 .addr(addr),.data_read(dr),.data_read2(dr),.data_write(dw),.rw(rw),.as(as_n),.ena7RDreg(phase==7),.ena7WRreg(phase==15),
 .fromram(fromram),.toram(toram),.ramready(ramready),.overclock(1'b0),.cpu(2'b11),.ziiram_active(1'b0),.ziiiram_active(1'b0),.ziiiram2_active(1'b0),.ziiiram3_active(1'b0),.eth_en(1'b0),.frometh(16'b0),.ethready(1'b0),.chip_config(2'b11),.slow_config(2'b00),.aga(1'b1),.turbochipram(1'b1),.turbokick(1'b1),.ramaddr(ramaddr),.cpustate(cpustate),.ramlds(ramlds),.ramuds(ramuds),
 .rtg_reg_addr(reg_addr),.rtg_reg_d(reg_d),.rtg_reg_wr(reg_wr),.rtg_reg_req(reg_req),.rtg_reg_ack(reg_ack),.rtg_reg_q(reg_q),.audio_buf(1'b0),.host_addr(8'd0),.host_ack(1'b0),.host_q(16'b0));
-rtg_video #(.H_ACTIVE(H_ACTIVE),.V_ACTIVE(V_ACTIVE))
+rtg_video
 rtg(.clk_sys(clk),.clk_rtg(clk),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(1'b0),.video_reset(1'b1),.frame_start_toggle(1'b0),.vblank_start_toggle(1'b0),.pixel_request(1'b0),.frame_request(1'b0),.line_prepare(1'b0),.reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(reg_ack),.reg_q(reg_q),.fetch_d(16'd0),.fetch_ack(1'b0),.fetch_fill(1'b0));
 integer i;
 reg [1023:0] image_path;

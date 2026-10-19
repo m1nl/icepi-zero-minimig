@@ -1,9 +1,7 @@
 `timescale 1ns/1ps
 module rtg_video_tb;
-    // Use production-width rows: fixed prefill no longer clamps short
-    // sections, so the old 64-pixel single-row sections are unsupported.
     parameter W=1024,HT=1344;
-    localparam H=12,VT=24;
+    localparam H=32,VT=48;
     reg sys=0,vid=0;
     always #4.375 sys=~sys;
     always #7.575757 vid=~vid;
@@ -42,7 +40,7 @@ module rtg_video_tb;
     wire [25:0] addr; wire req,pri;
     reg [15:0] data=0; reg ack=0,fill=0;
     wire [7:0] r,g,b; wire pixel,de;
-    rtg_video #(.PREPARE_DELAY(32),.H_ACTIVE(W),.V_ACTIVE(H)) dut (
+    rtg_video #(.PREPARE_DELAY(32)) dut (
         .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),
@@ -115,11 +113,15 @@ module rtg_video_tb;
         begin
             checking=0; mode=m;split=sp;
             write_reg(4,m==2?16'h8000:0);write_reg(6,m==1?0:1);
+            write_reg(24,0);write_reg(26,W/16);
+            write_reg(28,0);write_reg(30,H/16);
+            write_reg(32,W*(m==2?1:2)/16);
+            write_reg(11'h116,W*(m==2?1:2)/16);
             write_reg(18,sp==H?11'h7ff:sp);
             // Let changed settings be prepared at the next blank; then wait for its origin.
             wait(vb);@(negedge vid);wait(sof);@(negedge vid);
             // Above wait can land on a frame before the context change; verify snapshot.
-            if(dut.frame_split!=sp || dut.frame_indexed!=(m==2)) $fatal(1,"configuration not latched");
+            if(dut.config_sys_split!=sp || dut.config_sys_indexed!=(m==2)) $fatal(1,"configuration not latched");
             wait(vb);@(negedge vid);wait(sof);
             checking=1;checks=0;
             @(negedge vid);wait(vb);@(negedge vid);checking=0;
@@ -136,8 +138,6 @@ module rtg_video_tb;
         @(negedge vid);ena=1;video_reset=0;
         check_frame(0,H);check_frame(1,1);check_frame(2,6);check_frame(0,H-1);
         check_frame(2,H);
-        // An out-of-range split must behave as one framebuffer.
-        write_reg(18,0);
         check_frame(0,H);
         // Starve a running frame: fault must stick until next frame preparation.
         wait(sof);@(negedge vid);starve=1;

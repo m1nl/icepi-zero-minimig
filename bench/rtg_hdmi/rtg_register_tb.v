@@ -36,24 +36,24 @@ module rtg_register_tb;
         access(11'h110,0,0);
         if(q!==0 || dut.rtg_enable!==0) $fatal(1,"reset must select native video");
         access(11'h112,0,0);
-        if(q!==16'h07ff) $fatal(1,"reset must disable screen splitting");
+        if(q!==16'h8321 || dut.split_line!==11'h7ff) $fatal(1,"reset must disable screen splitting");
         access(11'h114,0,0);
-        if(q!==0) $fatal(1,"reset must select 1x repetition");
+        if(q!==16'h8321 || dut.prescale!==0) $fatal(1,"reset must select 1x repetition");
         access(11'h116,0,0);
-        if(q!==0) $fatal(1,"reset must select automatic stride");
+        if(q!==16'h8321 || dut.stride!==0) $fatal(1,"reset must clear explicit stride");
         // MMIO works while the selected pixel clock remains native/reset.
         access(11'h110,1,16'hffff);
         access(11'h110,0,0);
         if(q!==1 || dut.rtg_enable!==1) $fatal(1,"RTG display enable/readback");
         access(11'h112,1,16'd384);
         access(11'h112,0,0);
-        if(q!==384) $fatal(1,"RTG split row readback");
+        if(q!==16'h8321 || dut.split_line!==384) $fatal(1,"RTG split row write-only control");
         access(11'h114,1,16'hfff9);
         access(11'h114,0,0);
-        if(q!==9) $fatal(1,"RTG repetition readback");
+        if(q!==16'h8321 || dut.prescale!==9) $fatal(1,"RTG repetition write-only control");
         access(11'h116,1,16'hf080);
         access(11'h116,0,0);
-        if(q!==128) $fatal(1,"RTG stride readback");
+        if(q!==16'h8321 || dut.stride!==128) $fatal(1,"RTG stride write-only control");
         access(11'h110,1,16'hfffe);
         if(dut.rtg_enable!==0) $fatal(1,"native display selection");
         // $B80100 primary base, $B80104 format, $B80108 secondary base.
@@ -65,6 +65,19 @@ module rtg_register_tb;
         if(!dut.rtg_clut || dut.rtg_16bit) $fatal(1,"format decode");
         access(11'h108,1,16'h0234);access(11'h10a,1,16'h5670);
         if({dut.rtg_base2,4'd0}!==26'h2345670) $fatal(1,"secondary address decode");
+        // Write-only controls must not alias the bases; reads return the legacy ID.
+        access(11'h118,1,2);access(11'h11a,1,62);
+        access(11'h11c,1,1);access(11'h11e,1,45);
+        access(11'h120,1,120);
+        read_id(11'h118,16'h8321);read_id(11'h11a,16'h8321);
+        read_id(11'h11c,16'h8321);read_id(11'h11e,16'h8321);read_id(11'h120,16'h8321);
+        if(dut.h_start!==2 || dut.h_stop!==62 || dut.v_start!==1 ||
+           dut.v_stop!==45 || dut.source_bursts!==120)
+            $fatal(1,"viewport/source length writes");
+        if({dut.rtg_base,4'd0}!==26'h1234560 || dut.base_high!==10'h123)
+            $fatal(1,"source fetch length aliased primary base");
+        access(11'h114,1,11);read_id(11'h114,16'h8321);
+        if(dut.prescale!==11) $fatal(1,"4x/3x repetition write"); // 4x horizontal, 3x vertical
         // Held writes must not be replayed, even if bus data changes after ACK.
         @(negedge clk);addr=11'h102;wr=1;d=16'h7890;req=1;
         @(posedge clk);#1;@(negedge clk);d=16'hffff;
@@ -89,6 +102,6 @@ module rtg_register_tb;
         @(negedge clk);reset_n=0;
         @(posedge clk);#1;
         if(dut.rtg_enable!==0 || dut.split_line!==11'h7ff) $fatal(1,"reset must restore native defaults");
-        $display("PASS: compact RTG display/split/repeat/stride registers, ID, held transactions and C2P isolation");$finish;
+        $display("PASS: compact RTG display/split/repeat/stride/viewport registers, ID, held transactions and C2P isolation");$finish;
     end
 endmodule

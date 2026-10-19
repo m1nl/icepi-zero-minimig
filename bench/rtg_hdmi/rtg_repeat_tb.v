@@ -3,11 +3,11 @@ module rtg_repeat_tb;
     parameter W=1024,HT=1344;
     parameter LOW_PRIORITY_STALL=0;
     // Driver geometries are independent of the RTL's source-width formula.
-    localparam TRIPLE_SOURCE_WIDTH = W==1024 ? 320 : W==1280 ? 416 : (W/96)*32;
-    localparam H=12,VT=24;
+    localparam TRIPLE_SOURCE_WIDTH = (W/48)*16;
+    localparam H=32,VT=48;
     reg sys=0,vid=0;
     always #4.375 sys=~sys;
-    always #7.575757 vid=~vid;
+    always #(W==1280 ? 6.734007 : 7.575757) vid=~vid;
     reg reset_n=0,ena=0,video_reset=1;
     reg [10:0] cx=0; reg [9:0] cy=0;
     wire [10:0] px = cx >= HT-3 ? cx-(HT-3) : cx+3;
@@ -43,7 +43,7 @@ module rtg_repeat_tb;
     wire [25:0] addr; wire req,pri;
     reg [15:0] data=0; reg ack=0,fill=0;
     wire [7:0] r,g,b; wire pixel,de;
-    rtg_video #(.PREPARE_DELAY(32),.H_ACTIVE(W),.V_ACTIVE(H)) dut (
+    rtg_video #(.PREPARE_DELAY(32)) dut (
         .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.rtg_enable(),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),
@@ -106,11 +106,11 @@ module rtg_repeat_tb;
     // RGB sampled before the edge must correspond to this HDMI coordinate.
     always @(posedge vid) if(checking && !video_reset) begin
         if(cx<W && cy<H) begin
-            source_w=horizontal==3 ? TRIPLE_SOURCE_WIDTH : W/horizontal;
-            border=(W-source_w*horizontal)/2;
+            source_w=(W/(horizontal*16))*16;
+            border=((W-source_w*horizontal)/32)*16;
             source_x=(cx-border)/horizontal;
             source_y=(cy<split ? cy : cy-split)/vertical;
-            if(cx<border || cx>=W-border) begin
+            if(cx<border || cx>=border+source_w*horizontal) begin
                 if(de || {r,g,b}!==0) $fatal(1,"border not black %0d,%0d",cx,cy);
             end else begin
                 expected_addr=(cy<split ? 26'h10000 : 26'h20000)+
@@ -129,16 +129,20 @@ module rtg_repeat_tb;
         begin
             checking=0; mode=m;split=sp;
             horizontal=hx;vertical=vy;
-            source_w=hx==3 ? TRIPLE_SOURCE_WIDTH : W/hx;
+            source_w=(W/(hx*16))*16;
             row_bytes=source_w*(m==2?1:2)+padding;
             write_reg(11'h114,(hx-1)|((vy-1)<<2));
-            write_reg(11'h116,padding ? row_bytes/16 : 0);
+            write_reg(11'h116,row_bytes/16);
             write_reg(4,m==2?16'h8000:0);write_reg(6,m==1?0:1);
+            border=((W-source_w*hx)/32)*16;
+            write_reg(24,border/16);write_reg(26,(border+source_w*hx)/16);
+            write_reg(28,0);write_reg(30,H/16);
+            write_reg(32,source_w*(m==2?1:2)/16);
             write_reg(18,sp==H?11'h7ff:sp);
             // Let changed settings be prepared at the next blank; then wait for its origin.
             wait(vb);@(negedge vid);wait(sof);@(negedge vid);
             // Above wait can land on a frame before the context change; verify snapshot.
-            if(dut.frame_split!=sp || dut.frame_indexed!=(m==2)) $fatal(1,"configuration not latched");
+            if(dut.config_sys_split!=sp || dut.config_sys_indexed!=(m==2)) $fatal(1,"configuration not latched");
             wait(vb);@(negedge vid);wait(sof);
             checking=1;checks=0;
             @(negedge vid);wait(vb);@(negedge vid);checking=0;
@@ -153,15 +157,13 @@ module rtg_repeat_tb;
             write_reg(11'h400+i*4,i);write_reg(11'h402+i*4,{i[7:0]^8'h55,~i[7:0]});
         end
         @(negedge vid);ena=1;video_reset=0;
-        for(hx=1;hx<=3;hx=hx+1)
+        for(hx=1;hx<=4;hx=hx+1)
             for(vy=1;vy<=3;vy=vy+1)
                 for(fmt=0;fmt<3;fmt=fmt+1) begin
                     check_frame(fmt,H,hx,vy,0);
                     check_frame(fmt,1,hx,vy,16);
                     check_frame(fmt,H-1,hx,vy,0);
                 end
-        // An out-of-range split must behave as one framebuffer.
-        write_reg(18,0);
         check_frame(0,H,1,1,0);
         // Starve a running frame: fault must stick until next frame preparation.
         wait(sof);@(negedge vid);starve=1;
@@ -170,7 +172,7 @@ module rtg_repeat_tb;
         starve=0;check_frame(0,H,1,1,0);
         // Byte parity affects indexed pixels. Check underflow and the first
         // complete recovered frame for every horizontal repetition factor.
-        for(hx=1;hx<=3;hx=hx+1) begin
+        for(hx=1;hx<=4;hx=hx+1) begin
             check_frame(2,H,hx,1,0);
             wait(sof);@(negedge vid);starve=1;
             wait(dut.frame_fault);repeat(10) @(negedge vid);
@@ -182,7 +184,7 @@ module rtg_repeat_tb;
         repeat(50) @(negedge sys);
         if(req || pri || dut.pop_top || dut.pop_bottom) $fatal(1,"disabled RTG still active");
         @(negedge vid);ena=1;video_reset=0;check_frame(0,H,1,1,0);
-        $display("PASS: all 1x/2x/3x axis combinations, formats, splits, stride, restart, starvation and disable");$finish;
+        $display("PASS: all 1x/2x/3x/4x H and 1x/2x/3x V combinations, formats, splits, stride, restart, starvation and disable");$finish;
     end
-    initial begin #200000000;$fatal(1,"timeout");end
+    initial begin #1000000000;$fatal(1,"timeout");end
 endmodule

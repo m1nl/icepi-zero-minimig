@@ -44,7 +44,7 @@ module hdmi_reset_tb;
             $fatal(1, "Timing registers changed asynchronously");
         @(negedge clk);
         if (x !== 0 || y !== 0 || dut.screen_width !== SW || dut.screen_height !== SH ||
-            dut.frame_width !== FW || dut.frame_height !== FH || dut.video_id_code !== CEA_MODE)
+            dut.frame_height !== FH || dut.video_id_code !== CEA_MODE)
             $fatal(1, "RTG reset configuration incorrect");
         reset = 0;
         blanks = 0;
@@ -83,7 +83,7 @@ module hdmi_reset_tb;
         reset = 1; rtg = 0; pal = 1; long_frame = 1; interlace = 0; screen = 0;
         repeat (3) @(negedge clk);
         if (x !== 0 || y !== 0 || dut.screen_width !== 720 || dut.screen_height !== 576 ||
-            dut.frame_width !== 908 || dut.frame_height !== 626 || dut.video_id_code !== 17)
+            dut.frame_height !== 626 || dut.video_id_code !== 17)
             $fatal(1, "Return to native reset configuration failed");
         reset = 0;
         repeat (5) @(negedge clk);

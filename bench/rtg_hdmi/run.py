@@ -21,6 +21,13 @@ TESTS = {
     'vblank': ('rtg_vblank_tb', RTG + ['rtl/minimig/paula_intcontroller.v']),
     'osd': ('rtg_osd_tb', ['rtl/rtg/rtg_osd.v']),
     'audio': ('audio_cdc_tb', ['rtl/hdmi/audio_cdc.v']),
+    'audio_counter': ('hdmi_audio_counter_tb', HDMI),
+    # Explicit reference experiment; production uses the register-based picker.
+    'audio_queue': ('hdmi_audio_queue_tb', [
+        'rtl/hdmi/packet_picker.sv.bak' if p == 'rtl/hdmi/packet_picker.sv' else p
+        for p in HDMI]),
+    'audio_stream': ('hdmi_audio_stream_tb', HDMI),
+    'avi_checksum': ('avi_checksum_tb', ['rtl/hdmi/auxiliary_video_information_info_frame.sv']),
     'reset': ('hdmi_reset_tb', HDMI),
     'config': ('hdmi_config_tb', HDMI + ['bench/rtg_hdmi/hdmi_reset_tb.sv']),
     'top_config': ('rtg_top_config_tb', RTG + ['rtl/soc/minimig_virtual_top.v',
@@ -30,12 +37,14 @@ TESTS = {
     'addresses': ('rtg_sdram_address_tb', RTG + SDRAM),
     'integrated': ('hdmi_rtg_tb', RTG + SDRAM + HDMI),
     'repeat': ('rtg_repeat_tb', RTG),
+    'repeat720': ('rtg_repeat_tb', RTG),
+    'viewport': ('rtg_viewport_tb', RTG),
     'priority': ('rtg_priority_stress_tb', RTG),
     'serializer': ('serializer_lattice_tb', ['rtl/hdmi/serializer.sv']),
     'clocks': ('video_clock_control_tb', ['rtl/hdmi/video_clock_control.v']),
 }
-QUICK = ('fifo', 'registers', 'vblank', 'audio', 'osd', 'reset', 'config', 'top_config', 'video')
-LONG = ('config', 'reset', 'video', 'repeat', 'priority', 'contention', 'addresses', 'integrated')
+QUICK = ('fifo', 'registers', 'vblank', 'audio', 'audio_counter', 'avi_checksum', 'osd', 'reset', 'config', 'top_config', 'video')
+LONG = ('config', 'reset', 'video', 'repeat', 'repeat720', 'viewport', 'priority', 'contention', 'addresses', 'integrated', 'audio_stream')
 
 
 def main():
@@ -49,6 +58,8 @@ def main():
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='rtg-hdmi-tests-') as folder:
         for name in args.tests or QUICK:
+            if name == 'audio_queue' and not (ROOT/'rtl/hdmi/packet_picker.sv.bak').exists():
+                parser.error('audio_queue tests the LUTRAM reference and requires rtl/hdmi/packet_picker.sv.bak')
             top, sources = TESTS[name]
             source = next(HERE.glob(top + '.*'))
             simulator = args.sim
@@ -62,6 +73,8 @@ def main():
                 command = ['verilator', '--binary', '--timing', '-Wno-fatal', '-DSOC_SIM',
                            '--output-split', '0', '--output-split-cfuncs', '0',
                            '--top-module', top, '--Mdir', str(build), str(source), *sources]
+                if name == 'repeat720':
+                    command += ['-GW=1280', '-GHT=1650']
                 env = dict(os.environ, CCACHE_DISABLE='1')
                 with (Path(folder) / (name + '.log')).open('w+') as log:
                     result = subprocess.run(command, cwd=ROOT, env=env,
@@ -74,6 +87,8 @@ def main():
                 continue
             command = ['iverilog', '-g2012', '-DSOC_SIM', '-s', top,
                        '-o', str(Path(folder) / name)]
+            if name == 'repeat720':
+                command += ['-P' + top + '.W=1280', '-P' + top + '.HT=1650']
             if name == 'top_config':
                 command += ['-i', '-I', 'fpga/icepi-zero', '-I', 'rtl/soc']
             if name in ('serializer', 'clocks'):
