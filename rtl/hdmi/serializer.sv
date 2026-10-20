@@ -12,13 +12,23 @@ module serializer
     output logic tmds_clock
 );
 
+`ifdef TMDS_INVERT
+localparam TMDS_CLOCK_INIT = 10'b1111100000;
+`else
+localparam TMDS_CLOCK_INIT = 10'b0000011111;
+`endif
+
 `ifndef VERILATOR
     `ifdef XILINX
         // https://www.xilinx.com/support/documentation/user_guides/ug471_7Series_SelectIO.pdf
         logic tmds_plus_clock [NUM_CHANNELS:0];
         assign tmds_plus_clock = '{tmds_clock, tmds[2], tmds[1], tmds[0]};
         logic [9:0] tmds_internal_plus_clock [NUM_CHANNELS:0];
-        assign tmds_internal_plus_clock = '{10'b0000011111, tmds_internal[2], tmds_internal[1], tmds_internal[0]};
+`ifdef TMDS_INVERT
+        assign tmds_internal_plus_clock = '{TMDS_CLOCK_INIT, ~(tmds_internal[2]), ~(tmds_internal[1]), ~(tmds_internal[0])};
+`else
+        assign tmds_internal_plus_clock = '{TMDS_CLOCK_INIT,   tmds_internal[2],    tmds_internal[1],    tmds_internal[0]};
+`endif
         logic [1:0] cascade [NUM_CHANNELS:0];
 
         // this is requried for OSERDESE2 to work
@@ -237,7 +247,11 @@ module serializer
             end
 
             always_ff @(posedge clk_pixel_x5)
-                out <= shift[1:0];
+`ifdef TMDS_INVERT
+                out <= ~(shift[1:0]);
+`else
+                out <=   shift[1:0];
+`endif
 
             ODDRX1F u_oddr (
                 .Q    (tmds[i]),
@@ -257,7 +271,7 @@ module serializer
 
         always_ff @(posedge clk_pixel_x5) begin
             if (load_word)
-                clk_shift <= 10'b0000011111;
+                clk_shift <= TMDS_CLOCK_INIT;
             else
                 clk_shift <= {2'b0, clk_shift[9:2]};
         end
@@ -280,7 +294,11 @@ module serializer
             begin: tmds_rev
                 for (j = 0; j < 10; j++)
                 begin: tmds_rev_channel
-                    assign tmds_reversed[i][j] = tmds_internal[i][9-j];
+`ifdef TMDS_INVERT
+                    assign tmds_reversed[i][j] = ~(tmds_internal[i][9-j]);
+`else
+                    assign tmds_reversed[i][j] =   tmds_internal[i][9-j];
+`endif
                 end
             end
         endgenerate
@@ -379,9 +397,9 @@ module serializer
                             tmds_shift[i] <= load ? tmds_mux[i] : tmds_shift[i] >> 2;
                     end
 
-                    logic [9:0] tmds_shift_clk_pixel = 10'b0000011111;
+                    logic [9:0] tmds_shift_clk_pixel = TMDS_CLOCK_INIT;
                     always_ff @(posedge clk_pixel_x5)
-                        tmds_shift_clk_pixel <= load ? 10'b0000011111 : {tmds_shift_clk_pixel[1:0], tmds_shift_clk_pixel[9:2]};
+                        tmds_shift_clk_pixel <= load ? TMDS_CLOCK_INIT : {tmds_shift_clk_pixel[1:0], tmds_shift_clk_pixel[9:2]};
 
                     logic [NUM_CHANNELS-1:0] tmds_shift_negedge_temp;
                     for (i = 0; i < NUM_CHANNELS; i++)
@@ -394,8 +412,13 @@ module serializer
                             // To fix this in the GOWIN toolchain, put:
                             //    `define GOWIN
                             // at the top of serializer.sv
+`ifdef TMDS_INVERT
+                            tmds[i] <= ~(tmds_shift[i][0]);
+                            tmds_shift_negedge_temp[i] <= ~(tmds_shift[i][1]);
+`else
                             tmds[i] <= tmds_shift[i][0];
                             tmds_shift_negedge_temp[i] <= tmds_shift[i][1];
+`endif
                         end
                         always_ff @(negedge clk_pixel_x5)
                             tmds[i] <= tmds_shift_negedge_temp[i];
