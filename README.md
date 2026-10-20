@@ -24,7 +24,7 @@ This minimig variant has been upgraded with [AGA chipset](http://en.wikipedia.or
 * supports HDMI video output with sound
 * peripherals : 2 x USB HID ports with FPGA USB controllers
 * has an implementation of the [Akiko](https://en.wikipedia.org/wiki/Amiga_custom_chips#Akiko) chunky to planar converter
-* RTG framebuffer video with a Picasso96 driver and independent 1x / 2x / 3x horizontal and vertical pixel repetition
+* RTG framebuffer video with a Picasso96 driver and independent 1x / 2x / 3x / 4x horizontal and 1x / 2x / 3x vertical pixel repetition
 
 ## RTG video (Picasso96)
 
@@ -83,29 +83,22 @@ Picasso96Mode settings provide the mode list; modes are not stored in the FPGA o
 
 ### Supported RTG modes
 
-These nine source resolutions cover the complete hardware viewport and produce a correct image. All support 8-bit indexed colour (CLUT), 16-bit RGB565 and 15-bit RGB555.
+Driver 1.15 programs a viewport within the fixed HDMI raster. It selects the largest independent horizontal (1x–4x) and vertical (1x–3x) repetition factors that fit, with black borders outside the image. All combinations support CLUT, RGB565 and RGB555.
 
-| Source resolution | Horizontal repetition | Vertical repetition |
+| Physical raster | Aligned source widths at 1x / 2x / 3x / 4x | Aligned source heights at 1x / 2x / 3x |
 | --- | --- | --- |
-| 1024x768 | 1x | 1x |
-| 1024x384 | 1x | 2x |
-| 1024x256 | 1x | 3x |
-| 512x768 | 2x | 1x |
-| 512x384 | 2x | 2x |
-| 512x256 | 2x | 3x |
-| 320x768 | 3x | 1x |
-| 320x384 | 3x | 2x |
-| 320x256 | 3x | 3x |
+| 1024x768 | 1024 / 512 / 336 / unavailable | 768 / 384 / 256 |
+| 1280x720 | 1280 / 640 / 416 / 320 | 720 / 352 / 240 |
 
-The 320-wide modes produce 960 output pixels, with 32 black pixels on each side. Every mode uses the same physical 1024x768 HDMI output.
+The minimum source mode is **320x192**; 4x horizontal repetition therefore requires the 1280x720 profile. These are maximum aligned dimensions for each factor, rather than a fixed mode list. Smaller modes work too: 320x240 uses 3x3 repetition at 1024x768, or 4x3 at 1280x720. Viewport boundaries use 16-pixel units; borders are centered to that alignment, with any unmatched block on the right or bottom.
 
 ### RTG limitations and fallback modes
 
-* Driver 1.12 also permits nonzero source sizes up to 1024x768 as a display fallback. Horizontal repetition is 3x for widths up to 320, 2x up to 512 and 1x above 512; vertical repetition is 3x for heights up to 256, 2x up to 384 and 1x above 384.
-* The fallback keeps clock/timing values nonzero, but hardware still fetches a complete source viewport from the table above. Areas outside a smaller bitmap can show data from subsequent rows or beyond its allocation. They are not guaranteed black. For example, 320x240 uses 3x3 repetition and reads 16 additional source rows. Prefer the nine exact modes for Workbench.
-* Zero-sized modes and dimensions above 1024x768 cannot enable RTG scanout.
-* Horizontal panning is unsupported. Dragged screens must share pixel format and repetition settings.
-* Pixel repetition supports integer factors 1x, 2x and 3x independently on each axis. Vertical repetition rereads each output row from SDRAM and does not reduce SDRAM traffic by itself.
+* Install driver 1.15 with the matching core. The driver must program explicit stride; configuration registers are write-only.
+* Visible source dimensions must be multiples of 16. For other sizes, the driver crops the visible width/height down to that alignment while preserving the full bitmap stride. For example, 1280x360 displays 1280x352 at 1x2 in 720p, leaving 16 output lines of border below.
+* Source widths below 320, heights below 192, or dimensions above the selected physical raster cannot enable RTG scanout. Editor clock callbacks still return defined, nonzero timing values.
+* Horizontal panning is unsupported. Dragged screens must share pixel format and repetition settings. Split positions retain single-output-line precision in hardware.
+* Vertical repetition rereads every displayed row from SDRAM; there is no full-line replay buffer.
 * Rendering uses the CPU; the driver provides no hardware blitter or hardware sprite acceleration. Double buffering is controlled by the application through P96.
 
 See [the driver README](amiga_sw/rtg/README) for additional details and version history.
