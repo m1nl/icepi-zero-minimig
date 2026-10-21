@@ -140,9 +140,10 @@ signal uart_shiftout: std_logic;
 signal uart_txbusy: std_logic;
 signal uart_ld: std_logic;
 
-signal aux_spi_data_wr : std_logic_vector(8 downto 0);
+signal aux_spi_data_wr : std_logic_vector(7 downto 0);
 signal aux_spi_data_wr_en : std_logic;
-signal aux_spi_data_rd : std_logic_vector(8 downto 0);
+signal aux_spi_data_rd : std_logic_vector(7 downto 0);
+signal aux_spi_data_rd_start : std_logic;
 signal aux_spi_data_rd_ack : std_logic;
 signal aux_spi_fifo_empty : std_logic;
 signal aux_spi_first_byte : std_logic;
@@ -239,7 +240,8 @@ signal uartpresent : std_logic;
 component circular_fifo
 generic (
 	WIDTH : integer := 8;
-	DEPTH : integer := 8
+	DEPTH : integer := 16;
+	FLAG_WIDTH : integer := 1
 );
 port (
 	clk   : in std_logic;
@@ -248,7 +250,9 @@ port (
 	din   : in std_logic_vector(WIDTH-1 downto 0);
 	rd_ack : in std_logic;
 	dout  : out std_logic_vector(WIDTH-1 downto 0);
-	empty : out std_logic
+	empty : out std_logic;
+	flag_in : in std_logic_vector(FLAG_WIDTH-1 downto 0);
+	flag_out : out std_logic_vector(FLAG_WIDTH-1 downto 0)
 );
 end component;
 
@@ -263,7 +267,7 @@ q(15 downto 0) <=
 	audio_q when audio_select='1' else
 	keyboard_q when input_select='1' else
 	amiga_buffer when amiga_select='1' else
-	(15 downto 9 => '0') & aux_spi_data_rd when aux_spi_select='1' else
+	(15 downto 9 => '0') & aux_spi_data_rd_start & aux_spi_data_rd when aux_spi_select='1' else
 	usbtohost_0(15 downto 0) when usb_select_0='1' else
 	usbtohost_1(15 downto 0) when usb_select_1='1' else
 	platformdata;
@@ -516,10 +520,12 @@ end process;
 
 interrupt <= interrupt_en and (interrupt_trigger or interrupt_level);
 
+-- Eight slots hold up to seven pending bytes, enough for one AUX HID report.
 fifo_inst : circular_fifo
 generic map (
-	WIDTH => 9,
-	DEPTH => 16
+	WIDTH => 8,
+	DEPTH => 16,
+	FLAG_WIDTH => 1
 )
 port map (
 	clk   => sysclk,
@@ -528,11 +534,13 @@ port map (
 	din   => aux_spi_data_wr,
 	rd_ack => aux_spi_data_rd_ack,
 	dout  => aux_spi_data_rd,
-	empty => aux_spi_fifo_empty
+	empty => aux_spi_fifo_empty,
+	flag_in(0) => aux_spi_data_wr_start,
+	flag_out(0) => aux_spi_data_rd_start
 );
 
--- Bit 8 travels with the first byte of each CS transaction through the FIFO.
-aux_spi_data_wr <= aux_spi_data_wr_start & aux_spi_shift;
+-- The sideband flag marks the first byte of each CS transaction.
+aux_spi_data_wr <= aux_spi_shift;
 
 process (sysclk, reset_n)
 begin
