@@ -220,6 +220,8 @@ wire           tg68_ena7WR;
 wire           tg68_ena28;
 wire [ 16-1:0] tg68_cout;
 wire [ 16-1:0] tg68_cin;
+wire [15:0] tg68_cout_hi, tg68_cin_lo;
+wire tg68_long_cand, tg68_long_ack;
 wire           tg68_cpuena;
 wire [  4-1:0] cpu_config;
 wire           overclock;
@@ -565,7 +567,9 @@ wire [15:0] amigahost_d;
 
 //// TG68K main CPU ////
 `ifdef HOSTONLY
-assign tg68_cpustate=2'b01;
+assign tg68_cpustate=4'b0101;
+assign tg68_long_cand=1'b0;
+assign tg68_cin_lo=16'b0;
 assign tg68_nrst_out=1'b1;
 `else
 
@@ -606,6 +610,10 @@ TG68K #(
 	.vma          (                 ),
 	.ena7RDreg    (tg68_ena7RD      ),
 	.ena7WRreg    (tg68_ena7WR      ),
+	.fromram_hi   (tg68_cout_hi     ),
+	.toram_lo     (tg68_cin_lo      ),
+	.ram_long_cand(tg68_long_cand   ),
+	.ram_long_ack (tg68_long_ack    ),
 	.fromram      (tg68_cout        ),
 	.toram        (tg68_cin         ),
 	.ramready     (tg68_cpuena      ),
@@ -695,6 +703,10 @@ sdram_ctrl #(
 	.hostRD       (host_ramdata     ),
 	.hostena      (host_ramack      ),
 
+	.cpu_long_cand(tg68_long_cand   ),
+	.cpu_long_ack (tg68_long_ack    ),
+	.cpuWR_lo     (tg68_cin_lo      ),
+	.cpuRD_hi     (tg68_cout_hi     ),
 	.cpuWR        (tg68_cin         ),
 	.cpuAddr      (tg68_cad[25:1]   ),
 	.cpuU         (tg68_cuds        ),

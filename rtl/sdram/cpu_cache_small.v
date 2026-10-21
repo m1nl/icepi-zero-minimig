@@ -9,7 +9,7 @@
 
 // AMR - adjust for 8-word bursts.
 
-module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1, parameter addr_prefix=0, parameter last_pair_enable=1)
+module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1, parameter addr_prefix=0, parameter last_pair_enable=1, parameter unaligned_write_combine=0)
 (
   // system
   input  wire           clk,            // clock
@@ -23,7 +23,11 @@ module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1,
   input  wire           cpu_cs,         // cpu activity
   input  wire [  26+addr_prefix_bits-1:0] cpu_adr,        // cpu address
   input  wire [  2-1:0] cpu_bs,         // cpu byte selects
-  input  wire           cpu_32bit,      // cpu 32 bit write
+  input  wire           cpu_longword,   // legacy transfer-phase hint (optional combining)
+  input  wire           cpu_long_cand,  // aligned 32-bit read/write candidate
+  output wire           cpu_long_ack,   // pair accepted with cpu_ack
+  input  wire [15:0]    cpu_dat_w_lo,   // second word of a paired write
+  output reg  [15:0]    cpu_dat_r_hi,   // first word of a paired read
   input  wire           cpu_we,         // cpu write
   input  wire           cpu_ir,         // cpu instruction read
   input  wire           cpu_dr,         // cpu data read
@@ -96,6 +100,10 @@ reg           sdr_sm_ilru;
 reg           sdr_sm_dlru;
 reg  [15:0]   cpu_dat_l;
 reg  [1:0]    cpu_bs_l;
+reg           cpu_pair;
+reg           read_pair_pending;
+// The kernel only offers aligned full-word pairs. Check again at this boundary.
+wire          pair_cand = cpu_long_cand && (cpu_adr[1:0] == 2'b00) && (&cpu_bs);
 
 // cpu cache control
 reg  [ 2-1:0] cc_clr_r;
@@ -293,6 +301,7 @@ always @(posedge clk) cpu_cacheline_w_ready <= addr_prefix_match && cpu_we;
 assign cpu_wr_ena = cpu_cacheline_w_ready && cpu_cs && cpu_cacheline_ready && (sdr_write_req == sdr_write_ack);
 
 assign cpu_ack = cpu_cache_ack;
+assign cpu_long_ack = cpu_pair;
 
 `ifdef COUNTWAITSTATES
 reg [7:0] writewaitctr /* synthesis noprune */;
@@ -333,6 +342,8 @@ always @ (posedge clk) begin
     last_pair_valid_d <= #1 1'b0;
     fill_comp_i       <= #1 1'b0;
     fill_comp_d       <= #1 1'b0;
+    cpu_pair          <= #1 1'b0;
+    read_pair_pending <= #1 1'b0;
   end else begin
     // default values
     sdr_read_req      <= #1 1'b0;
@@ -356,6 +367,7 @@ always @ (posedge clk) begin
         end
       end
       CPU_SM_IDLE : begin
+        cpu_pair <= #1 pair_cand;
         cpu_adr_l <= cpu_adr;
         cpu_adr_blk_ptr <= #1 cpu_adr_blk;
         cpu_sm_adr <= #1 {cpu_adr_idx, cpu_adr_blk};
@@ -369,30 +381,32 @@ always @ (posedge clk) begin
             if (cpu_adr[25:2] == last_pair_adr_d) last_pair_valid_d <= #1 1'b0;
             cpu_sm_adr <= #1 {cpu_adr_idx, cpu_adr_blk_ptr};
             if (sdr_write_req == sdr_write_ack) begin
-              cpu_cache_ack<=1'b1;
+              cpu_cache_ack <= #1 1'b1;
               sdr_adr <= #1 cpu_adr[25:1];
-              sdr_dqm_w <= #1 {2'b11, ~cpu_bs};
-              sdr_dat_w <= #1 {cpu_dat_w, cpu_dat_w};
-              if (cpu_32bit) begin
+              // SDRAM/cache storage puts address + 0 in the lower half.
+              sdr_dqm_w <= #1 pair_cand ? 4'b0000 : {2'b11, ~cpu_bs};
+              sdr_dat_w <= #1 {pair_cand ? cpu_dat_w_lo : cpu_dat_w, cpu_dat_w};
+              // Optional old protocol: collect a second narrow CPU write.
+              // Prefer the new complete pair, and never combine across a line.
+              if (unaligned_write_combine && !pair_cand && cpu_longword && cpu_adr[3:1] != 3'b111)
                 cpu_sm_state <= #1 CPU_SM_WAIT_LOWORD;
-              end else begin
+              else
                 cpu_sm_state <= #1 CPU_SM_WRITE;
-//                cpu_dat_l <= cpu_dat_w;
-//                cpu_bs_l <= cpu_bs;
-              end
             end else begin
               cpu_cacheline_ready <= 1'b1;
             end
           end else if (last_pair_hit_i) begin
             // sequential companion word is already latched - serve immediately,
             // skipping the BRAM read and the READ state
-            cpu_dat_r <= #1 cpu_adr[1] ? last_pair_i[31:16] : last_pair_i[15:0];
+            cpu_dat_r <= #1 (pair_cand || cpu_adr[1]) ? last_pair_i[31:16] : last_pair_i[15:0];
+            cpu_dat_r_hi <= #1 last_pair_i[15:0];
             cpu_cache_ack <= #1 1'b1;
             cpu_sm_state <= #1 CPU_SM_WAIT;
           end else if (last_pair_hit_d) begin
             // sequential companion word is already latched - serve immediately,
             // skipping the BRAM read and the READ state
-            cpu_dat_r <= #1 cpu_adr[1] ? last_pair_d[31:16] : last_pair_d[15:0];
+            cpu_dat_r <= #1 (pair_cand || cpu_adr[1]) ? last_pair_d[31:16] : last_pair_d[15:0];
+            cpu_dat_r_hi <= #1 last_pair_d[15:0];
             cpu_cache_ack <= #1 1'b1;
             cpu_sm_state <= #1 CPU_SM_WAIT;
           end else begin
@@ -422,8 +436,6 @@ always @ (posedge clk) begin
             // unaligned 32 bit write, hi word
             cpu_sm_bs <= #1 {~sdr_dqm_w[1:0], 2'b00};
             cpu_sm_mem_dat_w[31:16] <= #1 sdr_dat_w[15:0];
-//            cpu_dat_l <= cpu_dat_w;
-//            cpu_bs_l <= cpu_bs;
             cpu_sm_state <= #1 CPU_SM_WRITE;
           end else begin
             // aligned 32 bit write, do it in one step
@@ -432,13 +444,14 @@ always @ (posedge clk) begin
             cpu_adr_blk_ptr <= #1 cpu_adr_blk;
             sdr_write_req <= !sdr_write_req;
             cpu_cacheline_ready <= 1'b1;
-            cpu_sm_state <= #1 CPU_SM_IDLE;
+            // ACK must be consumed before accepting another request.
+            cpu_sm_state <= #1 CPU_SM_WAIT;
           end
           cpu_sm_iram0_we <= #1 itag0_match && itag0_valid /*&& !cc_fr*/;
           cpu_sm_iram1_we <= #1 itag1_match && itag1_valid /*&& !cc_fr*/;
           cpu_sm_dram0_we <= #1 dtag0_match && dtag0_valid /*&& !cc_fr*/;
           cpu_sm_dram1_we <= #1 dtag1_match && dtag1_valid /*&& !cc_fr*/;
-          cpu_cache_ack<=1'b1;
+          cpu_cache_ack <= #1 1'b1;
       end else begin
           cpu_cacheline_ready <= 1'b1;
       end
@@ -446,8 +459,10 @@ always @ (posedge clk) begin
         sdr_write_req <= !sdr_write_req;
         // on hit update cache, on miss no update neccessary; tags don't get updated on writes
         cpu_sm_adr <= #1 {cpu_adr_idx_l, cpu_adr_blk_l};
-        cpu_sm_bs <= #1 cpu_adr_blk_ptr[0] ? {cpu_bs_l, 2'b00} : {2'b00, cpu_bs_l};
-        cpu_sm_mem_dat_w <= #1 { cpu_dat_l, cpu_dat_l };
+        cpu_sm_bs <= #1 cpu_pair ? 4'b1111 :
+                         (cpu_adr_blk_ptr[0] ? {cpu_bs_l, 2'b00} : {2'b00, cpu_bs_l});
+        cpu_sm_mem_dat_w <= #1 (unaligned_write_combine && !cpu_pair) ?
+                                  {cpu_dat_l, cpu_dat_l} : sdr_dat_w;
         cpu_sm_iram0_we <= #1 itag0_match && itag0_valid /*&& !cc_fr*/;
         cpu_sm_iram1_we <= #1 itag1_match && itag1_valid /*&& !cc_fr*/;
         cpu_sm_dram0_we <= #1 dtag0_match && dtag0_valid /*&& !cc_fr*/;
@@ -473,7 +488,8 @@ always @ (posedge clk) begin
           // data is already in instruction cache way 0
           cpu_sm_itag_we <= #1 1'b1;
           cpu_sm_tag_dat_w <= #1 {1'b0, itram_cpu_dat_r[30:0]};
-          cpu_dat_r<=cpu_adr[1] ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
+          cpu_dat_r<=(pair_cand || cpu_adr[1]) ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
+          cpu_dat_r_hi <= #1 idram0_cpu_dat_r[15:0];
           last_pair_i <= #1 idram0_cpu_dat_r;
           last_pair_adr_i <= #1 cpu_adr[25:2];
           last_pair_valid_i <= #1 1'b1;
@@ -483,7 +499,8 @@ always @ (posedge clk) begin
           // data is already in instruction cache way 1
           cpu_sm_itag_we <= #1 1'b1;
           cpu_sm_tag_dat_w <= #1 {1'b1, itram_cpu_dat_r[30:0]};
-          cpu_dat_r<=cpu_adr[1] ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
+          cpu_dat_r<=(pair_cand || cpu_adr[1]) ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
+          cpu_dat_r_hi <= #1 idram1_cpu_dat_r[15:0];
           last_pair_i <= #1 idram1_cpu_dat_r;
           last_pair_adr_i <= #1 cpu_adr[25:2];
           last_pair_valid_i <= #1 1'b1;
@@ -493,7 +510,8 @@ always @ (posedge clk) begin
           // data is already in data cache way 0
           cpu_sm_dtag_we <= #1 1'b1;
           cpu_sm_tag_dat_w <= #1 {1'b0, dtram_cpu_dat_r[30:0]};
-          cpu_dat_r<=cpu_adr[1] ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
+          cpu_dat_r<=(pair_cand || cpu_adr[1]) ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
+          cpu_dat_r_hi <= #1 ddram0_cpu_dat_r[15:0];
           last_pair_d <= #1 ddram0_cpu_dat_r;
           last_pair_adr_d <= #1 cpu_adr[25:2];
           last_pair_valid_d <= #1 1'b1;
@@ -503,7 +521,8 @@ always @ (posedge clk) begin
           // data is already in data cache way 1
           cpu_sm_dtag_we <= #1 1'b1;
           cpu_sm_tag_dat_w <= #1 {1'b1, dtram_cpu_dat_r[30:0]};
-          cpu_dat_r<=cpu_adr[1] ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
+          cpu_dat_r<=(pair_cand || cpu_adr[1]) ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
+          cpu_dat_r_hi <= #1 ddram1_cpu_dat_r[15:0];
           last_pair_d <= #1 ddram1_cpu_dat_r;
           last_pair_adr_d <= #1 cpu_adr[25:2];
           last_pair_valid_d <= #1 1'b1;
@@ -535,8 +554,10 @@ always @ (posedge clk) begin
         end else begin
           sdr_read_req <= #1 1'b0;
           // read data to cpu
-          cpu_cache_ack <= #1 1'b1;
-          cpu_dat_r<=sdr_dat_r[15:0];
+          cpu_cache_ack <= #1 !cpu_pair;
+          cpu_dat_r <= #1 sdr_dat_r;
+          cpu_dat_r_hi <= #1 sdr_dat_r;
+          read_pair_pending <= #1 cpu_pair;
           // capture the critical word into its correct half; only arm the
           // companion capture when it is the even word (odd half then arrives
           // as the first FILL2 beat). odd critical words defer to the READ path.
@@ -592,6 +613,11 @@ always @ (posedge clk) begin
       end
       CPU_SM_FILL2 :
       if (sdr_read_ack) begin
+          if (read_pair_pending) begin
+            cpu_dat_r <= #1 sdr_dat_r;
+            cpu_cache_ack <= #1 1'b1;
+            read_pair_pending <= #1 1'b0;
+          end
           if (!cpu_cs) cpu_acked <= #1 1'b1;
           // cache line fill 2nd...8th word
           // the first FILL2 beat is the odd companion of an even critical word:
@@ -619,11 +645,18 @@ always @ (posedge clk) begin
           cpu_adr_blk_ptr <= #1 cpu_adr_blk; // if CS already activated during fill
           cpu_sm_adr <= #1 {cpu_adr_idx, cpu_adr_blk};
       end
-      CPU_SM_FILLW :
-      if (!cpu_cs) begin
-        cpu_cacheline_ready <= 1'b1;
-        cpu_sm_state <= #1 CPU_SM_IDLE;
-        cpu_adr_blk_ptr <= #1 cpu_adr_blk;
+      CPU_SM_FILLW : begin
+        // Even inhibited reads must collect both beats before accepting a pair.
+        if (read_pair_pending && sdr_read_ack) begin
+          cpu_dat_r <= #1 sdr_dat_r;
+          cpu_cache_ack <= #1 1'b1;
+          read_pair_pending <= #1 1'b0;
+        end
+        if (!cpu_cs) begin
+          cpu_cacheline_ready <= 1'b1;
+          cpu_sm_state <= #1 CPU_SM_IDLE;
+          cpu_adr_blk_ptr <= #1 cpu_adr_blk;
+        end
       end
       default: cpu_sm_state <= #1 CPU_SM_INIT;
     endcase

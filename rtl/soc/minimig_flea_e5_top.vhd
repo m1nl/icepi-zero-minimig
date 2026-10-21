@@ -84,7 +84,7 @@ end entity;
 
 architecture rtl of minimig_flea_e5_top is
 	-- RTG raster configuration. Match the driver profile and clock constraints.
-	constant RTG_PIXEL_HZ            : natural := 54000000;
+	constant RTG_PIXEL_HZ            : natural := 66000000;
 	constant RTG_PIXELX5_HZ          : natural := 5 * RTG_PIXEL_HZ;
 	constant RTG_FRAME_WIDTH         : natural := 1344;
 	constant RTG_FRAME_HEIGHT        : natural := 806;
@@ -215,7 +215,7 @@ n_led1 <= NOT led_power;
 auxpll	:	entity work.ecp5pll
 generic map (
 	in_hz => natural(base_frequency),
-	-- CLKOP supplies 60 MHz feedback: 540 MHz VCO / 9.
+	-- CLKOP supplies 60 MHz feedback: 660 MHz VCO / 11.
 	out0_hz => natural(60e6),
 	out0_tol_hz => 0,
 	out1_hz => RTG_PIXELX5_HZ,
@@ -226,8 +226,8 @@ generic map (
 port map (
 	clk_i => clk,
 	clk_o(0) => clk_usb,     -- CLKOP: 60 MHz and PLL feedback
-	clk_o(1) => clk_rtg_5x,  -- CLKOS: 270 MHz
-	clk_o(2) => clk_rtg,     -- CLKOS2: 54 MHz
+	clk_o(1) => clk_rtg_5x,  -- CLKOS: 330 MHz
+	clk_o(2) => clk_rtg,     -- CLKOS2: 66 MHz
 	clk_o(3) => open,
 	locked => auxpll_locked
 );

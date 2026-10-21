@@ -82,6 +82,10 @@ module sdram_ctrl # (parameter addr_max_bits=26, parameter addr_prefix_bits=0, p
   input  wire     [3:0] cpustate,
   input  wire           cpuL,
   input  wire           cpuU,
+  input  wire           cpu_long_cand, // aligned pair offered by TG68K
+  output wire           cpu_long_ack,  // pair completed with cpuena
+  input  wire [15:0]    cpuWR_lo,
+  output wire [15:0]    cpuRD_hi,
   input  wire [ 16-1:0] cpuWR,
   output wire [ 16-1:0] cpuRD,
   output reg            enaWRreg,
@@ -158,7 +162,6 @@ reg  [16-1:0] sdata_next;
 reg           sdata_oe;
 wire          ccache_fill;
 wire          ccachehit;
-wire          cpuLongword;
 wire          cpuCSn;
 reg  [ 8-1:0] reset_cnt;
 reg           reset;
@@ -181,7 +184,6 @@ reg           cache_fill_2;
 reg  [16-1:0] chip48_1;
 reg  [16-1:0] chip48_2;
 reg  [16-1:0] chip48_3;
-wire          longword_en;
 wire          writebuffer_req;
 wire [26-1:1] writebufferAddr;
 wire [16-1:0] writebufferWR;
@@ -204,7 +206,6 @@ assign sd_we  = sd_cmd[0];
 // misc signals
 ////////////////////////////////////////
 
-assign cpuLongword = cpustate[3];
 assign cpuCSn      = cpustate[2];
 
 ////////////////////////////////////////
@@ -292,7 +293,11 @@ cpu_cache_new #(
 	.cpu_cs           (!cpuCSn),                      // cpu activity
 	.cpu_adr          ({cpuAddr, 1'b0}),              // cpu address
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
-	.cpu_32bit        (longword_en),                  // cpu 32 bit write
+	.cpu_longword     (cpustate[3]),
+	.cpu_long_cand    (cpu_long_cand),
+	.cpu_long_ack     (cpu_long_ack),
+	.cpu_dat_w_lo     (cpuWR_lo),
+	.cpu_dat_r_hi     (cpuRD_hi),
 	.cpu_we           (cpu_we),                       // cpu write
 	.cpu_ir           (cpu_ir),                       // cpu instruction read
 	.cpu_dr           (cpu_dr),                       // cpu data read
@@ -314,7 +319,6 @@ cpu_cache_new #(
 	.snoop_bs         (cache_snoop_bs)
 );
 
-assign longword_en = cpuLongword && cpuAddr[3:1]!=3'b111 && cpustate[1:0]==2'b11;
 assign cpuena = ccachehit;
 assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_fill_2 && slot2_type == CPU_READCACHE);
 

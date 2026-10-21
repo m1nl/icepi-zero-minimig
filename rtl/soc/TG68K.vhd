@@ -64,6 +64,11 @@ port (
 	fromram       : in      std_logic_vector(15 downto 0);
 	toram         : out     std_logic_vector(15 downto 0);
 	ramready      : in      std_logic:='0';
+	-- SDRAM-only paired transfer; chipset and MMIO keep the narrow bus.
+	fromram_hi    : in      std_logic_vector(15 downto 0):=(others => '0');
+	toram_lo      : out     std_logic_vector(15 downto 0);
+	ram_long_cand : out     std_logic;
+	ram_long_ack  : in      std_logic:='0';
 	overclock     : in      std_logic:='0';
 	cpu           : in      std_logic_vector(1 downto 0);
 	ziiram_active : in      std_logic;
@@ -129,6 +134,8 @@ signal uds_in           : std_logic;
 signal lds_in           : std_logic;
 signal state            : std_logic_vector(1 downto 0);
 signal longword         : std_logic;
+signal long_cand        : std_logic;
+signal long_ack         : std_logic;
 signal sel_ram          : std_logic;
 signal ram_req          : std_logic;
 signal sel_chip         : std_logic;
@@ -296,6 +303,9 @@ end process;
 datatg68 <= fromram when ram_req='1' else akiko_q when sel_akiko_d='1' else datatg68_c;
 toram <= w_datatg68;
 
+ram_long_cand <= long_cand;
+long_ack <= ram_req;
+
 -- Register incoming data
 process(clk) begin
 	if rising_edge(clk) then
@@ -451,6 +461,10 @@ pf68K_Kernel_inst: entity work.TG68KdotC_Kernel
 		clk             => clk,           -- : in std_logic;
 		nReset          => reset,         -- : in std_logic:='1';      --low active
 		clkena_in       => clkena,        -- : in std_logic:='1';
+		long_cand       => long_cand,
+		long_ack        => long_ack,
+		data_in_hi      => fromram_hi,
+		data_write_lo   => toram_lo,
 		data_in         => datatg68,      -- : in std_logic_vector(15 downto 0);
 		IPL             => cpuIPL,        -- : in std_logic_vector(2 downto 0):="111";
 		IPL_autovector  => '1',           -- : in std_logic:='0';
