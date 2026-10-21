@@ -83,7 +83,6 @@ module sdram_ctrl # (parameter addr_max_bits=26, parameter addr_prefix_bits=0, p
   input  wire           cpuL,
   input  wire           cpuU,
   input  wire           cpu_long_cand, // aligned pair offered by TG68K
-  output wire           cpu_long_ack,  // pair completed with cpuena
   input  wire [15:0]    cpuWR_lo,
   output wire [15:0]    cpuRD_hi,
   input  wire [ 16-1:0] cpuWR,
@@ -295,7 +294,6 @@ cpu_cache_new #(
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
 	.cpu_longword     (cpustate[3]),
 	.cpu_long_cand    (cpu_long_cand),
-	.cpu_long_ack     (cpu_long_ack),
 	.cpu_dat_w_lo     (cpuWR_lo),
 	.cpu_dat_r_hi     (cpuRD_hi),
 	.cpu_we           (cpu_we),                       // cpu write

@@ -1,0 +1,1 @@
+../icepi-zero/minimig_icepi-zero.sdc

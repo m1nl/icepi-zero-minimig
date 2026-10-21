@@ -1,0 +1,17 @@
+*
+!build.sh
+!build.tcl
+!build_xl.sh
+!build_xl.tcl
+!*.sdc
+!*.lpf
+!*.ldf
+!*.sdc
+!*.sty
+!*.vhd
+!*.sv
+!*.vh
+!*.sv
+!*.v
+!*.xcf
+!.gitignore

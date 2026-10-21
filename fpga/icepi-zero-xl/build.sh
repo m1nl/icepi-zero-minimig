@@ -5,4 +5,4 @@
 cd "$(dirname "$(readlink -f "$0")")"
 
 # --- run the build ----------------------------------------------------------
-grc --config=diamondc.grc diamondc build_xl.tcl "$@"
+grc --config=diamondc.grc diamondc build.tcl "$@"

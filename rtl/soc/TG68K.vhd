@@ -25,6 +25,9 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
 
+library work;
+use work.board_config.all;
+
 entity TG68K is
 generic (
 		havertg : integer := 1;
@@ -68,7 +71,6 @@ port (
 	fromram_hi    : in      std_logic_vector(15 downto 0):=(others => '0');
 	toram_lo      : out     std_logic_vector(15 downto 0);
 	ram_long_cand : out     std_logic;
-	ram_long_ack  : in      std_logic:='0';
 	overclock     : in      std_logic:='0';
 	cpu           : in      std_logic_vector(1 downto 0);
 	ziiram_active : in      std_logic;
@@ -304,6 +306,7 @@ datatg68 <= fromram when ram_req='1' else akiko_q when sel_akiko_d='1' else data
 toram <= w_datatg68;
 
 ram_long_cand <= long_cand;
+-- Direct RAM always accepts eligible aligned pairs; ramready completes them.
 long_ack <= ram_req;
 
 -- Register incoming data
@@ -455,7 +458,9 @@ pf68K_Kernel_inst: entity work.TG68KdotC_Kernel
 		MUL_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no MUL,
 		DIV_Mode        => 2, -- 0=>16Bit,  1=>32Bit,         2=>switchable with CPU(1),  3=>no DIV,
 		BitField        => 2, -- 0=>no,     1=>yes,           2=>switchable with CPU(1)
-		MUL_Hardware    => 1  -- 0=>no,     1=>yes
+		MUL_Hardware    => 1, -- 0=>no,     1=>yes
+		-- Optional pair transfers: bit 0=data, bit 1=immediate, bit 2=absolute address.
+		DataPath32      => tg68k_datapath32
 	)
 	PORT MAP (
 		clk             => clk,           -- : in std_logic;

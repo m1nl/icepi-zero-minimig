@@ -9,8 +9,14 @@
 
 // AMR - adjust for 8-word bursts.
 
-module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1, parameter addr_prefix=0, parameter last_pair_enable=1, parameter unaligned_write_combine=0)
-(
+module cpu_cache_new #(
+    parameter addr_max_bits=26,
+    parameter addr_prefix_bits=1,
+    parameter addr_prefix=0,
+    parameter last_pair_enable_i=1,
+    parameter last_pair_enable_d=1,
+    parameter unaligned_write_combine=1
+) (
   // system
   input  wire           clk,            // clock
   input  wire           rst,            // cache reset
@@ -25,7 +31,6 @@ module cpu_cache_new #(parameter addr_max_bits=26, parameter addr_prefix_bits=1,
   input  wire [  2-1:0] cpu_bs,         // cpu byte selects
   input  wire           cpu_longword,   // legacy transfer-phase hint (optional combining)
   input  wire           cpu_long_cand,  // aligned 32-bit read/write candidate
-  output wire           cpu_long_ack,   // pair accepted with cpu_ack
   input  wire [15:0]    cpu_dat_w_lo,   // second word of a paired write
   output reg  [15:0]    cpu_dat_r_hi,   // first word of a paired read
   input  wire           cpu_we,         // cpu write
@@ -283,13 +288,13 @@ reg cpu_cacheline_w_ready;
 reg  [32-1:0] last_pair_i;
 reg  [26-1:2] last_pair_adr_i;    // tag+idx+blk[2:1] identifying the 32-bit pair
 reg           last_pair_valid_i;
-wire          last_pair_hit_i = last_pair_enable && cc_en && !cache_inhibit && addr_prefix_match
+wire          last_pair_hit_i = last_pair_enable_i && cc_en && !cache_inhibit && addr_prefix_match
                                 && last_pair_valid_i && (cpu_adr[25:2] == last_pair_adr_i);
 
 reg  [32-1:0] last_pair_d;
 reg  [26-1:2] last_pair_adr_d;    // tag+idx+blk[2:1] identifying the 32-bit pair
 reg           last_pair_valid_d;
-wire          last_pair_hit_d = last_pair_enable && cc_en && !cache_inhibit && addr_prefix_match
+wire          last_pair_hit_d = last_pair_enable_d && cc_en && !cache_inhibit && addr_prefix_match
                                 && last_pair_valid_d && (cpu_adr[25:2] == last_pair_adr_d);
 
 // set in FILL1 when the critical word is the even (lower) half of its pair: the
@@ -301,7 +306,6 @@ always @(posedge clk) cpu_cacheline_w_ready <= addr_prefix_match && cpu_we;
 assign cpu_wr_ena = cpu_cacheline_w_ready && cpu_cs && cpu_cacheline_ready && (sdr_write_req == sdr_write_ack);
 
 assign cpu_ack = cpu_cache_ack;
-assign cpu_long_ack = cpu_pair;
 
 `ifdef COUNTWAITSTATES
 reg [7:0] writewaitctr /* synthesis noprune */;
@@ -430,6 +434,9 @@ always @ (posedge clk) begin
           cpu_adr_blk_ptr <= #1 cpu_adr_blk;
           sdr_dqm_w[3:2] <= #1 ~cpu_bs;
           sdr_dat_w[31:16] <= #1 cpu_dat_w;
+
+          if (cpu_adr[25:2] == last_pair_adr_i) last_pair_valid_i <= #1 1'b0;
+          if (cpu_adr[25:2] == last_pair_adr_d) last_pair_valid_d <= #1 1'b0;
 
           // on hit update cache, on miss no update neccessary; tags don't get updated on writes
           if (!cpu_adr_blk[0]) begin

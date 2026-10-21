@@ -221,7 +221,7 @@ wire           tg68_ena28;
 wire [ 16-1:0] tg68_cout;
 wire [ 16-1:0] tg68_cin;
 wire [15:0] tg68_cout_hi, tg68_cin_lo;
-wire tg68_long_cand, tg68_long_ack;
+wire tg68_long_cand;
 wire           tg68_cpuena;
 wire [  4-1:0] cpu_config;
 wire           overclock;
@@ -613,7 +613,6 @@ TG68K #(
 	.fromram_hi   (tg68_cout_hi     ),
 	.toram_lo     (tg68_cin_lo      ),
 	.ram_long_cand(tg68_long_cand   ),
-	.ram_long_ack (tg68_long_ack    ),
 	.fromram      (tg68_cout        ),
 	.toram        (tg68_cin         ),
 	.ramready     (tg68_cpuena      ),
@@ -704,7 +703,6 @@ sdram_ctrl #(
 	.hostena      (host_ramack      ),
 
 	.cpu_long_cand(tg68_long_cand   ),
-	.cpu_long_ack (tg68_long_ack    ),
 	.cpuWR_lo     (tg68_cin_lo      ),
 	.cpuRD_hi     (tg68_cout_hi     ),
 	.cpuWR        (tg68_cin         ),
