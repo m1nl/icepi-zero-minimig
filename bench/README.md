@@ -11,7 +11,7 @@ in temporary directories unless an existing Makefile specifies otherwise.
 | [`ide/`](ide/README.md) | IDE/FIFO packet phases, abort/reset recovery and ATA read/write tests |
 | [`sd/`](sd/README.md) | SD SPI clock limits, byte transfers and direct sector clocks using production HDL and firmware dividers |
 | `rtg_area/` | Isolated ECP5 resource assessments, equivalence checks and optimization patches |
-| `cpu_cache_fsm/` | Cache handshake/FSM tests; working small-cache variant is the default |
+| `cpu_cache_fsm/` | Cache handshake/FSM and TG68K paired memory accesses; small-cache variant is the default |
 | `cpu_cache_tags/` | Historical parameterized cache tag tests |
 | `cpu_cache_sdram/`, `cpu_cache_sdram_verilator/` | Existing SDRAM/cache integration benches, including the RTG interface additions |
 | `archive/` | Earlier temporary reproductions and their supporting RTL snapshots |

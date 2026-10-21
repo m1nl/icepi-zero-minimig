@@ -31,7 +31,7 @@ def assemble_rom(asm, folder, vasm, extra_args=()):
     return binary
 
 
-def run_rom(binary, folder, cpu, *, driver=False):
+def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_combine=False):
     data = binary.read_bytes()
     if len(data) > 8192:
         raise RuntimeError('test ROM exceeds behavioral memory')
@@ -43,11 +43,16 @@ def run_rom(binary, folder, cpu, *, driver=False):
     top = 'rtg_cpu_mmio_tb'
     parameters = {
         'CHECK_MMIO': int(not driver),
+        'CACHE_RAM': int(cached),
+        'LEGACY_WRITE_COMBINE': int(legacy_write_combine),
         'VERBOSE': 0,
         'TIMEOUT_NS': 20000000 if driver else 2000000,
     }
     run('iverilog', '-g2012', '-s', top, '-o', str(folder / 'test'),
         *(f'-P{top}.{key}={value}' for key, value in parameters.items()),
-        str(BENCH / 'rtg_cpu_mmio_tb.v'), str(cpu), 'rtl/soc/akiko.v',
+        '-DSOC_SIM', str(BENCH / 'rtg_cpu_mmio_tb.v'),
+        'rtl/sdram/cpu_cache_small.v', 'rtl/sdram/dpram_inf_256x32.v',
+        'rtl/sdram/dpram_inf_be_1024x32.v',
+        str(cpu), 'rtl/soc/akiko.v',
         'rtl/rtg/rtg_video.v', 'rtl/rtg/rtg_async_fifo.v')
     run('vvp', str(folder / 'test'), f'+image={image}')

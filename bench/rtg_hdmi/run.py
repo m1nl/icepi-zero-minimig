@@ -9,7 +9,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 RTG = ['rtl/rtg/rtg_video.v', 'rtl/rtg/rtg_async_fifo.v']
-SDRAM = ['rtl/sdram/sdram_ctrl.v', 'rtl/sdram/cpu_cache_new.v',
+SDRAM = ['rtl/sdram/sdram_ctrl.v', 'rtl/sdram/cpu_cache_small.v',
          'rtl/sdram/dpram_inf_256x32.v', 'rtl/sdram/dpram_inf_be_1024x32.v',
          'rtl/sdram/dpram_inf_generic.v']
 HDMI = [str(p.relative_to(ROOT)) for p in (ROOT / 'rtl/hdmi').glob('*.sv')

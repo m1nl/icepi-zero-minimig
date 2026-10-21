@@ -3,6 +3,28 @@
     dc.l $2000,$100
     dcb.b $100-*,0
 start:
+    ; Exercise aligned data pairs, instruction extensions and an unaligned
+    ; fallback before checking the separate word-sized MMIO transactions.
+    move.l #$0101,d0
+    movec d0,cacr
+    cnop 0,4
+    nop
+    move.l #$12345678,d0
+    move.l d0,$1400
+    move.l $1400,d1
+    cmp.l d0,d1
+    bne fail
+    move.b #$a5,$1401
+    cmp.l #$12a55678,$1400
+    bne fail
+    move.l d0,$1406
+    move.l $1406,d1
+    cmp.l d0,d1
+    bne fail
+    move.l d0,$140e
+    move.l $140e,d1
+    cmp.l d0,d1
+    bne fail
     move.w $b80000,d0
     cmp.w #$c0ca,d0
     bne fail

@@ -26,6 +26,10 @@ def main():
         print('Testing TG68K MMIO decode, longword writes and readback', flush=True)
         binary = assemble_rom(BENCH / 'rtg_cpu_mmio.asm', folder, args.vasm)
         run_rom(binary, folder, cpu)
+        print('Testing TG68K paired SDRAM/cache transfers with narrow MMIO', flush=True)
+        run_rom(binary, folder, cpu, cached=True)
+        print('Testing optional legacy narrow-write combining', flush=True)
+        run_rom(binary, folder, cpu, cached=True, legacy_write_combine=True)
         if args.mmio_only:
             return
         for profile in ('1024x768', '1280x720'):

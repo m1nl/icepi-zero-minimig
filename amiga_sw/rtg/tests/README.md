@@ -22,7 +22,7 @@ diagnostic and README files, checks distinct volume names, verifies no-op
 builds, and exercises DEBUG=1/0 rebuilds. It finishes with DEBUG=0 artifacts.
 Requires installed vasm, xdftool and the normal driver build dependencies.
 
-- `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM,
+- `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM with narrow RAM and the production small cache (legacy write combining off/on),
   then runs driver callbacks for the requested profile(s).
 - `test_driver_fallback.py`: generates a 68020 ROM from real driver callbacks
   and independent expected results for 35 cases in three formats. Also checks
@@ -42,7 +42,9 @@ expect those headers to be present. Source and include path overrides from
 the driver Makefile are forwarded to the tests.
 
 This simulates actual CPU instructions and the TG68K RTG bus decode/ACK path
-with the current RTG/Akiko RTL. RAM/ROM are behavioral and RTG scanout is held
+with the current RTG/Akiko RTL. The cached MMIO run also checks TG68K paired
+instruction-extension/data transfers, byte writes and unaligned longwords.
+RAM/ROM and the cache's SDRAM responder are behavioral; RTG scanout is held
 inactive. It does not load the complete .card hunk into AmigaOS, emulate P96,
 boot Workbench or validate HDMI/SDRAM timing. RTL integration, pixels, IRQ,
 FIFO/CDC and serializer tests remain under `bench/`.

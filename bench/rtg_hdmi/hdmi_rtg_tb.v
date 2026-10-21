@@ -73,6 +73,7 @@ module hdmi_rtg_tb;
         .chipRW(1'b1),.chip_dma(1'b1),.chipWR(16'd0),.chipWR2(16'd0),.chipRD(),.chip48(),
         .rtgAddr(addr),.rtgce(req),.rtgpri(pri),.rtg_extend_ok(extend_ok),.rtgack(ack),.rtgfill(fill),.rtgRd(),
         .audAddr(23'd0),.audce(1'b0),.audack(),.audfill(),.audRd(),
+        .cpu_long_cand(1'b0),.cpuWR_lo(16'b0),.cpu_long_ack(),.cpuRD_hi(),
         .cpuAddr(25'd0),.cpustate(4'b0001),.cpuL(1'b1),.cpuU(1'b1),.cpuWR(16'd0),
         .cpuRD(),.enaWRreg(),.ena7RDreg(),.ena7WRreg(),.cpuena()
     );
