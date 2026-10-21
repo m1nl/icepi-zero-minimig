@@ -43,6 +43,9 @@ set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.addr[*
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.data_write*}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.data_write*}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
 
+set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.long_cand*}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
+set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.long_cand*}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
+
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfile*}] 4
 set_multicycle_path -to [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfile*}] 4
 
@@ -59,6 +62,8 @@ set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfil
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] 3
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
+
+set_multicycle_path -from [get_cells {virtual_top.tg68k.ram_req*}] -to [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.*}] 3
 
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.gen_rtg.rtg.*}] 3
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.tg68k.u_akiko.*}] 3
@@ -98,7 +103,7 @@ set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*sync*}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.*fifo.*sync*}]
 # These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
 set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.config_sys_*}]
-set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.ready_vid*}]
+set_false_path -to [get_cells {virtual_top.gen_rtg.rtg.ready_vid[0]}]
 set_false_path -to [get_cells {virtual_top.gen_rtg.osd_rtg.enable_sync*}]
 
 set_false_path -from [get_cells {virtual_top.gen_rtg.rtg.*fifo.rd_gray[*]}] -to [get_cells {virtual_top.gen_rtg.rtg.*fifo.rd_gray_w1[*]}]

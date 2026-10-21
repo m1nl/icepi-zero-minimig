@@ -43,6 +43,9 @@ set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.addr[*
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.data_write*}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.data_write*}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
 
+set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.long_cand*}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
+set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.long_cand*}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
+
 set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfile*}] 4
 set_multicycle_path -to [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfile*}] 4
 
@@ -59,6 +62,8 @@ set_multicycle_path -from [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.regfil
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] 3
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\..*}] 4
 set_multicycle_path -from [get_cells {virtual_top.tg68k.addr[*]}] -to [get_cells -regexp {virtual_top\.sdram\.cache\..*}] 3
+
+set_multicycle_path -from [get_cells {virtual_top.tg68k.ram_req*}] -to [get_cells {virtual_top.tg68k.pf68K_Kernel_inst.*}] 3
 
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.gen_rtg.rtg.*}] 3
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.tg68k.u_akiko.*}] 3

@@ -223,8 +223,8 @@ LOCATE COMP "Audio_R" SITE "N16" ;
 
 # Period Constraints
 FREQUENCY PORT "clk" 8.0 MHz;
-FREQUENCY NET "clk_rtg_5x" 270.0 MHz;
-FREQUENCY NET "clk_rtg" 54.0 MHz;
+FREQUENCY NET "clk_rtg_5x" 330.0 MHz;
+FREQUENCY NET "clk_rtg" 66.0 MHz;
 FREQUENCY NET "clk_usb" 60.0 MHz;
 FREQUENCY NET "clk_28m" 28.6 MHz;
 FREQUENCY NET "clk_sys" 114.4 MHz;
@@ -238,8 +238,8 @@ BLOCK COMP "genvideo.clkmux_1" PIN "SEL0" ;
 BLOCK COMP "genvideo.clkmux_1" PIN "SEL1" ;
 
 # Explicit constraints on the DCSC output clocks.
-FREQUENCY NET "clk_pixel" 54.0 MHz;
-FREQUENCY NET "clk_tmds" 270.0 MHz;
+FREQUENCY NET "clk_pixel" 66.0 MHz;
+FREQUENCY NET "clk_tmds" 330.0 MHz;
 
 # Used to avoid timing failures for HDMI clock switch as we use clk to switch DCSC
 BLOCK PATH FROM CLKNET "clk_c" TO CLKNET "clk_sys";
@@ -306,7 +306,7 @@ BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*_sync*";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/*fifo/*_sync*";
 # These held clk_sys snapshots feed only pixel logic; DMA paths stay timed.
 BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/config_sys_*";
-BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid*";
+BLOCK PATH TO CELL "virtual_top/gen_rtg.rtg/ready_vid[0]";
 BLOCK PATH TO CELL "virtual_top/gen_rtg.osd_rtg/enable_sync*";
 
 BLOCK PATH FROM CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray[*]" TO CELL "virtual_top/gen_rtg.rtg/*fifo/rd_gray_w1[*]";
@@ -336,6 +336,8 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virt
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/long_cand*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/long_cand*" TO CELL "virtual_top/sdram/cache/*" 2X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/data_write*" 4X ;
@@ -349,6 +351,8 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "*" 3X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/minimig/CPU1/*" 3X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/ram_req*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 3X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/gen_rtg.rtg/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 2X ;
@@ -372,7 +376,7 @@ MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genv
 BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
 
 # HDMI package-pin data-to-forwarded-clock skew target: +/- 300 ps.
-# 54 MHz pixels, 270 MHz DDR serializer clock, 540 Mb/s per data lane.
+# 66 MHz pixels, 330 MHz DDR serializer clock, 660 Mb/s per data lane.
 # PCB skew and serial-eye/jitter requirements need separate budgeting.
 CLOCK_TO_OUT PORT "lvds_dp[0]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;
 CLOCK_TO_OUT PORT "lvds_dp[1]" MAX 0.300 ns MIN -0.300 ns CLKNET "clk_tmds" CLKOUT PORT "lvds_dp[3]" ;

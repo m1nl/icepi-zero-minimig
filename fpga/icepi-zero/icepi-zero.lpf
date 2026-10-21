@@ -411,6 +411,8 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virt
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/data_write*" TO CELL "virtual_top/sdram/cache/*" 2X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/long_cand*" TO CELL "virtual_top/sdram/*" 4X ;
+MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/long_cand*" TO CELL "virtual_top/sdram/cache/*" 2X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/regfile*" TO CELL "virtual_top/tg68k/data_write*" 4X ;
@@ -424,6 +426,8 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "*" 3X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/minimig/CPU1/*" 3X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/*" 4X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/addr[*]" TO CELL "virtual_top/sdram/cache/*" 2X ;
+
+MULTICYCLE FROM CELL "virtual_top/tg68k/ram_req*" TO CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" 3X ;
 
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/gen_rtg.rtg/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 2X ;
