@@ -1,6 +1,6 @@
 [submodule "rtl/tg68k"]
 	path = rtl/tg68k
-	url = https://github.com/TobiFlex/TG68K.C.git
+	url = https://github.com/m1nl/TG68K.C.git
 [submodule "EightThirtyTwo"]
 	path = EightThirtyTwo
 	url = https://github.com/m1nl/EightThirtyTwo
