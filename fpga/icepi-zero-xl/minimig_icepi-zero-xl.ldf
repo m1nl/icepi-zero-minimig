@@ -444,7 +444,7 @@
         <Source name="icepi-zero-xl.lpf" type="Logic Preference" type_short="LPF">
             <Options/>
         </Source>
-        <Source name="minimig_icepi-zero.sdc" type="Synplify Design Constraints File" type_short="SDC">
+        <Source name="minimig_icepi-zero-xl.sdc" type="Synplify Design Constraints File" type_short="SDC">
             <Options/>
         </Source>
     </Implementation>

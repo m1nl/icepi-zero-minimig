@@ -570,13 +570,21 @@ buslogic : block
 	signal sel_chip_d       : std_logic;
 	signal fast_rd_d        : std_logic;
 	signal clkena_pre       : std_logic;
+	signal cpu_internal_ack : std_logic;
 begin
+	short_internal_cycle: if tg68k_short_internal_cycle generate
+		cpu_internal_ack <= '1' when cpu_internal='1' and slower(1)='0' else '0';
+	end generate;
+	normal_internal_cycle: if not tg68k_short_internal_cycle generate
+		cpu_internal_ack <= '1' when cpu_internal='1' and slower(0)='0' else '0';
+	end generate;
+
 	clkena <= '1' when
 			(ena7RDreg='1' and clkena_e='1') or
 			(ena7WRreg='1' and clkena_f='1') or
 			(clkena_in='1' and fast_rd='1' and slower(0)='0') or
-			(cpu_internal='1' and slower(0)='0') or
 			(sel_undecoded_d='1' and slower(0)='0') or
+			cpu_internal_ack='1' or
 			akiko_ack='1' or
 			rtg_reg_ack_d='1' or
 			host_ack_d='1' or
