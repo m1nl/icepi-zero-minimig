@@ -48,6 +48,7 @@ port (
 	aux_spi_clk	:	in std_logic;
 	aux_spi_mosi	:	in std_logic;
 	aux_spi_csn	:	in std_logic;
+	aux_spi_alt	:	in std_logic;
 
 	led_g	:	out std_logic;
 	led_y	:	out std_logic;
@@ -157,6 +158,11 @@ architecture rtl of minimig_icepizero_top is
 	signal led_i	:	std_logic_vector(4 downto 0);
 	signal led_counter	:	std_logic_vector(1 downto 0);
 
+	signal aux_spi_clk_i	:	std_logic;
+	signal aux_spi_mosi_i	:	std_logic;
+	signal aux_spi_csn_i	:	std_logic;
+	signal aux_spi_alt_i	:	std_logic;
+
 	component ODDRX1F
 	port (
 		D0	:	in std_logic;
@@ -189,8 +195,9 @@ begin
 	amiga_reset_n <= button(0) and slave_button(0);
 	menu_button_n <= button(1) and slave_button(1);
 
+	-- joyb(5) joyb(3) joyb(1) allocated to aux_spi when aux_spi_alt_i='1'
 	joya_i <= '1' & joya;
-	joyb_i <= '1' & joyb;
+	joyb_i <= '1' & joyb when aux_spi_alt_i='0' else "11" & joyb(4) & '1' & joyb(2) & '1' & joyb(0);
 	joyc_i <= (others => '1');
 	joyd_i <= (others => '1');
 
@@ -338,10 +345,22 @@ begin
 		USB_DP => usb_dp,
 		USB_DN => usb_dn,
 
-		AUX_SPI_CSN => aux_spi_csn,
-		AUX_SPI_CLK => aux_spi_clk,
-		AUX_SPI_MOSI => aux_spi_mosi
+		AUX_SPI_CSN => aux_spi_csn_i,
+		AUX_SPI_CLK => aux_spi_clk_i,
+		AUX_SPI_MOSI => aux_spi_mosi_i
 	);
+
+	-- alternative aux_spi wiring
+	process (clk)
+	begin
+		if rising_edge(clk) then
+			aux_spi_alt_i <= aux_spi_alt;
+		end if;
+	end process;
+
+	aux_spi_clk_i  <= joyb(5) when aux_spi_alt_i='1' else aux_spi_clk;
+	aux_spi_csn_i  <= joyb(3) when aux_spi_alt_i='1' else aux_spi_csn;
+	aux_spi_mosi_i <= joyb(1) when aux_spi_alt_i='1' else aux_spi_mosi;
 
 	led_g <= led_power;
 	led_i(4) <= led_power;
@@ -352,7 +371,7 @@ begin
 	led_r <= led_hdd;
 	led_i(2) <= led_hdd;
 
-	led_i(1 downto 0) <= led_usb;
+	led_i(1 downto 0) <= led_usb when aux_spi_alt_i='0' else "11";
 
 	-- power indicator is quite dark already
 	led(4) <= led_i(4);
