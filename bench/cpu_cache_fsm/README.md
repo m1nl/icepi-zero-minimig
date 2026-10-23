@@ -26,9 +26,9 @@ Controller elaboration and lint now use the production small cache at the defaul
 ## TG68K paired SDRAM transfers
 
 The supported board projects use `cpu_cache_small.v`. Its `cpu_long_cand`
-input replaces the old `cpu_32bit` write-combining hint. `cpu_long_ack`
-qualifies `cpu_ack` for aligned, full-word read/write pairs, including
-instruction extensions. The first word is `cpu_dat_w` / `cpu_dat_r_hi`;
+input replaces the old `cpu_32bit` write-combining hint. Aligned, full-word read/write candidates are always accepted, including
+instruction extensions. `cpu_ack` alone indicates completion; paired reads wait
+for both words. No pair-acceptance feedback port is required. The first word is `cpu_dat_w` / `cpu_dat_r_hi`;
 the second is `cpu_dat_w_lo` / `cpu_dat_r`. Narrow reads still use
 `cpu_dat_r`. SDRAM/cache entries retain their existing first-word-in-low-half
 layout; the cache translates the CPU's big-endian pair ordering.
@@ -38,33 +38,48 @@ write-through hits/misses, line-end aligned pairs, inhibited pair reads and
 unaligned-candidate rejection and reset between paired read beats. A paired miss waits for the second SDRAM
 beat before acknowledging; the SDRAM burst protocol is unchanged.
 
-`rtl/soc/TG68K.vhd` exposes `ram_long_cand`, `ram_long_ack`, `fromram_hi`
+`rtl/soc/TG68K.vhd` exposes `ram_long_cand`, `fromram_hi`
 and `toram_lo`; `minimig_virtual_top.v` connects them through `sdram_ctrl.v`.
 Only directly selected SDRAM memory can offer/accept pairs. Chipset bus
 transactions, NMI interception, RTG/Akiko/host registers, undecoded space
-and the SDRAM-backed audio peripheral retain their existing narrow protocol.
+retain their existing narrow protocol.
 Turbo chip/slow/Kickstart memory served directly by SDRAM can pair.
 The legacy `cpustate[3]`/`longword` remains available for chipset bus timing;
 the SDRAM controller only uses it for the optional legacy combining path.
 
 Run `bash bench/rtg_hdmi/run_cpu_mmio.sh` to test the real synthesized
-TG68K wrapper/kernel with both a narrow memory responder and the production
+TG68K wrapper/kernel with both an uncached pair-capable memory responder and the production
 small cache. The ROM checks aligned paired reads/writes, byte writes,
-unaligned longwords across a cache-line boundary and RTG MMIO word ordering.
+unaligned longwords (including odd addresses) across cache-line boundaries,
+byte guards and RTG MMIO word ordering.
 The cached run requires accepted instruction-extension and data pairs.
 These tests do not establish board timing closure.
 
-### Optional legacy write combining
+### Combined writes
 
-`legacy_write_combine=0` is the default in both the cache and SDRAM controller.
-Setting the controller parameter to 1 forwards it to the cache and restores
-collection of two narrow writes using the `cpu_longword` hint from
-`cpustate[3]`. This can combine a pair starting two bytes into a 32-bit cache
-entry, updating both touched entries. Byte masks are preserved; combining
-remains disabled at the final word of a 16-byte line. Reads never use this
-legacy hint. A new-interface complete pair always takes precedence.
+`unaligned_write_combine=1` remains the cache default. It collects two narrow
+writes using the `cpu_longword` hint from `cpustate[3]`. A new-interface aligned
+pair always takes precedence. Reads never use the legacy hint. Combining remains
+disabled at the final halfword of a 16-byte line so SDRAM burst addressing cannot
+wrap to the wrong word.
 
-The FSM runner tests parameter values 0 and 1, checking write counts,
-aligned/unaligned pairs, partial byte masks, line-boundary fallback and I/D
-cache updates. The real-CPU MMIO runner also checks both parameter settings.
-No production instantiation enables legacy combining.
+Both paths fill the existing `sdr_adr` / `sdr_dat_w` / `sdr_dqm_w` buffer and use
+`CPU_SM_WRITE` to submit one SDRAM transaction and update resident I/D cache
+ways. A combined pair starting at +2 uses `CPU_SM_WB` to update the next cache
+entry. Its data and hit ways are retained from the first cache update. The
+collection states fill the buffer. Cache updates use `cpu_dat_l` / `cpu_bs_l`
+for the most recently accepted narrow word, while the first collected word stays
+in the buffer. Direct aligned pairs use the complete buffer. WRITE registers
+cache data and hit ways before the optional WB cycle, so later CPU input changes
+cannot alter the second cache update. Both touched last-pair buffers are invalidated.
+
+Collected writes take one extra cache-controller cycle to finish cache updates;
+CPU ACK timing and the direct aligned-pair path are preserved. A held CPU request
+must drop before another request is accepted. Last-pair read buffers remain
+unchanged otherwise.
+
+The FSM runner tests combining off and on, checking write counts, aligned and
+unaligned pairs, partial byte masks, line-boundary fallback and I/D cache updates.
+The real-CPU MMIO runner also checks both settings. The SDRAM controller uses the
+cache's default (combining enabled). These simulations do not establish FPGA
+resource counts or timing closure.

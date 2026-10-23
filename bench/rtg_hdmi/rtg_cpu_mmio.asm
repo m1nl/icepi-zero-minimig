@@ -25,6 +25,37 @@ start:
     move.l $140e,d1
     cmp.l d0,d1
     bne fail
+    ; Odd longwords require masked first/last words around the collected pair.
+    move.l #$a5a5a5a5,$1430
+    move.l #$a5a5a5a5,$1434
+    move.l d0,$1431
+    move.l $1431,d1
+    cmp.l d0,d1
+    bne fail
+    cmp.b #$a5,$1430
+    bne fail
+    cmp.b #$a5,$1435
+    bne fail
+    move.l #$a5a5a5a5,$1450
+    move.l #$a5a5a5a5,$1454
+    move.l d0,$1453
+    move.l $1453,d1
+    cmp.l d0,d1
+    bne fail
+    cmp.b #$a5,$1452
+    bne fail
+    cmp.b #$a5,$1457
+    bne fail
+    move.l #$a5a5a5a5,$147c
+    move.l #$a5a5a5a5,$1480
+    move.l d0,$147f
+    move.l $147f,d1
+    cmp.l d0,d1
+    bne fail
+    cmp.b #$a5,$147e
+    bne fail
+    cmp.b #$a5,$1483
+    bne fail
     move.w $b80000,d0
     cmp.w #$c0ca,d0
     bne fail

@@ -71,7 +71,7 @@ module rtg_sdram_address_tb #(
         .chipRW(1'b1),.chip_dma(div[4]),.chipWR(16'd0),.chipWR2(16'd0),.chipRD(),.chip48(),
         .rtgAddr(addr),.rtgce(req),.rtgpri(pri),.rtg_extend_ok(extend_ok),.rtgack(ack),.rtgfill(fill),.rtgRd(data),
         .audAddr(23'd0),.audce(1'b0),.audack(),.audfill(),.audRd(),
-        .cpu_long_cand(1'b0),.cpuWR_lo(16'b0),.cpu_long_ack(),.cpuRD_hi(),
+        .cpu_long_cand(1'b0),.cpuWR_lo(16'b0),.cpuRD_hi(),
         .cpuAddr(cpu_addr),.cpustate(cpu_state),.cpuL(1'b0),.cpuU(1'b0),.cpuWR(16'h1234),
         .cpuRD(),.enaWRreg(),.ena7RDreg(),.ena7WRreg(),.cpuena(cpu_ack)
     );

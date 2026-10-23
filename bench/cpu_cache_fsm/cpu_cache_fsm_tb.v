@@ -10,7 +10,6 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
   reg sdr_read_pre=0, sdr_read_ack=0, sdr_write_ack=0;
   reg cpu_long_cand=0, cpu_longword=0;
   reg [15:0] cpu_dat_w_lo=0;
-  wire cpu_long_ack;
   wire [15:0] cpu_dat_r_hi;
   wire cpu_ack, sdr_read_req, sdr_write_req;
   wire [15:0] cpu_dat_r;
@@ -25,14 +24,14 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
 `endif
   cpu_cache_new
 `ifdef SMALL_CACHE
-  #(.legacy_write_combine(LEGACY_WRITE_COMBINE))
+  #(.unaligned_write_combine(LEGACY_WRITE_COMBINE))
 `endif
   dut (
     .clk(clk), .rst(rst), .cache_en(1'b1), .clk28_en(1'b1),
     .cpu_cache_ctrl(4'b0001), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
     .cpu_cs(cpu_cs), .cpu_adr(cpu_adr), .cpu_bs(cpu_bs),
 `ifdef SMALL_CACHE
-    .cpu_longword(cpu_longword), .cpu_long_cand(cpu_long_cand), .cpu_long_ack(cpu_long_ack),
+    .cpu_longword(cpu_longword), .cpu_long_cand(cpu_long_cand),
     .cpu_dat_w_lo(cpu_dat_w_lo), .cpu_dat_r_hi(cpu_dat_r_hi),
 `else
     .cpu_32bit(1'b0),
@@ -111,7 +110,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
           @(posedge clk);
           if(cpu_ack===1) begin
 `ifdef SMALL_CACHE
-            if(cpu_long_ack!==0) $fatal(1,"Narrow read accepted as a pair");
+            if(dut.cpu_pair!==0) $fatal(1,"Narrow read accepted as a pair");
 `endif
             if(cpu_dat_r!==memory[address/2]) $fatal(1,"Read data mismatch at %h",address);
             disable await_ack;
@@ -138,7 +137,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
         forever begin
           @(posedge clk);
           if(cpu_ack===1) begin
-            if(cpu_long_ack!==0) $fatal(1,"Legacy write asserted new pair ACK");
+            if(dut.cpu_pair!==0) $fatal(1,"Legacy write asserted new pair ACK");
             disable await_narrow_write;
           end
           #2; timeout=timeout+1;
@@ -187,7 +186,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
         forever begin
           @(posedge clk);
           if(cpu_ack===1) begin
-            if(cpu_long_ack!==1 || {cpu_dat_r_hi,cpu_dat_r}!=={memory[address/2],memory[address/2+1]})
+            if(dut.cpu_pair!==1 || {cpu_dat_r_hi,cpu_dat_r}!=={memory[address/2],memory[address/2+1]})
               $fatal(1,"Wide read mismatch at %h: %h %h",address,cpu_dat_r_hi,cpu_dat_r);
             disable await_pair;
           end
@@ -210,7 +209,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
         forever begin
           @(posedge clk);
           if(cpu_ack===1) begin
-            if(cpu_long_ack!==1) $fatal(1,"Wide write not accepted");
+            if(dut.cpu_pair!==1) $fatal(1,"Wide write not accepted");
             disable await_pair_write;
           end
           #2; timeout=timeout+1;
@@ -289,7 +288,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     wide_read('h80c,0);
     // Unaligned candidates must fall back to a single word.
     cpu_long_cand=1; start_read('h602,0); finish_read('h602);
-    if(cpu_long_ack===1) $fatal(1,"Unaligned pair accepted");
+    if(dut.cpu_pair===1) $fatal(1,"Unaligned pair accepted");
     cpu_long_cand=0;
     cache_inhibit=1;
     wide_read('h90c,0);
@@ -320,7 +319,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     end
     if(cpu_ack!==0) $fatal(1,"Pair acknowledged before second beat");
     rst=1; tick;
-    if(cpu_ack!==0 || cpu_long_ack!==0 || dut.read_pair_pending!==0)
+    if(cpu_ack!==0 || dut.cpu_pair!==0 || dut.read_pair_pending!==0)
       $fatal(1,"Reset retained incomplete pair/ACK");
     cpu_cs=0; rst=0; idle(280); cpu_long_cand=0;
     wide_read('hb00,0);
