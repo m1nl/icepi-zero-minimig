@@ -144,7 +144,7 @@ Use `slot=title`, where slot `0` is Default and `1`–`4` are numbered slots. Ti
 
 To use this Minimig core, you will at the minimum need an SD/SDHC card, formatted with the FAT32 filesystem, USB HID keyboard / mouse and a HDMI monitor / TV.
 
-IcePi Zero core is compatible with [IcePi Carrier](https://github.com/MiSTle-Dev/Boards/tree/main/icepi_carrier) board so you can use more USB ports or have better USB compatibility. Only USB / HID features of FPGA Companion firmware are in use.
+IcePi Zero and IcePi Zero XL cores are compatible with the [IcePi Carrier](https://github.com/MiSTle-Dev/Boards/tree/main/icepi_carrier) board so you can use more USB ports or have better USB compatibility. The core only receives HID reports over SPI from FPGA Companion firmware. See [companion board SPI wiring](#companion-board-spi-wiring) for the regular and alternative connections.
 
 FleaFPGA Ohm core retains original [pin assignments](https://github.com/Basman74/Minimig_ECS/blob/master/Minimig_setup_README.pdf) except for analog audio and 30/15kHz video output select. Ping me if you need IcePi carrier-compatible build.
 
@@ -197,6 +197,23 @@ diamond/3.14/bin/lin64/ddtcmd -oft -fullvme -if fpga/fleaohm/Minimig_FleaOhm/Min
 ### Wiring diagram for IcePi Zero
 
 ![GPIO IcePi Minimig](doc/icepi/GPIO-IcePi-Minimig.png)
+
+### Companion board SPI wiring
+
+IcePi Zero and IcePi Zero XL support two companion board SPI layouts. GPIO numbers below follow Raspberry Pi GPIO numbering; physical pin numbers refer to the 40-pin header. Connect the companion's SPI outputs to the selected inputs below and connect a common ground. Signals use 3.3 V logic.
+
+| Signal from companion to FPGA | Regular wiring | Alternative wiring |
+| --- | --- | --- |
+| SPI clock (SCLK) | GPIO24, pin 18 | GPIO11, pin 23 |
+| SPI chip select (CSN, active low) | GPIO18, pin 12 | GPIO8, pin 24 |
+| SPI data (MOSI) | GPIO25, pin 22 | GPIO10, pin 19 |
+| Layout select | GPIO17, pin 11: low or unconnected | GPIO17, pin 11: pulled high to 3.3 V |
+
+Regular wiring is the default: GPIO17 has an internal pull-down. It matches the SPI clock, chip-select and MOSI connections in the diagram above and leaves the joystick pins available.
+
+For alternative wiring, pull **GPIO17 (physical pin 11) high** and keep it high while using that layout. This places SCLK, CSN and MOSI on the same header pins as a regular Raspberry Pi's default SPI0 signals (GPIO11/SCLK, GPIO8/CE0 and GPIO10/MOSI). These pins normally serve joystick B's second fire button, up and left respectively, so those three physical joystick inputs are unavailable in this layout.
+
+The FPGA acts as an SPI receiver and only accepts HID reports from the companion. MISO and IRQ are unused by this core and do not need connecting, even though the diagram labels them. In the alternative layout, GPIO9 (pin 21), normally Raspberry Pi SPI0 MISO, remains joystick B's right input; leave it disconnected from the companion's SPI interface.
 
 ### Wiring diagram for FleaFPGA Ohm
 
