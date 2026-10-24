@@ -14,6 +14,7 @@ in temporary directories unless an existing Makefile specifies otherwise.
 | `cpu_cache_fsm/` | Cache handshake/FSM and TG68K paired memory accesses; small-cache variant is the default |
 | `cpu_cache_tags/` | Historical parameterized cache tag tests |
 | `cpu_cache_sdram/`, `cpu_cache_sdram_verilator/` | Existing SDRAM/cache integration benches, including the RTG interface additions |
+| [`sdram_write_queue/`](sdram_write_queue/README.md) | Optional CPU write queue, byte merging, 114 MHz SDRAM command spacing and CPU read-after-write |
 | `archive/` | Earlier temporary reproductions and their supporting RTL snapshots |
 | [`../amiga_sw/rtg/tests/`](../amiga_sw/rtg/tests/README.md) | Driver callback tests and historical driver ROMs/scripts |
 
@@ -38,6 +39,8 @@ python3 bench/rtg_hdmi/run.py repeat repeat720 priority viewport
 python3 bench/rtg_hdmi/run.py contention addresses integrated
 python3 bench/rtg_area/check_config_paths.py
 python3 bench/cpu_cache_fsm/run.py
+python3 bench/sdram_write_queue/run.py
+python3 bench/rtg_hdmi/run.py contention_queue
 bash bench/rtg_hdmi/run_cpu_mmio.sh
 make -C amiga_sw/rtg test
 ```

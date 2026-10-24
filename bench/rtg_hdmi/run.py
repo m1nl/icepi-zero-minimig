@@ -9,7 +9,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 RTG = ['rtl/rtg/rtg_video.v', 'rtl/rtg/rtg_async_fifo.v']
-SDRAM = ['rtl/sdram/sdram_ctrl.v', 'rtl/sdram/cpu_cache_small.v',
+SDRAM = ['rtl/sdram/sdram_ctrl.v', 'rtl/sdram/sdram_write_queue.v', 'rtl/sdram/cpu_cache_small.v',
          'rtl/sdram/dpram_inf_256x32.v', 'rtl/sdram/dpram_inf_be_1024x32.v',
          'rtl/sdram/dpram_inf_generic.v']
 HDMI = [str(p.relative_to(ROOT)) for p in (ROOT / 'rtl/hdmi').glob('*.sv')
@@ -44,7 +44,8 @@ TESTS = {
     'clocks': ('video_clock_control_tb', ['rtl/hdmi/video_clock_control.v']),
 }
 QUICK = ('fifo', 'registers', 'vblank', 'audio', 'audio_counter', 'avi_checksum', 'osd', 'reset', 'config', 'top_config', 'video')
-LONG = ('config', 'reset', 'video', 'repeat', 'repeat720', 'viewport', 'priority', 'contention', 'addresses', 'integrated', 'audio_stream')
+TESTS['contention_queue'] = TESTS['contention']
+LONG = ('config', 'reset', 'video', 'repeat', 'repeat720', 'viewport', 'priority', 'contention', 'contention_queue', 'addresses', 'integrated', 'audio_stream')
 
 
 def main():
@@ -75,6 +76,8 @@ def main():
                            '--top-module', top, '--Mdir', str(build), str(source), *sources]
                 if name == 'repeat720':
                     command += ['-GW=1280', '-GHT=1650']
+                if name == 'contention_queue':
+                    command += ['-GCPU_WRITE_QUEUE=1']
                 env = dict(os.environ, CCACHE_DISABLE='1')
                 with (Path(folder) / (name + '.log')).open('w+') as log:
                     result = subprocess.run(command, cwd=ROOT, env=env,
@@ -89,6 +92,8 @@ def main():
                        '-o', str(Path(folder) / name)]
             if name == 'repeat720':
                 command += ['-P' + top + '.W=1280', '-P' + top + '.HT=1650']
+            if name == 'contention_queue':
+                command += ['-P' + top + '.CPU_WRITE_QUEUE=1']
             if name == 'top_config':
                 command += ['-i', '-I', 'fpga/icepi-zero', '-I', 'rtl/soc']
             if name in ('serializer', 'clocks'):

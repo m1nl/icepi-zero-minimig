@@ -270,6 +270,9 @@
         <Source name="../../rtl/minimig/userio_ps2mouse.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>
+        <Source name="../../rtl/sdram/sdram_write_queue.v" type="Verilog" type_short="Verilog">
+            <Options/>
+        </Source>
         <Source name="../../rtl/sdram/sdram_ctrl.v" type="Verilog" type_short="Verilog">
             <Options/>
         </Source>

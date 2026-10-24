@@ -676,6 +676,9 @@ wire		host_we;
 
 //sdram sdram (
 sdram_ctrl #(
+`ifdef MINIMIG_SDRAM_WRITE_QUEUE
+	.cpu_write_queue(1),
+`endif
 	.addr_max_bits(addr_max_bits)
 ) sdram (
 	.cache_rst    (tg68_rst_sync    ),

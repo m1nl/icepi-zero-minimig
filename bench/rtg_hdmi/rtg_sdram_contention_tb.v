@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Exercise the actual RTG producer, SDRAM arbiter and CPU cache together.
 // Data pins are zero: this checks arbitration/progress, not SDRAM electrical timing.
-module rtg_sdram_contention_tb;
+module rtg_sdram_contention_tb #(parameter CPU_WRITE_QUEUE=0);
     reg sys=0,vid=0;
     always #4.375 sys=~sys;
     always #7.575757 vid=~vid;
@@ -55,7 +55,7 @@ module rtg_sdram_contention_tb;
     wire cpu_ack,host_ack,mem_ready;
     tri [15:0] dq;
     assign dq=16'd0;
-    sdram_ctrl mem (
+    sdram_ctrl #(.cpu_write_queue(CPU_WRITE_QUEUE)) mem (
         .sysclk(sys),.clk7_en(&div[3:2]),.clk28_en(div[1:0]==0),
         .reset_in(reset_n),.cache_rst(reset_n),.reset_out(mem_ready),
         .cache_inhibit(1'b0),.cacheline_clr(1'b0),.cpu_cache_ctrl(4'd0),
