@@ -349,6 +349,8 @@ MULTICYCLE FROM CLKNET "clk_sys" TO CLKNET "clk_28m" 2X;
 
 BLOCK PATH TO PORT "led[*]";
 
+BLOCK PATH FROM CELL "aux_spi_alt_i*";
+
 BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_0/typ[*]";
 BLOCK PATH FROM CELL "virtual_top/mycfide/usbblock.u_usb_hid_host_1/typ[*]";
 BLOCK PATH FROM CELL "virtual_top/mycfide/joystick_d*";

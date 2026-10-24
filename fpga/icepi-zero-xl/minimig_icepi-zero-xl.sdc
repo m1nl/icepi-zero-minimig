@@ -72,6 +72,8 @@ set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_
 
 set_false_path -to [get_ports {led[*]}]
 
+set_false_path -from [get_cells {aux_spi_alt_i*}]
+
 set_false_path -from [get_cells {virtual_top.mycfide.usbblock\.u_usb_hid_host_0.typ[*]}]
 set_false_path -from [get_cells {virtual_top.mycfide.usbblock\.u_usb_hid_host_1.typ[*]}]
 set_false_path -from [get_cells {virtual_top.mycfide.joystick_d*}]
