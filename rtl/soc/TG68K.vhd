@@ -574,11 +574,9 @@ buslogic : block
 begin
 
 	short_internal_cycle: if tg68k_short_internal_cycle generate
-		cpu_internal_ack <= '1' when cpu_internal='1' and
-			((slower(0)='0' and overclock_d='0') or (slower(1)='0' and overclock_d='1'))
-				else '0';
+		cpu_internal_ack <= '1' when cpu_internal='1' and ((slower(1)='0' and overclock_d='1') or slower(0)='0') else '0';
 	end generate;
-	
+
 	normal_internal_cycle: if not tg68k_short_internal_cycle generate
 		cpu_internal_ack <= '1' when cpu_internal='1' and slower(0)='0' else '0';
 	end generate;
