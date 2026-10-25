@@ -85,7 +85,7 @@ module sdram_ctrl #(
   output wire    [15:0] audRd,
   // cpu
   input  wire [ 26+addr_prefix_bits-1:1] cpuAddr,        // cpu address
-  input  wire     [3:0] cpustate,
+  input  wire     [4:0] cpustate,
   input  wire           cpuL,
   input  wire           cpuU,
   input  wire           cpu_long_cand, // aligned pair offered by TG68K
@@ -169,6 +169,7 @@ reg           sdata_oe;
 wire          ccache_fill;
 wire          ccachehit;
 wire          cpuCSn;
+wire          cpuReq;
 reg  [ 8-1:0] reset_cnt;
 reg           reset;
 reg           reset_sdstate;
@@ -259,6 +260,7 @@ assign sd_we  = sd_cmd[0];
 ////////////////////////////////////////
 
 assign cpuCSn      = cpustate[2];
+assign cpuReq      = cpustate[3];
 
 ////////////////////////////////////////
 // reset
@@ -303,21 +305,25 @@ assign audack=(slot1_type==AUDIO && sdram_state==ph4) ? 1'b1 : 1'b0;
 assign hostRD = sdata_reg;
 assign hostena=slot1_type==HOST ? cache_fill_1 : 1'b0;
 
+reg cpu_ir_r;
+reg cpu_dr_r;
+reg cpu_we_r;
 
-reg cpu_ir;
-reg cpu_dr;
-reg cpu_we;
-always @(posedge sysclk) begin
 `ifdef MINIMIG_NO_DATA_CACHE
-	cpu_ir <= ~cpustate[0];
-	cpu_dr <= 1'b0;
+wire cpu_ir = ~cpustate[0];
+wire cpu_dr = 1'b0;
 `else
-	cpu_ir <= !(|cpustate[1:0]);            // cpu instruction read
-	cpu_dr <= cpustate[1] && !cpustate[0];  // cpu data read
+wire cpu_ir = cpustate[1:0] == 2'b00;
+wire cpu_dr = cpustate[1:0] == 2'b10;
 `endif
-	cpu_we <= &cpustate[1:0];
-end
 
+wire cpu_we = &cpustate[1:0];
+
+always @(posedge sysclk) begin
+	cpu_ir_r <= cpu_ir;	// cpu instruction read
+	cpu_dr_r <= cpu_dr;	// cpu data read
+	cpu_we_r <= cpu_we; // cpu write
+end
 
 ////////////////////////////////////////
 // cpu cache
@@ -343,15 +349,16 @@ cpu_cache_new #(
 	.cache_inhibit    (cache_inhibit),                // cache inhibit
 	.cacheline_clr    (cacheline_clr),
 	.cpu_cs           (!cpuCSn),                      // cpu activity
+    .cpu_req          (cpuReq),
 	.cpu_adr          ({cpuAddr, 1'b0}),              // cpu address
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
-	.cpu_longword     (cpustate[3]),
+	.cpu_longword     (cpustate[4]),
 	.cpu_long_cand    (cpu_long_cand),
 	.cpu_dat_w_lo     (cpuWR_lo),
 	.cpu_dat_r_hi     (cpuRD_hi),
-	.cpu_we           (cpu_we),                       // cpu write
-	.cpu_ir           (cpu_ir),                       // cpu instruction read
-	.cpu_dr           (cpu_dr),                       // cpu data read
+	.cpu_we           (cpu_we_r),                     // cpu write
+	.cpu_ir           (cpu_ir_r),                     // cpu instruction read
+	.cpu_dr           (cpu_dr_r),                     // cpu data read
 	.cpu_dat_w        (cpuWR),                        // cpu write data
 	.cpu_dat_r        (cpuRD),                        // cpu read data
 	.cpu_ack          (ccachehit),                    // cpu acknowledge

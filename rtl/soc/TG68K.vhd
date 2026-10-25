@@ -91,7 +91,7 @@ port (
 	cacheline_clr : out     std_logic;
 	--	ovr           : in      std_logic;
 	ramaddr       : out     std_logic_vector(31 downto 0);
-	cpustate      : out     std_logic_vector(3 downto 0);
+	cpustate      : out     std_logic_vector(4 downto 0);
 --	chipset_ramsel: out     std_logic;
 	nResetOut     : buffer  std_logic;
 	--	cpuDMA        : buffer  std_logic;
@@ -381,7 +381,7 @@ ramcs_n <= '0' when ram_req='1' and req_enable='1' and cpu_internal='0' else '1'
 ramlds <= lds_in;
 ramuds <= uds_in;
 
-cpustate <= longword & ramcs_n & state(1 downto 0);
+cpustate <= longword & req_enable & ramcs_n & state(1 downto 0);
 
 -- This is the mapping to the SDRAM
 -- map $00-$1F to $00-$1F (chipram), $A0-$FF to $20-$7F. All non-fastram goes into the first

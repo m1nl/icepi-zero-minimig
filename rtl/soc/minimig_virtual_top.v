@@ -234,7 +234,7 @@ wire           aga;
 wire           cache_inhibit;
 wire           cacheline_clr;
 wire [ 32-1:0] tg68_cad;
-wire [  4-1:0] tg68_cpustate;
+wire [  5-1:0] tg68_cpustate;
 wire           tg68_nrst_out;
 //wire           tg68_cdma;
 wire           tg68_clds;
@@ -567,7 +567,7 @@ wire [15:0] amigahost_d;
 
 //// TG68K main CPU ////
 `ifdef HOSTONLY
-assign tg68_cpustate=4'b0101;
+assign tg68_cpustate=4'b00101;
 assign tg68_long_cand=1'b0;
 assign tg68_cin_lo=16'b0;
 assign tg68_nrst_out=1'b1;
