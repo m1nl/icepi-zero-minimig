@@ -511,6 +511,8 @@ always @ (posedge clk) begin
         if (cpu_cs)
            cpu_sm_state <= CPU_SM_WAIT;
         else begin
+           cacheline_ready_i <= #1 cacheline_valid_i;
+           cacheline_ready_d <= #1 cacheline_valid_d;
            cpu_sm_state <= CPU_SM_IDLE;
         end
         if (cc_en && level1_i && itag0_valid && itag0_match) begin
@@ -519,7 +521,6 @@ always @ (posedge clk) begin
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 idram0_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b0;
-          cacheline_ready_i <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_i && itag1_valid && itag1_match) begin
@@ -528,7 +529,6 @@ always @ (posedge clk) begin
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 idram1_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b1;
-          cacheline_ready_i <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_d && dtag0_valid && dtag0_match && data_cache) begin
@@ -537,7 +537,6 @@ always @ (posedge clk) begin
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 ddram0_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b0;
-          cacheline_ready_d <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_d && dtag1_valid && dtag1_match && data_cache) begin
@@ -546,7 +545,6 @@ always @ (posedge clk) begin
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 ddram1_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b1;
-          cacheline_ready_d <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
         end else begin
