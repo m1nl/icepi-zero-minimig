@@ -7,7 +7,7 @@ module sdram_readback_tb #(parameter QUEUED=1);
 	reg [3:0] div=0;
 	always @(posedge clk) div<=div+1'b1;
 	reg reset_n=0, rtgce=0;
-	reg [3:0] state=4'b0101;
+	reg [4:0] state=5'b00101;
 	reg [25:1] address=25'h0400000;
 	reg [15:0] wr=0, wr_lo=0;
 	reg pair=0;
@@ -74,7 +74,7 @@ module sdram_readback_tb #(parameter QUEUED=1);
 		integer timeout;
 		begin
 			@(negedge clk); #0.1;
-			state=writing ? 4'b0111 : 4'b0110;
+			state=writing ? 5'b01111 : 5'b01110;
 			address=(26'h0800000+offset)>>1; wr=hi; wr_lo=lo; pair=paired; bs=selects;
 			repeat(3) tick;
 			@(negedge clk); #0.1; state[2]=0;

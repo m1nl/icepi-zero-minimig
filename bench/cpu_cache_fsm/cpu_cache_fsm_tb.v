@@ -3,6 +3,15 @@
 module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
   reg clk=0; always #5 clk=~clk;
   reg rst=1, cpu_cs=0, cpu_we=0, cpu_ir=0, cpu_dr=0;
+  // req_enable stays high during a peripheral cycle while RAM CS stays low.
+  reg peripheral_req=0;
+  wire cpu_req=cpu_cs || peripheral_req;
+  reg cpu_we_r=0, cpu_ir_r=0, cpu_dr_r=0;
+  always @(posedge clk) begin
+    cpu_we_r <= cpu_we;
+    cpu_ir_r <= cpu_ir;
+    cpu_dr_r <= cpu_dr;
+  end
   reg cache_inhibit=0, cacheline_clr=0;
   reg [26:0] cpu_adr=0;
   reg [15:0] cpu_dat_w=0, sdr_dat_r=0;
@@ -31,12 +40,18 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     .cpu_cache_ctrl(4'b0001), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
     .cpu_cs(cpu_cs), .cpu_adr(cpu_adr), .cpu_bs(cpu_bs),
 `ifdef SMALL_CACHE
+    .cpu_req(cpu_req),
     .cpu_longword(cpu_longword), .cpu_long_cand(cpu_long_cand),
     .cpu_dat_w_lo(cpu_dat_w_lo), .cpu_dat_r_hi(cpu_dat_r_hi),
 `else
     .cpu_32bit(1'b0),
 `endif
-    .cpu_we(cpu_we), .cpu_ir(cpu_ir), .cpu_dr(cpu_dr), .cpu_dat_w(cpu_dat_w),
+`ifdef SMALL_CACHE
+    .cpu_we(cpu_we_r), .cpu_ir(cpu_ir_r), .cpu_dr(cpu_dr_r),
+`else
+    .cpu_we(cpu_we), .cpu_ir(cpu_ir), .cpu_dr(cpu_dr),
+`endif
+    .cpu_dat_w(cpu_dat_w),
     .cpu_dat_r(cpu_dat_r), .cpu_ack(cpu_ack),
     .sdr_dat_r(sdr_dat_r), .sdr_read_req(sdr_read_req), .sdr_read_ack(sdr_read_ack),
     .sdr_read_pre(sdr_read_pre), .sdr_adr(sdr_adr), .sdr_dat_w(sdr_dat_w),
@@ -197,6 +212,30 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
       tick; cpu_cs=0; idle(20); cpu_long_cand=0;
     end
   endtask
+  // TG68K presents address/type before req_enable/CS, then advances on the
+  // rising edge that consumes ACK. Do not hold the completed request in WAIT.
+  // Check first-cycle ACK after this setup, as well as the returned data.
+  task predicted_read;
+    input integer address;
+    input instruction, paired, fast;
+    begin
+      cpu_adr=address; cpu_we=0; cpu_ir=instruction; cpu_dr=!instruction;
+      cpu_bs=3; cpu_long_cand=paired; cpu_cs=0;
+      @(posedge clk); #2;
+      cpu_cs=1;
+      @(posedge clk); #2;
+      if(cpu_ack !== fast)
+        $fatal(1,"Wrong first-cycle ACK at %h: expected fast=%b",address,fast);
+      if(!fast) begin @(posedge clk); #2; end
+      if(cpu_ack!==1 || cpu_dat_r!==memory[address/2+(paired ? 1 : 0)] ||
+         (paired && cpu_dat_r_hi!==memory[address/2]))
+        $fatal(1,"Prediction read mismatch at %h",address);
+      // Return immediately after consuming ACK so the next call can present
+      // its address on the same CPU advance edge, before the low-CS clock.
+      @(posedge clk); #2;
+      cpu_cs=0; cpu_ir=0; cpu_dr=0; cpu_long_cand=0;
+    end
+  endtask
   task wide_write;
     input integer address;
     input [31:0] data;
@@ -271,6 +310,69 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     wide_read('h70c,1);
     wide_read('h700,1);
     wide_read('h700,1);
+    // req_enable remains high across a peripheral access. The cache must
+    // restore both predictions rather than following the peripheral address.
+    begin: peripheral_restore
+      reg [23:0] saved_i, saved_d;
+      integer word_i, word_d;
+      wide_read('hd00,0); wide_read('hd00,0);
+      wide_read('he00,1); wide_read('he00,1);
+      saved_i=dut.cacheline_adr_i; saved_d=dut.cacheline_adr_d;
+      word_i=saved_i*2; word_d=saved_d*2;
+      cpu_cs=0; cpu_we=0; cpu_ir=0; cpu_dr=1;
+      cpu_adr='hf04; peripheral_req=1;
+      repeat(2) begin
+        repeat(4) begin
+          tick;
+          if(cpu_ack!==0 || sdr_read_req!==0)
+            $fatal(1,"Peripheral cycle caused a cache response/request");
+        end
+        if(dut.cacheline_adr_i!==saved_i || dut.cacheline_adr_d!==saved_d ||
+           (dut.cacheline_way_i ? dut.idram1_cpu_dat_r : dut.idram0_cpu_dat_r)!==
+              {memory[word_i+1],memory[word_i]} ||
+           (dut.cacheline_way_d ? dut.ddram1_cpu_dat_r : dut.ddram0_cpu_dat_r)!==
+              {memory[word_d+1],memory[word_d]})
+          $fatal(1,"Peripheral cycle did not restore predicted BRAM data");
+        cpu_adr='hf08;
+      end
+      peripheral_req=0; cpu_dr=0;
+      predicted_read(word_i*2,1,1,1);
+      predicted_read(word_d*2,0,1,1);
+    end
+    // Even companions, odd-word advances, paired advances and within-line
+    // wrap must all acknowledge on the first IDLE edge after address setup.
+    wide_read('hd80,0); wide_read('hd90,0);
+    predicted_read('hd80,0,0,0);
+    predicted_read('hd82,0,0,1);
+    predicted_read('hd84,0,0,1);
+    predicted_read('hd86,0,0,1);
+    predicted_read('hd88,0,1,1);
+    predicted_read('hd8c,0,1,1);
+    predicted_read('hd80,0,1,1); // final pair wrapped to the first pair
+    predicted_read('hd8c,0,1,0); // a wrong prediction uses the normal lookup
+    predicted_read('hd90,0,1,0); // wrapping must not alias the next line
+    // Independent I/D predictions survive accesses through the other cache.
+    wide_read('hf00,1); wide_read('hf80,0);
+    predicted_read('hf00,1,1,0);
+    predicted_read('hf80,0,1,0);
+    predicted_read('hf04,1,1,1);
+    predicted_read('hf84,0,1,1);
+    predicted_read('hf08,1,1,1);
+    predicted_read('hf88,0,1,1);
+    // Clearing a prediction must prevent a later fast hit until lookup.
+    predicted_read('hf8c,0,1,1);
+    cacheline_clr=1;
+    @(posedge clk); #2;
+    if(dut.cacheline_valid_d!==0 || dut.cacheline_valid_i!==0)
+      $fatal(1,"Clear did not invalidate predictions");
+    cacheline_clr=0;
+    predicted_read('hf80,0,1,0);
+    // A conflicting tag fills the other way; its predictions must use that way.
+    wide_read('h1f00,1); wide_read('h1f80,0);
+    predicted_read('h1f00,1,1,0);
+    predicted_read('h1f80,0,1,0);
+    predicted_read('h1f04,1,1,1);
+    predicted_read('h1f84,0,1,1);
     // Same-index conflicting tags exercise both ways and replacement.
     wide_read('h1600,0); wide_read('h600,0); wide_read('h2600,0);
     wide_read('h1600,0); wide_read('h600,0);
@@ -343,7 +445,8 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     if(dut.cpu_cacheline_d[0]!==line_before_reset) $fatal(1,"Line RAM changed during reset");
     if(dut.cpu_cacheline_d_dirty!==1) $fatal(1,"Reset did not invalidate data line");
 `else
-    if(dut.last_pair_valid_d!==0) $fatal(1,"Reset did not invalidate last pair");
+    if(dut.cacheline_valid_d!==0 || dut.cacheline_valid_i!==0)
+      $fatal(1,"Reset did not invalidate BRAM fast hits");
 `endif
     $display("PASS FSM: launch gating, I/D narrow and paired accesses, write-through, inhibited reads, reset");
     $finish;

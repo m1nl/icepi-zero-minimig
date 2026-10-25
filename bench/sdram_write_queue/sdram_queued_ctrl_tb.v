@@ -32,7 +32,7 @@ module sdram_queued_ctrl_tb #(
 		.chipRD(), .chip48(), .rtgAddr(rtgaddr), .rtgce(rtgce), .rtgpri(rtgce),
 		.rtg_extend_ok(1'b0), .rtgack(), .rtgfill(), .rtgRd(),
 		.audAddr(23'd0), .audce(1'b0), .audack(), .audfill(), .audRd(),
-		.cpuAddr(cpuaddr), .cpustate(4'b0101), .cpuL(1'b0), .cpuU(1'b0),
+		.cpuAddr(cpuaddr), .cpustate(5'b00101), .cpuL(1'b0), .cpuU(1'b0),
 		.cpu_long_cand(1'b0), .cpuWR_lo(16'd0), .cpuRD_hi(), .cpuWR(16'd0),
 		.cpuRD(), .enaWRreg(), .ena7RDreg(), .ena7WRreg(), .cpuena()
 	);

@@ -13,6 +13,7 @@ def run(*args, **kwargs):
 def build_cpu(folder):
     """Translate the current VHDL CPU wrapper/kernel, not a cached snapshot."""
     run('ghdl', '-a', '--std=08', '-fsynopsys', f'--workdir={folder}',
+        'fpga/icepi-zero/board_config.vhd',
         'rtl/tg68k/TG68K_Pack.vhd', 'rtl/tg68k/TG68K_ALU.vhd',
         'rtl/tg68k/TG68KdotC_Kernel.vhd', 'rtl/soc/TG68K.vhd')
     cpu = folder / 'cpu.v'
@@ -31,7 +32,8 @@ def assemble_rom(asm, folder, vasm, extra_args=()):
     return binary
 
 
-def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_combine=False):
+def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_combine=False,
+            overclock=False):
     data = binary.read_bytes()
     if len(data) > 8192:
         raise RuntimeError('test ROM exceeds behavioral memory')
@@ -45,6 +47,7 @@ def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_com
         'CHECK_MMIO': int(not driver),
         'CACHE_RAM': int(cached),
         'LEGACY_WRITE_COMBINE': int(legacy_write_combine),
+        'OVERCLOCK': int(overclock),
         'VERBOSE': 0,
         'TIMEOUT_NS': 20000000 if driver else 2000000,
     }

@@ -4,6 +4,29 @@ Run `python3 bench/cpu_cache_fsm/run.py` with Icarus Verilog installed. The defa
 
 The test covers a miss held while `sdr_read_pre` is low, a previous burst still active, request retention after the launch pulse until data arrives, instruction/data cache hits without a launch pulse, writes with `sdr_read_pre` low, consecutive inhibited misses while the previous burst drains, unexpected FSM states, and reset during a matching write.
 
+The inferred data RAM models the always-enabled CPU and snoop ports. The
+small-cache checks exercise restoration of both predicted pairs during
+peripheral accesses: `cpu_req` represents TG68K's `req_enable`, which stays high
+while the peripheral completes even though RAM `cpu_cs` remains low. The bench
+checks restored data and the first RAM reads after returning from the peripheral,
+rather than requiring every BRAM output to stay unchanged throughout the cycle.
+Both BRAM fast-hit entries must be invalid after reset. Fill reads still use the
+ordinary cache lookup before a BRAM fast-hit entry becomes valid.
+
+Read hits prepare independent speculative pairs for I and D during WAIT. Even
+narrow reads retain the pair; odd narrow reads and paired reads advance to the
+next pair, wrapping inside the same 16-byte line. The latency checks require
+first-cycle ACKs after TG68K-style address/type setup and the controller's
+registered access-type decode. A request consumes ACK on a rising edge and
+releases CS immediately afterward; the next request can present its address on
+that same CPU advance edge, before the low-CS clock. Completed requests are not
+held in WAIT for extra cycles. Checks cover wrong predictions, crossing into
+another line, alternating I/D accesses, both ways, and clearing predictions.
+
+The real-CPU MMIO runner also checks cached normal and overclock operation with
+legacy write combining disabled and enabled. Its five-bit `cpustate` layout is
+`{longword, req_enable, ramcs_n, access_type[1:0]}`; bit 3 is not `ram_req`.
+
 ## Migration decisions
 
 - The root cache launches from `CPU_SM_READ` or `CPU_SM_SDWAI` only when `!sdr_read_ack && sdr_read_pre`, matching the small cache's read-launch qualification.
@@ -52,7 +75,9 @@ TG68K wrapper/kernel with both an uncached pair-capable memory responder and the
 small cache. The ROM checks aligned paired reads/writes, byte writes,
 unaligned longwords (including odd addresses) across cache-line boundaries,
 byte guards and RTG MMIO word ordering.
-The cached run requires accepted instruction-extension and data pairs.
+The runner compiles `fpga/icepi-zero/board_config.vhd` with the CPU. The cached
+run requires accepted data read/write pairs; instruction-extension pairs depend
+on that board's `tg68k_datapath32` setting.
 These tests do not establish board timing closure.
 
 ### Combined writes

@@ -30,6 +30,11 @@ def main():
         run_rom(binary, folder, cpu, cached=True)
         print('Testing optional legacy narrow-write combining', flush=True)
         run_rom(binary, folder, cpu, cached=True, legacy_write_combine=True)
+        for legacy in (False, True):
+            print('Testing TG68K overclock with legacy combining ' +
+                  ('enabled' if legacy else 'disabled'), flush=True)
+            run_rom(binary, folder, cpu, cached=True,
+                    legacy_write_combine=legacy, overclock=True)
         if args.mmio_only:
             return
         for profile in ('1024x768', '1280x720'):

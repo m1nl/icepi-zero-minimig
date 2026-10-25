@@ -50,7 +50,7 @@ module rtg_sdram_contention_tb #(parameter CPU_WRITE_QUEUE=0);
     reg [4:0] div=0;
     always @(posedge sys) div<=div+1'b1;
     reg host_req=0;
-    reg [3:0] cpu_state=4'b0101;
+    reg [4:0] cpu_state=5'b00101;
     reg [24:0] cpu_addr=25'h400000; // physical bank 1, shared with RTG
     wire cpu_ack,host_ack,mem_ready;
     tri [15:0] dq;
@@ -84,14 +84,14 @@ module rtg_sdram_contention_tb #(parameter CPU_WRITE_QUEUE=0);
         end else if(host_gap!=0) host_gap=host_gap-1;
         else host_req=1;
         if(!cpu_state[2] && cpu_ack) begin
-            cpu_state=4'b0101;cpu_gap=32;cpu_count=cpu_count+1;cpu_wait=0;
+            cpu_state=5'b00101;cpu_gap=32;cpu_count=cpu_count+1;cpu_wait=0;
             cpu_addr=cpu_addr+25'd16;
         end else if(!cpu_state[2]) begin
             cpu_wait=cpu_wait+1;
             if(cpu_wait>max_cpu_wait) max_cpu_wait=cpu_wait;
             if(cpu_wait>8192) $fatal(1,"Amiga CPU starved by RTG");
         end else if(cpu_gap!=0) cpu_gap=cpu_gap-1;
-        else cpu_state=cpu_count[0]?4'b0011:4'b0010; // alternate reads and writes
+        else cpu_state=cpu_count[0]?5'b01011:5'b01010; // RAM request: alternate reads and writes
         if(mem.refresh_pending) begin
             refresh_wait=refresh_wait+1;
             if(refresh_wait>max_refresh_wait) max_refresh_wait=refresh_wait;
