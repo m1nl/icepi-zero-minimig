@@ -342,10 +342,9 @@ wire reset_top_r, reset_bottom_r;
 
 wire [15:0] data_top, data_bottom;
 
-// Compare each bank before selecting it: the request/priority path contains
-// only zero/constant tests and muxes, not a limit-minus-issued carry chain.
-wire top_has_work    = rows_remaining_top != 0;
-wire bottom_has_work = rows_remaining_bottom != 0;
+// Update with the row counters so SDRAM arbitration does not include their
+// zero comparisons. Flags describe the same cycle as the corresponding count.
+reg top_has_work, bottom_has_work;
 
 // Sections contain complete rows, so row_left > 4 also means
 // more than four bursts remain in the section.
@@ -450,6 +449,8 @@ always @(posedge clk_sys or negedge resetn_sys) begin
     addr_bottom <= 0;
     rows_remaining_top <= 0;
     rows_remaining_bottom <= 0;
+    top_has_work <= 0;
+    bottom_has_work <= 0;
     has_bottom <= 0;
     prefill_left <= 0;
     prefill_words <= 0;
@@ -480,8 +481,10 @@ always @(posedge clk_sys or negedge resetn_sys) begin
           addr_bottom <= next_addr;
 
           if (row_left_bottom == 1) begin
-            if (rows_remaining_bottom != 0)
+            if (rows_remaining_bottom != 0) begin
               rows_remaining_bottom <= next_rows_remaining;
+              bottom_has_work <= rows_remaining_bottom != 1;
+            end
             row_left_bottom <= row_bursts;
             if (repeat_row) begin
               repeat_bottom <= repeat_bottom + 1'b1;
@@ -498,8 +501,10 @@ always @(posedge clk_sys or negedge resetn_sys) begin
           addr_top <= next_addr;
 
           if (row_left_top == 1) begin
-            if (rows_remaining_top != 0)
+            if (rows_remaining_top != 0) begin
               rows_remaining_top <= next_rows_remaining;
+              top_has_work <= rows_remaining_top != 1;
+            end
             row_left_top <= row_bursts;
             if (repeat_row) begin
               repeat_top <= repeat_top + 1'b1;
@@ -543,6 +548,8 @@ always @(posedge clk_sys or negedge resetn_sys) begin
 
             rows_remaining_top <= top_rows;
             rows_remaining_bottom <= split_valid ? bottom_rows : 0;
+            top_has_work <= top_rows != 0;
+            bottom_has_work <= split_valid && (bottom_rows != 0);
 
             has_bottom <= split_valid;
             config_sys_split <= split_valid ? split_line[9:0] : viewport_bottom;
