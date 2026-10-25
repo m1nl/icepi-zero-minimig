@@ -103,6 +103,7 @@ void inthandler()
 	if (PLATFORM & (1 << PLATFORM_AMIGAHOST))
 		akiko_inthandler();
 
+	KeyboardService();
 	EnableInterrupts();
 }
 
@@ -230,6 +231,7 @@ int main(void) {
 
 	while(1)
 	{
+		KeyboardPoll();
 		drivesounds_fill();
 
 		if (cartridge && c64keyboard_checkreset())
@@ -244,6 +246,7 @@ int main(void) {
 		if (!ErrorFatal)
 			HandleFpga(); /* Stop talking to the disk subsystems if a fatal error occurs */
 
+		KeyboardPoll();
 		HandleUI();
 	}
 }

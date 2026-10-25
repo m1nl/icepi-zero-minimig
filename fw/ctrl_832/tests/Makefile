@@ -6,7 +6,8 @@ SANITIZE ?= -fsanitize=address,undefined
 CFLAGS := -std=c99 -g -Wall -Wextra -Wno-int-to-pointer-cast
 
 .PHONY: test
-test: $(BUILD_DIR)/atapi_test $(BUILD_DIR)/fat_test $(BUILD_DIR)/hdd_bounds_test $(BUILD_DIR)/hdd_bounds_read_unchecked_test $(BUILD_DIR)/mmc_error_test $(BUILD_DIR)/boot_spi_test
+test: $(BUILD_DIR)/keyboard_queue_test $(BUILD_DIR)/atapi_test $(BUILD_DIR)/fat_test $(BUILD_DIR)/hdd_bounds_test $(BUILD_DIR)/hdd_bounds_read_unchecked_test $(BUILD_DIR)/mmc_error_test $(BUILD_DIR)/boot_spi_test
+	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/keyboard_queue_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/atapi_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/fat_test
 	ASAN_OPTIONS=detect_leaks=0 $(BUILD_DIR)/hdd_bounds_test
@@ -36,3 +37,6 @@ $(BUILD_DIR)/mmc_error_test: mmc_error_test.c $(FW)/mmc.c $(FW)/errors.c $(wildc
 
 $(BUILD_DIR)/boot_spi_test: boot_spi_test.c ../../ctrl_boot_832/spi.c ../../ctrl_boot_832/spi.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -Werror $(SANITIZE) boot_spi_test.c -o $@
+
+$(BUILD_DIR)/keyboard_queue_test: keyboard_queue_test.c $(FW)/keyboard.c $(FW)/hardware.h $(FW)/interrupts.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -Werror $(SANITIZE) keyboard_queue_test.c -o $@

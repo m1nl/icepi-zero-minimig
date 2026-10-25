@@ -124,3 +124,19 @@ No production HDL or bootstrap change is needed. Simulation does not establish
 SD pin setup/hold margins; the existing board constraints lack SD I/O delays.
 Electrical timing validation still needs card/board timing data and hardware
 measurement rather than assumed delay values.
+
+- `keyboard_queue_test.c` checks FIFO ordering and send-once delivery, guest
+  acknowledgements, the 20 ms timeout boundary, timer/queue wrap, bounded
+  overflow, mouse bypass and interrupt protection. The queue holds 127 keys,
+  including its in-flight head; overflow rejects the newest key and increments
+  `keyboard_queue_overflows`.
+
+The head event is sent unchanged through the existing FPGA interface exactly
+once. ACK or 20 ms without ACK discards it and permits the next queued key.
+The timeout uses `GetTimer(20)` and `CheckTimer()`. The wait starts at
+transmission and is not extended by new arrivals; each
+subsequent transmission starts a fresh wait. Expiry is checked by the next
+cooperative service call, with the existing hardware timer resolution. Mouse
+and OSD-only (type-3) events bypass the queue; ordinary type-2 keys reach the
+OSD with their single queued delivery. No new FPGA status bits are required.
+The timeout deliberately permits replacement of an unread key after 20 ms.

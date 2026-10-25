@@ -53,19 +53,15 @@
 #define REG_JOYSTICK_0_OUT 6
 #define REG_JOYSTICK_1_OUT 10
 
-static inline void KeyboardSend(unsigned short event) {
-    if ((event & 0xc000U) == 0x8000U) {
-        unsigned int start = (unsigned int)HW_TIMER;
-        while (HW_KEYBOARD_STATUS & KEYBOARD_BUSY) {
-            /* HW_TIMER is scaled by 256; two increments allow about
-             * 22.68-45.36 us, depending on the initial timer phase.
-             * On timeout send anyway, accepting possible key loss. */
-            if ((unsigned int)(HW_TIMER - start) >= 512U)
-                break;
-        }
-    }
-    HW_KEYBOARD(REG_KEYBOARD_OUT) = event;
-}
+/* KeyboardSend/KeyboardService: HID ISR context, interrupts disabled.
+ * KeyboardSendMain/KeyboardPoll: main context, interrupts enabled.
+ * Send returns zero on overflow; keyboard_queue_overflows records losses.
+ */
+int KeyboardSend(unsigned short event);
+int KeyboardSendMain(unsigned short event);
+void KeyboardService(void);
+void KeyboardPoll(void);
+extern volatile unsigned int keyboard_queue_overflows;
 
 #define EnableCard() HW_SPI(HW_SPI_CS) = 0x02
 #define DisableCard() HW_SPI(HW_SPI_CS) = 0x03
@@ -158,11 +154,19 @@ static inline void Reconfigure() { PLATFORM = (1 << PLATFORM_RECONFIG); }
 
 static inline void SendKeypress(unsigned char ami, unsigned short delay_ms) {
     int t = (2 << 14) | ((unsigned int)ami);
-    KeyboardSend(t);
-    WaitTimer(delay_ms);
+    KeyboardSendMain(t);
+    {
+        unsigned long deadline = GetTimer(delay_ms);
+        while (!CheckTimer(deadline))
+            KeyboardPoll();
+    }
     t = (2 << 14) | ((unsigned int)(ami | 0x80));
-    KeyboardSend(t);
-    WaitTimer(delay_ms);
+    KeyboardSendMain(t);
+    {
+        unsigned long deadline = GetTimer(delay_ms);
+        while (!CheckTimer(deadline))
+            KeyboardPoll();
+    }
 }
 
 void EnableIECSerial();
