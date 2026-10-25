@@ -1,111 +1,74 @@
-# Cache FSM migration checks
+# Cache FSM regressions
 
-Run `python3 bench/cpu_cache_fsm/run.py` with Icarus Verilog installed. The default runs `rtl/sdram/cpu_cache_small.v`, which passes with the current source. `--variant root` or `--variant all` selects the historical root-cache checks; these currently fail elaboration because the root cache interface/layout has changed. The same abstract SDRAM responder was originally used for both variants.
+Run from the repository root:
 
-The test covers a miss held while `sdr_read_pre` is low, a previous burst still active, request retention after the launch pulse until data arrives, instruction/data cache hits without a launch pulse, writes with `sdr_read_pre` low, consecutive inhibited misses while the previous burst drains, unexpected FSM states, and reset during a matching write.
+```sh
+python3 bench/cpu_cache_fsm/run.py
+bash bench/rtg_hdmi/run_cpu_mmio.sh
+python3 bench/sdram_write_queue/run.py
+```
 
-The inferred data RAM models the always-enabled CPU and snoop ports. The
-small-cache checks exercise restoration of both predicted pairs during
-peripheral accesses: TG68K's `req_enable` stays high while the peripheral
-completes even though RAM `cpu_cs` remains low. The controller registers
-`req_enable && ramcs_n` as the cache's `cpu_restore` input. The bench
-checks restored data and the first RAM reads after returning from the peripheral,
-rather than requiring every BRAM output to stay unchanged throughout the cycle.
-Both BRAM fast-hit entries must be invalid after reset. Fill reads still use the
-ordinary cache lookup before a BRAM fast-hit entry becomes valid.
+The FSM runner uses the production `rtl/sdram/cpu_cache_small.v`, Icarus
+Verilog, and the inferred simulation RAMs. It runs all combinations of
+`data_cache=0/1` and `unaligned_write_combine=0/1`. Products go to temporary
+directories. Historical `--variant root` / `--variant all` runs target an
+obsolete interface and are not current regressions.
 
-Read hits prepare independent speculative pairs for I and D during WAIT. Even
-narrow reads retain the pair; odd narrow reads and paired reads advance to the
-next pair, wrapping inside the same 16-byte line. The latency checks require
-first-cycle ACKs after TG68K-style address/type setup and the controller's
-registered access-type decode. A request consumes ACK on a rising edge and
-releases CS immediately afterward; the next request can present its address on
-that same CPU advance edge, before the low-CS clock. Completed requests are not
-held in WAIT for extra cycles. Checks cover wrong predictions, crossing into
-another line, alternating I/D accesses, both ways, and clearing predictions.
+## Timing and coverage
 
-The real-CPU MMIO runner also checks cached normal and overclock operation with
-legacy write combining disabled and enabled. Its five-bit `cpustate` layout is
-`{longword, req_enable, ramcs_n, access_type[1:0]}`; bit 3 is not `ram_req`.
+Predicted reads must ACK on the first eligible IDLE edge after address/type
+setup, and return the correct narrow word or aligned pair. Ordinary resident
+hits must ACK one cache clock later, through READ. These are cache-controller
+latencies, not complete TG68K bus-cycle lengths. The access-type decode is
+registered as in `sdram_ctrl.v`; `cpu_restore` is combinational.
 
-## Migration decisions
+The five-bit CPU state is `{longword, req_enable, ramcs_n, access_type[1:0]}`.
+Bit 3 is `req_enable`, which remains high during peripheral service. Restoration
+uses `req_enable && ramcs_n`. The CPU consumes ACK on a rising edge, then can
+present the following address immediately; completed requests are not held in
+WAIT for extra cycles. Both BRAM ports are always enabled.
 
-- The root cache launches from `CPU_SM_READ` or `CPU_SM_SDWAI` only when `!sdr_read_ack && sdr_read_pre`, matching the small cache's read-launch qualification.
-- The small cache retries in `CPU_SM_READ`. The root uses `CPU_SM_SDWAI` because its READ state advances a four-word line copy and returns after four cycles; looping there would advance that machinery while waiting.
-- After launch, both variants hold the request in FILL1 until the first SDRAM word arrives. `sdr_read_pre` describes a launch opportunity, not guaranteed arbitration acceptance.
-- Unexpected CPU states fall back to INIT, and unexpected SDRAM states fall back to INIT0, following the small variant. All four two-bit SDRAM encodings are legal, so the directed SDRAM fallback check injects an unknown simulation value.
-- Root line-buffer write enables are suppressed during reset, restoring the original cache's hold behavior without adding a reset to LUTRAM contents.
-- The root retains its four-word line-copy schedule, full-line hits, and write-through machinery. The small variant's two-word last-pair buffering and different ACK scheduling are not appropriate replacements for those paths.
+With D-cache enabled, checks cover narrow and paired I/D reads, same-pair and
+next-pair predictions, wrap inside a 16-byte line, wrong predictions, alternating
+I/D accesses, both ways, peripheral restoration, prediction clear/reset, fill
+handshakes, inhibited misses, write-through, byte masks and legacy combining.
+`valid` records the saved line/way; `ready` qualifies the fast BRAM read.
 
-## Review findings
+With D-cache disabled, the bench requires every repeated narrow/paired data
+read to fetch SDRAM, while instruction reads remain cached and their saved
+prediction survives data accesses. It also checks direct return to an instruction
+prediction, instruction fast reads and write-through with combining on/off.
 
-Both variants qualify main-cache READ hits with `cc_en` but do not exclude `cache_inhibit`. An inhibited read of an already cached address can still acknowledge from a main cache way. The test above exercises inhibited misses; it does not claim inhibited cached reads bypass the main cache. This inherited behavior remains outside the migration.
+## ACK handoff
 
-The small cache now uses the same registered ACK timing for writes and reads. Paired writes supply both words in one request; WAIT_LOWORD and WRITE_32BIT are only reachable when optional legacy combining is enabled. The root-cache observations below describe its historical protocol.
+The disabled-D-cache case returns from an uncached data read at `0xC08` directly
+to saved instruction prediction `0xE04`. The next address is presented before
+FILLW observes low CS, as TG68K advances on ACK. The I pointer remains parked
+at the prediction throughout FILLW, and the first-cycle instruction read must
+return the correct pair without fetching SDRAM. Both narrow and paired uncached
+data handoffs are checked, with both combining settings.
 
-Combined long writes across a 16-byte line boundary have an inherited cache-update problem in the root. `sdram_ctrl.v` already disables combined long writes at the last word of a line.
+An earlier bench held the old data address for 20 idle clocks after releasing
+CS, then demanded a fast instruction return. That synthetic idle gap overwrote
+the parked I pointer and did not model the immediate TG68K handoff. It has been
+removed from this check. Real-TG68K traces show one address setup edge before
+request sampling in overclock mode and two in normal mode.
 
-Controller elaboration and lint now use the production small cache at the default address width. The historical root cache retains its old interface and cannot be substituted into the updated controller. These tests use inferred simulation memories and an abstract responder; they do not validate SDRAM hardware timing or Diamond memory mapping.
+The inherited ordinary READ-hit conditions still do not exclude `cache_inhibit`;
+inhibited tests cover misses,
+not bypass of already resident addresses.
 
-## TG68K paired SDRAM transfers
+## Real CPU and controller integration
 
-The supported board projects use `cpu_cache_small.v`. Its `cpu_long_cand`
-input replaces the old `cpu_32bit` write-combining hint. Aligned, full-word read/write candidates are always accepted, including
-instruction extensions. `cpu_ack` alone indicates completion; paired reads wait
-for both words. No pair-acceptance feedback port is required. The first word is `cpu_dat_w` / `cpu_dat_r_hi`;
-the second is `cpu_dat_w_lo` / `cpu_dat_r`. Narrow reads still use
-`cpu_dat_r`. SDRAM/cache entries retain their existing first-word-in-low-half
-layout; the cache translates the CPU's big-endian pair ordering.
+The real-TG68K runner builds the IcePi Zero CPU configuration once and runs nine
+ROM cases: one behavioral uncached responder plus cached normal/overclock runs
+with D-cache and legacy combining independently enabled/disabled. The ROM checks
+aligned paired reads/writes, byte writes, unaligned longwords, cache-line
+boundaries, narrow RTG MMIO ordering and accepted-read data against memory.
 
-The test covers paired I/D misses, BRAM and last-pair hits, paired
-write-through hits/misses, line-end aligned pairs, inhibited pair reads and
-unaligned-candidate rejection and reset between paired read beats. A paired miss waits for the second SDRAM
-beat before acknowledging; the SDRAM burst protocol is unchanged.
+The controller regression checks write-queue merging/backpressure, arbitration,
+command spacing and production-cache read-after-write with the queue off/on.
+Its cache source stub accepts the production `data_cache` parameter.
 
-`rtl/soc/TG68K.vhd` exposes `ram_long_cand`, `fromram_hi`
-and `toram_lo`; `minimig_virtual_top.v` connects them through `sdram_ctrl.v`.
-Only directly selected SDRAM memory can offer/accept pairs. Chipset bus
-transactions, NMI interception, RTG/Akiko/host registers, undecoded space
-retain their existing narrow protocol.
-Turbo chip/slow/Kickstart memory served directly by SDRAM can pair.
-The legacy `cpustate[3]`/`longword` remains available for chipset bus timing;
-the SDRAM controller only uses it for the optional legacy combining path.
-
-Run `bash bench/rtg_hdmi/run_cpu_mmio.sh` to test the real synthesized
-TG68K wrapper/kernel with both an uncached pair-capable memory responder and the production
-small cache. The ROM checks aligned paired reads/writes, byte writes,
-unaligned longwords (including odd addresses) across cache-line boundaries,
-byte guards and RTG MMIO word ordering.
-The runner compiles `fpga/icepi-zero/board_config.vhd` with the CPU. The cached
-run requires accepted data read/write pairs; instruction-extension pairs depend
-on that board's `tg68k_datapath32` setting.
-These tests do not establish board timing closure.
-
-### Combined writes
-
-`unaligned_write_combine=1` remains the cache default. It collects two narrow
-writes using the `cpu_longword` hint from `cpustate[3]`. A new-interface aligned
-pair always takes precedence. Reads never use the legacy hint. Combining remains
-disabled at the final halfword of a 16-byte line so SDRAM burst addressing cannot
-wrap to the wrong word.
-
-Both paths fill the existing `sdr_adr` / `sdr_dat_w` / `sdr_dqm_w` buffer and use
-`CPU_SM_WRITE` to submit one SDRAM transaction and update resident I/D cache
-ways. A combined pair starting at +2 uses `CPU_SM_WB` to update the next cache
-entry. Its data and hit ways are retained from the first cache update. The
-collection states fill the buffer. Cache updates use `cpu_dat_l` / `cpu_bs_l`
-for the most recently accepted narrow word, while the first collected word stays
-in the buffer. Direct aligned pairs use the complete buffer. WRITE registers
-cache data and hit ways before the optional WB cycle, so later CPU input changes
-cannot alter the second cache update. Both touched last-pair buffers are invalidated.
-
-Collected writes take one extra cache-controller cycle to finish cache updates;
-CPU ACK timing and the direct aligned-pair path are preserved. A held CPU request
-must drop before another request is accepted. Last-pair read buffers remain
-unchanged otherwise.
-
-The FSM runner tests combining off and on, checking write counts, aligned and
-unaligned pairs, partial byte masks, line-boundary fallback and I/D cache updates.
-The real-CPU MMIO runner also checks both settings. The SDRAM controller uses the
-cache's default (combining enabled). These simulations do not establish FPGA
-resource counts or timing closure.
+These simulations do not establish FPGA timing closure, physical RAM removal,
+or general workload throughput. Those require the selected board build/reports.

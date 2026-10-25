@@ -35,6 +35,12 @@ def main():
                   ('enabled' if legacy else 'disabled'), flush=True)
             run_rom(binary, folder, cpu, cached=True,
                     legacy_write_combine=legacy, overclock=True)
+        for overclock in (False, True):
+            for legacy in (False, True):
+                print('Testing TG68K with D-cache disabled, overclock=' + str(overclock) +
+                      ', legacy combining=' + str(legacy), flush=True)
+                run_rom(binary, folder, cpu, cached=True, data_cache=False,
+                        legacy_write_combine=legacy, overclock=overclock)
         if args.mmio_only:
             return
         for profile in ('1024x768', '1280x720'):

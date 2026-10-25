@@ -13,6 +13,7 @@ module cpu_cache_new #(
     parameter addr_max_bits=26,
     parameter addr_prefix_bits=1,
     parameter addr_prefix=0,
+    parameter data_cache=1,
     parameter last_pair_enable_i=1,
     parameter last_pair_enable_d=1,
     parameter unaligned_write_combine=1

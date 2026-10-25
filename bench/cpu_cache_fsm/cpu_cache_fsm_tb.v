@@ -1,18 +1,17 @@
 `timescale 1ns/1ps
 // Same external protocol checks run against the full-line and small-cache FSMs.
-module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
+module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
   reg clk=0; always #5 clk=~clk;
   reg rst=1, cpu_cs=0, cpu_we=0, cpu_ir=0, cpu_dr=0;
   // req_enable stays high during a peripheral cycle while RAM CS stays low.
   reg peripheral_req=0;
   wire cpu_req=cpu_cs || peripheral_req;
-  reg cpu_restore_r=0;
+  wire cpu_restore=cpu_req && !cpu_cs;
   reg cpu_we_r=0, cpu_ir_r=0, cpu_dr_r=0;
   always @(posedge clk) begin
     cpu_we_r <= cpu_we;
     cpu_ir_r <= cpu_ir;
     cpu_dr_r <= cpu_dr;
-    cpu_restore_r <= cpu_req && !cpu_cs;
   end
   reg cache_inhibit=0, cacheline_clr=0;
   reg [26:0] cpu_adr=0;
@@ -30,19 +29,21 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
   reg [15:0] memory[0:8191];
   integer delay_cycles=0, beats_left=0, first_word=0, writes=0, requests=0, index;
   reg busy_override=0;
+  // Let the following request present its address before the low-CS clock.
+  reg direct_handoff=0;
 `ifndef SMALL_CACHE
   reg [31:0] line_before_reset;
 `endif
   cpu_cache_new
 `ifdef SMALL_CACHE
-  #(.unaligned_write_combine(LEGACY_WRITE_COMBINE))
+  #(.data_cache(DATA_CACHE), .unaligned_write_combine(LEGACY_WRITE_COMBINE))
 `endif
   dut (
     .clk(clk), .rst(rst), .cache_en(1'b1), .clk28_en(1'b1),
     .cpu_cache_ctrl(4'b0001), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
     .cpu_cs(cpu_cs), .cpu_adr(cpu_adr), .cpu_bs(cpu_bs),
 `ifdef SMALL_CACHE
-    .cpu_restore(cpu_restore_r),
+    .cpu_restore(cpu_restore),
     .cpu_longword(cpu_longword), .cpu_long_cand(cpu_long_cand),
     .cpu_dat_w_lo(cpu_dat_w_lo), .cpu_dat_r_hi(cpu_dat_r_hi),
 `else
@@ -136,7 +137,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
           if(timeout>80) $fatal(1,"Read timed out at %h state=%0d",address,dut.cpu_sm_state);
         end
       end
-      tick; cpu_cs=0; idle(20);
+      tick; cpu_cs=0; if(!direct_handoff) idle(20);
     end
   endtask
 `ifdef SMALL_CACHE
@@ -211,7 +212,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
           if(timeout>100) $fatal(1,"Wide read timeout at %h state=%0d",address,dut.cpu_sm_state);
         end
       end
-      tick; cpu_cs=0; idle(20); cpu_long_cand=0;
+      tick; cpu_cs=0; if(!direct_handoff) idle(20); cpu_long_cand=0;
     end
   endtask
   // TG68K presents address/type before req_enable/CS, then advances on the
@@ -231,7 +232,9 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
       if(!fast) begin @(posedge clk); #2; end
       if(cpu_ack!==1 || cpu_dat_r!==memory[address/2+(paired ? 1 : 0)] ||
          (paired && cpu_dat_r_hi!==memory[address/2]))
-        $fatal(1,"Prediction read mismatch at %h",address);
+        $fatal(1,"Prediction read mismatch at %h: got %h/%h expected %h/%h",
+               address,cpu_dat_r_hi,cpu_dat_r,memory[address/2],
+               memory[address/2+(paired ? 1 : 0)]);
       // Return immediately after consuming ACK so the next call can present
       // its address on the same CPU advance edge, before the low-CS clock.
       @(posedge clk); #2;
@@ -266,6 +269,58 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
   initial begin
     for(index=0;index<8192;index=index+1) memory[index]=(index*31)^16'habcd;
     idle(3); rst=0; idle(280);
+`ifdef SMALL_CACHE
+    if (!DATA_CACHE) begin: uncached_data
+      integer before_requests;
+      reg [23:0] saved_i;
+      reg saved_way;
+      sdr_read_pre=1;
+      before_requests=requests;
+      wide_read('hc00,0); wide_read('hc00,0);
+      if(requests!=before_requests+2)
+        $fatal(1,"Disabled D-cache served a paired read");
+      before_requests=requests;
+      wide_read('he00,1); wide_read('he00,1);
+      if(requests!=before_requests+1 || dut.cacheline_valid_i!==1)
+        $fatal(1,"Disabling D-cache broke instruction caching");
+      saved_i=dut.cacheline_adr_i; saved_way=dut.cacheline_way_i;
+      before_requests=requests;
+      wide_read('hc04,0); wide_read('hc04,0);
+      start_read('hc08,0); finish_read('hc08);
+      direct_handoff=1;
+      start_read('hc08,0); finish_read('hc08);
+      direct_handoff=0;
+      if(requests!=before_requests+4 || dut.cacheline_valid_d!==0)
+        $fatal(1,"Disabled D-cache served or allocated a data read");
+      if(dut.cacheline_valid_i!==1 || dut.cacheline_adr_i!==saved_i ||
+         dut.cacheline_way_i!==saved_way)
+        $fatal(1,"Uncached data reads discarded instruction prediction");
+      // TG68K advances its address when consuming ACK. Present the instruction
+      // address before FILLW observes low CS, without an idle gap at the old D
+      // address. That gap would incorrectly overwrite the parked I pointer.
+      before_requests=requests;
+      predicted_read(saved_i*4,1,1,1);
+      predicted_read('he08,1,1,1);
+      if(requests!=before_requests)
+        $fatal(1,"Fast instruction return unnecessarily fetched SDRAM");
+      // A paired uncached read must collect its second beat before the same
+      // immediate instruction handoff. It must still leave I prediction ready.
+      saved_i=dut.cacheline_adr_i;
+      direct_handoff=1;
+      wide_read('hc0c,0);
+      direct_handoff=0;
+      if(requests!=before_requests+1)
+        $fatal(1,"Paired uncached handoff did not fetch exactly one burst");
+      predicted_read(saved_i*4,1,1,1);
+      if(requests!=before_requests+1)
+        $fatal(1,"Instruction return after paired data read fetched SDRAM");
+      wide_write('he00,32'h1234abcd);
+      wide_read('he00,1); wide_read('he00,0);
+      legacy_write('he02,3,2);
+      $display("PASS D-cache disabled: paired/narrow bypass, I prediction preservation and fast ACK, write-through");
+      $finish;
+    end
+`endif
     start_read('h100,0); expect_blocked(12); allow_launch; finish_read('h100);
     // A main-cache or line-buffer hit must not depend on sdr_read_pre.
     start_read('h100,0); finish_read('h100);
@@ -450,7 +505,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     if(dut.cacheline_valid_d!==0 || dut.cacheline_valid_i!==0)
       $fatal(1,"Reset did not invalidate BRAM fast hits");
 `endif
-    $display("PASS FSM: launch gating, I/D narrow and paired accesses, write-through, inhibited reads, reset");
+    $display("PASS FSM: first-cycle fast ACKs, launch gating, I/D narrow and paired accesses, write-through, inhibited reads, reset");
     $finish;
   end
   initial begin #100000; $fatal(1,"Global timeout"); end
