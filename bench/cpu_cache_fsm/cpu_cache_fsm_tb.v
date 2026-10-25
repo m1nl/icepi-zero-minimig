@@ -6,11 +6,13 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
   // req_enable stays high during a peripheral cycle while RAM CS stays low.
   reg peripheral_req=0;
   wire cpu_req=cpu_cs || peripheral_req;
+  reg cpu_restore_r=0;
   reg cpu_we_r=0, cpu_ir_r=0, cpu_dr_r=0;
   always @(posedge clk) begin
     cpu_we_r <= cpu_we;
     cpu_ir_r <= cpu_ir;
     cpu_dr_r <= cpu_dr;
+    cpu_restore_r <= cpu_req && !cpu_cs;
   end
   reg cache_inhibit=0, cacheline_clr=0;
   reg [26:0] cpu_adr=0;
@@ -40,7 +42,7 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0);
     .cpu_cache_ctrl(4'b0001), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
     .cpu_cs(cpu_cs), .cpu_adr(cpu_adr), .cpu_bs(cpu_bs),
 `ifdef SMALL_CACHE
-    .cpu_req(cpu_req),
+    .cpu_restore(cpu_restore_r),
     .cpu_longword(cpu_longword), .cpu_long_cand(cpu_long_cand),
     .cpu_dat_w_lo(cpu_dat_w_lo), .cpu_dat_r_hi(cpu_dat_r_hi),
 `else

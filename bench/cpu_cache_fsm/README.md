@@ -6,8 +6,9 @@ The test covers a miss held while `sdr_read_pre` is low, a previous burst still 
 
 The inferred data RAM models the always-enabled CPU and snoop ports. The
 small-cache checks exercise restoration of both predicted pairs during
-peripheral accesses: `cpu_req` represents TG68K's `req_enable`, which stays high
-while the peripheral completes even though RAM `cpu_cs` remains low. The bench
+peripheral accesses: TG68K's `req_enable` stays high while the peripheral
+completes even though RAM `cpu_cs` remains low. The controller registers
+`req_enable && ramcs_n` as the cache's `cpu_restore` input. The bench
 checks restored data and the first RAM reads after returning from the peripheral,
 rather than requiring every BRAM output to stay unchanged throughout the cycle.
 Both BRAM fast-hit entries must be invalid after reset. Fill reads still use the

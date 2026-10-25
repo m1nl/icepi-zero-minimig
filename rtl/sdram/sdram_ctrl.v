@@ -169,7 +169,6 @@ reg           sdata_oe;
 wire          ccache_fill;
 wire          ccachehit;
 wire          cpuCSn;
-wire          cpuReq;
 reg  [ 8-1:0] reset_cnt;
 reg           reset;
 reg           reset_sdstate;
@@ -260,7 +259,6 @@ assign sd_we  = sd_cmd[0];
 ////////////////////////////////////////
 
 assign cpuCSn      = cpustate[2];
-assign cpuReq      = cpustate[3];
 
 ////////////////////////////////////////
 // reset
@@ -309,15 +307,12 @@ reg cpu_ir_r;
 reg cpu_dr_r;
 reg cpu_we_r;
 
-`ifdef MINIMIG_NO_DATA_CACHE
-wire cpu_ir = ~cpustate[0];
-wire cpu_dr = 1'b0;
-`else
 wire cpu_ir = cpustate[1:0] == 2'b00;
 wire cpu_dr = cpustate[1:0] == 2'b10;
-`endif
 
 wire cpu_we = &cpustate[1:0];
+
+wire cpu_restore = cpustate[3] && cpustate[2];
 
 always @(posedge sysclk) begin
 	cpu_ir_r <= cpu_ir;	// cpu instruction read
@@ -335,11 +330,27 @@ reg snoop_act;
 
 wire cache_req_pre = (sdram_state == ph15 || sdram_state == ph7);
 
+localparam data_cache =
+`ifdef MINIMIG_NO_DATA_CACHE
+    0;
+`else
+    1;
+`endif
+
+localparam unaligned_write_combine =
+`ifdef MINIMIG_NO_UNALIGNED_WRITE_COMBINE
+    0;
+`else
+    1;
+`endif
+
 //// cpu cache ////
 cpu_cache_new #(
 	.addr_max_bits(addr_max_bits),
 	.addr_prefix_bits(addr_prefix_bits),
-	.addr_prefix(addr_prefix)
+	.addr_prefix(addr_prefix),
+	.data_cache(data_cache),
+	.unaligned_write_combine(unaligned_write_combine)
 ) cache (
 	.clk              (sysclk),                       // clock
 	.rst              (!reset || !cache_rst),         // cache reset
@@ -349,7 +360,7 @@ cpu_cache_new #(
 	.cache_inhibit    (cache_inhibit),                // cache inhibit
 	.cacheline_clr    (cacheline_clr),
 	.cpu_cs           (!cpuCSn),                      // cpu activity
-    .cpu_req          (cpuReq),
+	.cpu_restore      (cpu_restore),                  // restore cache prediction
 	.cpu_adr          ({cpuAddr, 1'b0}),              // cpu address
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
 	.cpu_longword     (cpustate[4]),

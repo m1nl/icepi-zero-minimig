@@ -17,12 +17,14 @@ wire [31:0] addr,ramaddr;
 // {longword, req_enable, ramcs_n, access_type[1:0]}
 wire [4:0] cpustate;
 reg cpu_ir=0, cpu_dr=0, cpu_we=0;
+reg cpu_restore=0;
 // Match the registered access-type decode in sdram_ctrl.v. req_enable is
 // separate from RAM CS and stays asserted while a peripheral cycle completes.
 always @(posedge clk) begin
  cpu_ir <= cpustate[1:0]==0;
  cpu_dr <= cpustate[1:0]==2;
  cpu_we <= &cpustate[1:0];
+ cpu_restore <= cpustate[3] && cpustate[2];
 end
 wire [15:0] dw,toram;
 wire as_n,rw,ramuds,ramlds;
@@ -45,7 +47,7 @@ generate if(CACHE_RAM) begin: cached_ram
  integer beats=0, first=0, delay_count=0;
  cpu_cache_new #(.unaligned_write_combine(LEGACY_WRITE_COMBINE)) cache(.clk(clk),.rst(!reset_n),.cache_en(1'b1),.clk28_en(1'b1),
   .cpu_cache_ctrl(cacr),.cache_inhibit(1'b0),.cacheline_clr(1'b0),
-  .cpu_cs(!cpustate[2]),.cpu_req(cpustate[3]),.cpu_adr({ramaddr[26:1],1'b0}),.cpu_bs({!ramuds,!ramlds}),
+  .cpu_cs(!cpustate[2]),.cpu_restore(cpu_restore),.cpu_adr({ramaddr[26:1],1'b0}),.cpu_bs({!ramuds,!ramlds}),
   .cpu_longword(cpustate[4]),.cpu_long_cand(ram_long_cand),
   .cpu_dat_w(toram),.cpu_dat_w_lo(toram_lo),.cpu_dat_r(fromram),.cpu_dat_r_hi(fromram_hi),
   .cpu_we(cpu_we),.cpu_ir(cpu_ir),.cpu_dr(cpu_dr),.cpu_ack(ramready),

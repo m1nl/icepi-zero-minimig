@@ -49,6 +49,15 @@ module rtg_priority_stress_tb;
         .fetch_addr(addr),.fetch_req(req),.fetch_pri(pri),.fetch_d(data),.fetch_ack(ack),.fetch_fill(fill),
         .red(r),.green(g),.blue(b)
     );
+    // Flags must change with the counters, including the final accepted row;
+    // a delayed zero test could issue an extra burst at a section boundary.
+    always @(posedge sys) begin
+        if(reset_n) begin
+            if(dut.top_has_work !== (dut.rows_remaining_top != 0) ||
+               dut.bottom_has_work !== (dut.rows_remaining_bottom != 0))
+                $fatal(1,"Row work flags do not match remaining rows");
+        end
+    end
     reg output_valid;
     always @(posedge vid)
         output_valid <= dut.valid_2 && ena && !video_reset &&

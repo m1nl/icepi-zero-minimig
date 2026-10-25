@@ -27,7 +27,7 @@ module cpu_cache_new #(
   input  wire           cacheline_clr,
   // cpu
   input  wire           cpu_cs,         // cpu activity
-  input  wire           cpu_req,        // CPU request phase enable
+  input  wire           cpu_restore,    // restore cache prediction
   input  wire [  26+addr_prefix_bits-1:0] cpu_adr,        // cpu address
   input  wire [  2-1:0] cpu_bs,         // cpu byte selects
   input  wire           cpu_longword,   // legacy transfer-phase hint (optional combining)
