@@ -3,6 +3,7 @@
 `timescale 1ns/1ps
 module rtg_cpu_mmio_tb #(
  parameter CHECK_MMIO=1,
+ parameter CHECK_AKIKO=0,
  parameter CACHE_RAM=0,
  parameter DATA_CACHE=1,
  parameter LEGACY_WRITE_COMBINE=0,
@@ -95,8 +96,20 @@ end
 end endgenerate
 integer wide_reads=0, wide_writes=0, wide_extensions=0;
 integer legacy_writes=0;
+integer akiko_reads=0, akiko_writes=0, akiko_fill_exits=0;
 generate if(CACHE_RAM) begin
  always @(posedge clk) begin
+  if(CHECK_AKIKO && reset_n) begin
+   if(cpu.akiko_req && cpu.akiko_ack) begin
+    if(cpu.akiko_wr) akiko_writes<=akiko_writes+1;
+    else akiko_reads<=akiko_reads+1;
+   end
+   // A fill can end on the edge that completes a peripheral request. The
+   // parked instruction prediction must survive that FILL2 -> IDLE handoff.
+   if(cached_ram.cache.cpu_sm_state==9 && !cached_ram.sdr_ack &&
+      cpu_restore && cpu.akiko_ack)
+    akiko_fill_exits<=akiko_fill_exits+1;
+  end
   if(cached_ram.cache.cpu_sm_state==2) legacy_writes<=legacy_writes+1;
   if(!cpustate[2] && ramready && !cpustate[0]) begin
    if(ram_long_cand && !ramaddr[1] && !ramuds && !ramlds) begin
@@ -129,6 +142,14 @@ always @(posedge clk) begin
   $fatal(1,"driver ROM read a write-only RTG register %h",reg_addr);
  if(VERBOSE && reg_ack) $display("RTG %s %h %h",reg_wr?"W":"R",reg_addr,reg_wr?reg_d:reg_q);
  if(mem['h800]==16'h600d) begin
+  if(CHECK_AKIKO) begin
+   if(akiko_reads!=128 || akiko_writes!=128)
+    $fatal(1,"Incomplete Akiko loop: reads=%0d writes=%0d",akiko_reads,akiko_writes);
+   if(DATA_CACHE && OVERCLOCK && akiko_fill_exits==0)
+    $fatal(1,"Akiko ACK did not overlap a cache fill exit");
+   $display("PASS: TG68K Akiko/cache loop reads=%0d writes=%0d fill-exit overlaps=%0d",
+            akiko_reads,akiko_writes,akiko_fill_exits);
+  end else
   if(CHECK_MMIO) begin
    if({rtg.rtg_base,4'b0}!==26'h123450 || {rtg.rtg_base2,4'b0}!==26'h567890 || rtg.clut[0]!==24'h123456 || rtg.clut[1]!==24'h654321 || rtg.split_line!==384) $fatal(1,"wrong registers");
    // The IcePi Zero board configuration enables paired data accesses;

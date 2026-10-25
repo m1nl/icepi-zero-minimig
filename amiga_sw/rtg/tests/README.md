@@ -22,8 +22,10 @@ diagnostic and README files, checks distinct volume names, verifies no-op
 builds, and exercises DEBUG=1/0 rebuilds. It finishes with DEBUG=0 artifacts.
 Requires installed vasm, xdftool and the normal driver build dependencies.
 
-- `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM with narrow RAM and the production small cache (legacy write combining off/on),
-  then runs driver callbacks for the requested profile(s).
+- `run.py`: translates the current TG68K wrapper/kernel once, runs the MMIO ROM
+  with narrow RAM and the production small cache (D-cache and legacy write
+  combining off/on, normal/overclock), then the Akiko/cache loop, followed by
+  driver callbacks for the requested profile(s).
 - `test_driver_fallback.py`: generates a 68020 ROM from real driver callbacks
   and independent expected results for 35 cases in three formats. Also checks
   minimum 320x192 source dimensions, sync widths, viewport bounds, source fetch length and vertical split limits
@@ -48,6 +50,16 @@ RAM/ROM and the cache's SDRAM responder are behavioral; RTG scanout is held
 inactive. It does not load the complete .card hunk into AmigaOS, emulate P96,
 boot Workbench or validate HDMI/SDRAM timing. RTL integration, pixels, IRQ,
 FIFO/CDC and serializer tests remain under `bench/`.
+
+The permanent `bench/rtg_hdmi/rtg_cpu_akiko.asm` ROM exercises Doom-style C2P
+traffic: eight longword writes to Akiko `$B80038`, then eight longword reads
+to separate planes, repeated eight times. Sixteen overclock runs cover eight
+instruction layouts with D-cache enabled/disabled. The bench requires 128
+accepted word reads and writes, checks every accepted cache read against RAM,
+and requires an Akiko ACK/cache-fill-exit overlap with D-cache enabled. This
+catches a FILL2 exit replacing a saved instruction BRAM pointer with the live
+peripheral address. It checks cache/MMIO transport, not pixel conversion results.
+These runs are included in `--mmio-only` and need no driver headers.
 
 Examples without Make:
 

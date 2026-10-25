@@ -41,6 +41,14 @@ def main():
                       ', legacy combining=' + str(legacy), flush=True)
                 run_rom(binary, folder, cpu, cached=True, data_cache=False,
                         legacy_write_combine=legacy, overclock=overclock)
+        for pad in range(8):
+            binary = assemble_rom(BENCH / 'rtg_cpu_akiko.asm', folder, args.vasm,
+                                  extra_args=(f'-DAKIKO_PAD={pad}',))
+            for data_cache in (True, False):
+                print(f'Testing TG68K Akiko/cache loop pad={pad}, '
+                      f'D-cache={data_cache}, overclock=True', flush=True)
+                run_rom(binary, folder, cpu, cached=True, data_cache=data_cache,
+                        overclock=True, akiko=True)
         if args.mmio_only:
             return
         for profile in ('1024x768', '1280x720'):

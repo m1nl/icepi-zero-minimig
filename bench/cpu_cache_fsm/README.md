@@ -66,6 +66,13 @@ with D-cache and legacy combining independently enabled/disabled. The ROM checks
 aligned paired reads/writes, byte writes, unaligned longwords, cache-line
 boundaries, narrow RTG MMIO ordering and accepted-read data against memory.
 
+It also runs the permanent Doom-style Akiko/cache ROM in
+`bench/rtg_hdmi/rtg_cpu_akiko.asm`: sixteen overclock cases span eight instruction
+layouts and D-cache off/on. The bench checks accepted instruction/data reads
+against RAM, all 128 Akiko word reads and writes, and an Akiko ACK coinciding
+with a FILL2 exit when D-cache is enabled. The fill-exit pointer selection must
+honor `cpu_restore` without redirecting an active fill's pointer.
+
 The controller regression checks write-queue merging/backpressure, arbitration,
 command spacing and production-cache read-after-write with the queue off/on.
 Its cache source stub accepts the production `data_cache` parameter.

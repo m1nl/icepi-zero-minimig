@@ -33,7 +33,7 @@ def assemble_rom(asm, folder, vasm, extra_args=()):
 
 
 def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_combine=False,
-            overclock=False, data_cache=True):
+            overclock=False, data_cache=True, akiko=False):
     data = binary.read_bytes()
     if len(data) > 8192:
         raise RuntimeError('test ROM exceeds behavioral memory')
@@ -44,7 +44,8 @@ def run_rom(binary, folder, cpu, *, driver=False, cached=False, legacy_write_com
         for i in range(0, len(data), 2)))
     top = 'rtg_cpu_mmio_tb'
     parameters = {
-        'CHECK_MMIO': int(not driver),
+        'CHECK_MMIO': int(not driver and not akiko),
+        'CHECK_AKIKO': int(akiko),
         'CACHE_RAM': int(cached),
         'DATA_CACHE': int(data_cache),
         'LEGACY_WRITE_COMBINE': int(legacy_write_combine),

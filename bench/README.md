@@ -51,7 +51,10 @@ combinations and all three pixel formats. The viewport test covers minimum
 320x192 source viewports, black borders, single-line split sections and exact FIFO
 consumption. `repeat720` repeats the pixel checks at 1280-wide/74.25 MHz.
 The CPU/driver tests additionally
-require GHDL and installed vasm. The driver test target downloads missing
+require GHDL and installed vasm. The CPU MMIO runner also includes sixteen
+Doom-style Akiko/cache regressions covering peripheral ACKs during cache-fill
+completion. These use the real TG68K and Akiko RTL with behavioral SDRAM.
+The driver test target downloads missing
 headers and translates the current CPU once for both raster profiles. Driver
 test source lives under `amiga_sw/rtg/tests/`; the old entry point in
 `bench/rtg_hdmi/test_driver_fallback.py` delegates there. Icarus Verilog and Python 3 are required. Full-frame and SDRAM tests use

@@ -431,16 +431,17 @@ always @ (posedge clk) begin
             cpu_sm_state <= #1 CPU_SM_INIT;
         end
       end
-      CPU_SM_WAIT_LOWORD :
-      if (!cpu_cs) begin
+      CPU_SM_WAIT_LOWORD : begin
+        if (!cpu_cs) begin
           cpu_sm_state <= #1 CPU_SM_WRITE_32BIT;
+        end
       end
-      CPU_SM_WRITE_32BIT :
-      if (cpu_cs) begin
+      CPU_SM_WRITE_32BIT : begin
+        sdr_dqm_w[3:2] <= #1 ~cpu_bs;
+        sdr_dat_w[31:16] <= #1 cpu_dat_w;
+        if (cpu_cs) begin
           cpu_adr_l <= cpu_adr;
           cpu_adr_blk_ptr <= #1 cpu_adr_blk;
-          sdr_dqm_w[3:2] <= #1 ~cpu_bs;
-          sdr_dat_w[31:16] <= #1 cpu_dat_w;
           if (itag0_match || itag1_match) cacheline_ready_i <= #1 0;
           if (dtag0_match || dtag1_match) cacheline_ready_d <= #1 0;
           // on hit update cache, on miss no update neccessary; tags don't get updated on writes
@@ -463,6 +464,7 @@ always @ (posedge clk) begin
           cpu_sm_dram0_we <= #1 dtag0_match && dtag0_valid /*&& !cc_fr*/;
           cpu_sm_dram1_we <= #1 dtag1_match && dtag1_valid /*&& !cc_fr*/;
           cpu_cache_ack <= #1 1'b1;
+        end
       end
       CPU_SM_WRITE : begin
         sdr_write_req <= !sdr_write_req;
@@ -495,12 +497,16 @@ always @ (posedge clk) begin
           cacheline_ready_i <= #1 1'b0;
           cacheline_adr_i <= #1 {cpu_adr[25:4], cpu_adr[3:2] + ((pair_cand || cpu_adr[1]) ? 2'd1 : 2'd0)};
           cpu_sm_adr_i <= #1 {cpu_adr_idx, cpu_adr_blk};
+          // prepare data for tag
+          cpu_sm_tag_dat_w <= #1 {!(itag0_valid && itag0_match), itram_cpu_dat_r[30:0]};
         end else cpu_sm_adr_i <= #1 cacheline_sm_adr_i;
         if (level1_d && data_cache) begin
           cacheline_valid_d <= #1 1'b1;
           cacheline_ready_d <= #1 1'b0;
           cacheline_adr_d <= #1 {cpu_adr[25:4], cpu_adr[3:2] + ((pair_cand || cpu_adr[1]) ? 2'd1 : 2'd0)};
           cpu_sm_adr_d <= #1 {cpu_adr_idx, cpu_adr_blk};
+          // prepare data for tag
+          cpu_sm_tag_dat_w <= #1 {!(dtag0_valid && dtag0_match), dtram_cpu_dat_r[30:0]};
         end else cpu_sm_adr_d <= #1 cacheline_sm_adr_d;
         if (cpu_cs)
            cpu_sm_state <= CPU_SM_WAIT;
@@ -510,7 +516,6 @@ always @ (posedge clk) begin
         if (cc_en && level1_i && itag0_valid && itag0_match) begin
           // data is already in instruction cache way 0
           cpu_sm_itag_we <= #1 1'b1;
-          cpu_sm_tag_dat_w <= #1 {1'b0, itram_cpu_dat_r[30:0]};
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 idram0_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b0;
@@ -520,7 +525,6 @@ always @ (posedge clk) begin
         end else if (cc_en && level1_i && itag1_valid && itag1_match) begin
           // data is already in instruction cache way 1
           cpu_sm_itag_we <= #1 1'b1;
-          cpu_sm_tag_dat_w <= #1 {1'b1, itram_cpu_dat_r[30:0]};
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 idram1_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b1;
@@ -530,7 +534,6 @@ always @ (posedge clk) begin
         end else if (cc_en && level1_d && dtag0_valid && dtag0_match && data_cache) begin
           // data is already in data cache way 0
           cpu_sm_dtag_we <= #1 1'b1;
-          cpu_sm_tag_dat_w <= #1 {1'b0, dtram_cpu_dat_r[30:0]};
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 ddram0_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b0;
@@ -540,7 +543,6 @@ always @ (posedge clk) begin
         end else if (cc_en && level1_d && dtag1_valid && dtag1_match && data_cache) begin
           // data is already in data cache way 1
           cpu_sm_dtag_we <= #1 1'b1;
-          cpu_sm_tag_dat_w <= #1 {1'b1, dtram_cpu_dat_r[30:0]};
           cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
           cpu_dat_r_hi <= #1 ddram1_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b1;
@@ -621,8 +623,9 @@ always @ (posedge clk) begin
           end
         end
       end
-      CPU_SM_FILL2 :
-      if (sdr_read_ack) begin
+      CPU_SM_FILL2 : begin
+        cpu_sm_mem_dat_w <= #1 { sdr_dat_r, sdr_dat_r };
+        if (sdr_read_ack) begin
           if (read_pair_pending) begin
             cpu_dat_r <= #1 sdr_dat_r;
             cpu_cache_ack <= #1 1'b1;
@@ -633,16 +636,21 @@ always @ (posedge clk) begin
           if (level1_i) cpu_sm_adr_i[2:0] <= #1 cpu_sm_adr_next_i[2:0];
           if (level1_d) cpu_sm_adr_d[2:0] <= #1 cpu_sm_adr_next_d[2:0];
           cpu_sm_bs <= #1 ~cpu_sm_bs;
-          cpu_sm_mem_dat_w <= #1 { sdr_dat_r, sdr_dat_r };
           cpu_sm_iram0_we <= #1  cpu_sm_ilru &&  cpu_sm_id;
           cpu_sm_iram1_we <= #1 !cpu_sm_ilru &&  cpu_sm_id;
           cpu_sm_dram0_we <= #1  cpu_sm_dlru && !cpu_sm_id;
           cpu_sm_dram1_we <= #1 !cpu_sm_dlru && !cpu_sm_id;
-      end else if (!cpu_cs | cpu_acked) begin
+        end else if (!cpu_cs | cpu_acked) begin
+          if (cpu_restore) begin
+            cpu_sm_adr_i <= #1 cacheline_sm_adr_i;
+            cpu_sm_adr_d <= #1 cacheline_sm_adr_d;
+          end else begin
+            cpu_sm_adr_i <= #1 {cpu_adr_idx, cpu_adr_blk};
+            cpu_sm_adr_d <= #1 {cpu_adr_idx, cpu_adr_blk};
+          end
           cpu_sm_state <= #1 CPU_SM_IDLE;
           cpu_adr_blk_ptr <= #1 cpu_adr_blk; // if CS already activated during fill
-          cpu_sm_adr_i <= #1 {cpu_adr_idx, cpu_adr_blk};
-          cpu_sm_adr_d <= #1 {cpu_adr_idx, cpu_adr_blk};
+        end
       end
       CPU_SM_FILLW : begin
         // Even inhibited reads must collect both beats before accepting a pair.
