@@ -37,6 +37,7 @@ This is the Minimig OSD (on-screen-display) handler.
 #include "osd.h"
 #include "hardware.h"
 #include "interrupts.h"
+#include "config.h"
 #include "stdio.h"
 
 #include "charrom.h"
@@ -872,14 +873,24 @@ void OsdHide(void)
 }
 
 
+void RestoreDefaultVideoMode(void)
+{
+    config.video_mode=0;
+    ConfigVideoOffset(config.x_offset, config.y_offset, 0);
+    ConfigVideo(config.filter.hires, config.filter.lores, config.scanlines, 0);
+}
+
 void OsdReset()
 {
+    int default_video=KeyboardKeyDown(KEY_SPACE);
     EnableOsd();
     //SPI(OSDCMDRST | (boot & 0x01));
     SPI(OSD_CMD_RST);
     //SPI(0x2 | (boot & 0x01));
     SPI(0x1);
     DisableOsd();
+    if (default_video)
+        RestoreDefaultVideoMode();
     EnableOsd();
     SPI(OSD_CMD_RST);
     SPI(0x0);

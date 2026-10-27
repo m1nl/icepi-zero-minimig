@@ -143,8 +143,12 @@ void RequestColdBoot(void) {
 static void ColdBoot(void) {
 	int result=0;
 	int key;
-	int override;
+	int override=0;
+	int default_video;
 	char s[40];
+
+	KeyboardPoll();
+	default_video=KeyboardKeyDown(KEY_SPACE);
 
 	if (!Init()) {
 		if (ErrorMask & (1<<ERROR_SDCARD)) ErrorFatal=1;
@@ -153,6 +157,15 @@ static void ColdBoot(void) {
 
 	if (ErrorFatal)
 		return; // The main loop keeps the diagnostic UI available for retries.
+
+	/* Refresh input after SD/config loading, then restore the selected mode
+	 * before the splash and subsequent configuration applications.
+	 */
+	KeyboardPoll();
+	default_video |= KeyboardKeyDown(KEY_SPACE);
+	DisableInterrupts();
+	if (default_video)
+		RestoreDefaultVideoMode();
 
 	fpga_init();	// Display splashscreen
 
@@ -201,6 +214,15 @@ static void ColdBoot(void) {
 
 	BootPrintEx("Loading kickstart ROM...");
 	result = ApplyConfiguration(1,1,0);
+
+	/* Also accept Space pressed during ROM loading, immediately before the
+	 * Amiga leaves reset. Service pending HID reports before taking the snapshot.
+	 */
+	KeyboardPoll();
+	default_video=KeyboardKeyDown(KEY_SPACE);
+	DisableInterrupts();
+	if (default_video && config.video_mode)
+		RestoreDefaultVideoMode();
 
 	OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 

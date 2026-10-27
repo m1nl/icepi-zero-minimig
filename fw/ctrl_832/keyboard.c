@@ -16,7 +16,7 @@ static unsigned int keyboard_waiting;
 /* Shared raw-key state for USB, AUX and other firmware input producers.
  * Track arrivals even on overflow so a held key still delays OSD capture.
  */
-static unsigned int keyboard_held[4];
+static volatile unsigned int keyboard_held[4];
 
 volatile unsigned int keyboard_queue_overflows;
 
@@ -82,6 +82,11 @@ int KeyboardIdle(void) {
     KeyboardService();
     return keyboard_head == keyboard_tail && !keyboard_waiting &&
         !(keyboard_held[0] | keyboard_held[1] | keyboard_held[2] | keyboard_held[3]);
+}
+
+/* One aligned word read gives main/ISR callers an atomic key-state snapshot. */
+int KeyboardKeyDown(unsigned char key) {
+    return !!(keyboard_held[(key & 0x7fU) >> 5] & (1U << (key & 31)));
 }
 
 /* Main-context entry points. The callers here run with interrupts enabled;

@@ -116,6 +116,7 @@ int OsdPoll(void);
 void OsdHide(void);
 void OsdWaitVBL(void);
 void OsdReset();
+void RestoreDefaultVideoMode(void);
 //void ConfigFilter(unsigned char lores, unsigned char hires);
 void OsdReconfig(); // Reset to Chameleon core.
 // deprecated functions from Minimig 1

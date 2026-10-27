@@ -65,6 +65,8 @@ void KeyboardService(void);
 void KeyboardPoll(void);
 /* Interrupts disabled; keep them disabled until OSD capture is enabled. */
 int KeyboardIdle(void);
+/* Atomic snapshot; safe in main or ISR context. Uses Amiga raw key codes. */
+int KeyboardKeyDown(unsigned char key);
 extern volatile unsigned int keyboard_queue_overflows;
 
 #define EnableCard() HW_SPI(HW_SPI_CS) = 0x02
