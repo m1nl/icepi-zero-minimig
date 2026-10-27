@@ -1,7 +1,7 @@
 # Minimig AGA
 Ported to IcePi Zero and FleaFPGA Ohm
 
-For support visit [Icy Electronics Discord](https://discord.com/channels/1381526195925024780/1529492140198199479).
+For support, join [Icy Electronics Discord](https://discord.gg/vzrqfhcvWr). Then open [#minimig channel](https://discord.com/channels/1381526195925024780/1529492140198199479).
 
 ### Foreword
 
