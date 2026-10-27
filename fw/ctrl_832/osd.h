@@ -111,6 +111,8 @@ void OsdWrite(unsigned char n, char *s, unsigned char inver, unsigned char stipp
 void OsdWriteOffset(unsigned char n, char *s, unsigned char inver, unsigned char stipple, char offset); // Used for scrolling "Exit" text downwards...
 void OsdClear(void);
 void OsdShow(unsigned char mode);
+/* Main context: returns zero while waiting for all keys and queued events. */
+int OsdPoll(void);
 void OsdHide(void);
 void OsdWaitVBL(void);
 void OsdReset();

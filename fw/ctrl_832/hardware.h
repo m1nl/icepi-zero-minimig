@@ -44,6 +44,8 @@
 #define HW_KEYBOARD_STATUS (*(volatile unsigned int *)KEYBOARDBASE)
 #define KEYBOARD_BUSY (1U << 16)
 
+#define KEYBOARD_TIMEOUT_MS 75
+
 #define REG_KEYBOARD_WORD0 2
 #define REG_KEYBOARD_WORD1 6
 #define REG_KEYBOARD_WORD2 0xa
@@ -61,6 +63,8 @@ int KeyboardSend(unsigned short event);
 int KeyboardSendMain(unsigned short event);
 void KeyboardService(void);
 void KeyboardPoll(void);
+/* Interrupts disabled; keep them disabled until OSD capture is enabled. */
+int KeyboardIdle(void);
 extern volatile unsigned int keyboard_queue_overflows;
 
 #define EnableCard() HW_SPI(HW_SPI_CS) = 0x02

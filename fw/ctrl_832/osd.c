@@ -36,6 +36,7 @@ This is the Minimig OSD (on-screen-display) handler.
 //#include "AT91SAM7S256.h"
 #include "osd.h"
 #include "hardware.h"
+#include "interrupts.h"
 #include "stdio.h"
 
 #include "charrom.h"
@@ -812,28 +813,62 @@ void OsdWaitVBL(void)
 }
 
 int osd_visible=0;
+static int osd_capture_pending;
+static int osd_keyboard_captured;
+
+/* Main context only. Input continues normally while capture is pending.
+ * Keep the idle check and capture write atomic with respect to HID handlers.
+ */
+int OsdPoll(void)
+{
+    int ready;
+    if (!osd_capture_pending)
+        return 1;
+    DisableInterrupts();
+    ready = KeyboardIdle();
+    if (ready) {
+        EnableOsd();
+        SPI(OSD_CMD_OSD);
+        SPI(0x01 | DISABLE_KEYBOARD);
+        DisableOsd();
+        osd_capture_pending=0;
+        osd_keyboard_captured=1;
+        osd_visible=1;
+    }
+    EnableInterrupts();
+    return ready;
+}
 
 // enable displaying of OSD
 void OsdShow(unsigned char mode)
 {
+    if ((mode & DISABLE_KEYBOARD) && !osd_keyboard_captured) {
+        osd_capture_pending=1;
+        OsdPoll();
+        return;
+    }
+    osd_capture_pending=0;
     EnableOsd();
     //SPI(OSDCMDENABLE | (mode & DISABLE_KEYBOARD));
     SPI(OSD_CMD_OSD);
     SPI(0x01 | (mode & DISABLE_KEYBOARD));
     DisableOsd();
     osd_visible=1;
+    osd_keyboard_captured=!!(mode & DISABLE_KEYBOARD);
 }
 
 
 // disable displaying of OSD
 void OsdHide(void)
 {
+    osd_capture_pending=0;
     EnableOsd();
     //SPI(OSDCMDDISABLE);
     SPI(OSD_CMD_OSD);
     SPI(0x00);
     DisableOsd();
     osd_visible=0;
+    osd_keyboard_captured=0;
 }
 
 
@@ -878,8 +913,8 @@ void ConfigVideo(unsigned char hires, unsigned char lores, unsigned char scanlin
 void ConfigVideoOffset(unsigned char xoffset, unsigned char yoffset, unsigned char mode)
 {
     switch (mode) {
-        case 0x01: if (xoffset < 24) xoffset = 24 else xoffset -= 24; break;
-        case 0x02: if (xoffset < 56) xoffset = 56 else xoffset -= 56; break;
+        case 0x01: if (xoffset < 24) xoffset = 24; else xoffset -= 24; break;
+        case 0x02: if (xoffset < 56) xoffset = 56; else xoffset -= 56; break;
     }
     EnableOsd();
     SPI(OSD_CMD_VID_XOFF);

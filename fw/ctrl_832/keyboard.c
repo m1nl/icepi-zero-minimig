@@ -13,6 +13,10 @@ static unsigned int keyboard_head;
 static unsigned int keyboard_tail;
 static unsigned long keyboard_deadline;
 static unsigned int keyboard_waiting;
+/* Shared raw-key state for USB, AUX and other firmware input producers.
+ * Track arrivals even on overflow so a held key still delays OSD capture.
+ */
+static unsigned int keyboard_held[4];
 
 volatile unsigned int keyboard_queue_overflows;
 
@@ -25,14 +29,14 @@ void KeyboardService(void) {
     if (keyboard_waiting) {
         if ((status & KEYBOARD_BUSY) && !CheckTimer(keyboard_deadline))
             return;
-        /* ACK or 20 ms timeout retires the head. It is never retransmitted. */
+        /* ACK or timeout retires the head. It is never retransmitted. */
         keyboard_tail = (keyboard_tail + 1) & KEYBOARD_QUEUE_MASK;
         keyboard_waiting = 0;
     }
 
     if (keyboard_tail != keyboard_head) {
         HW_KEYBOARD(REG_KEYBOARD_OUT) = keyboard_queue[keyboard_tail];
-        keyboard_deadline = GetTimer(20);
+        keyboard_deadline = GetTimer(KEYBOARD_TIMEOUT_MS);
         keyboard_waiting = 1;
     }
 }
@@ -42,11 +46,19 @@ void KeyboardService(void) {
  */
 int KeyboardSend(unsigned short event) {
     unsigned int next;
+    unsigned int key, mask;
 
     if ((event & 0xc000U) != 0x8000U) {
         HW_KEYBOARD(REG_KEYBOARD_OUT) = event;
         return 1;
     }
+
+    key = event & 0x7fU;
+    mask = 1U << (key & 31);
+    if (event & 0x80U)
+        keyboard_held[key >> 5] &= ~mask;
+    else
+        keyboard_held[key >> 5] |= mask;
 
     /* Retire an acknowledged/expired head before checking available space. */
     KeyboardService();
@@ -61,6 +73,15 @@ int KeyboardSend(unsigned short event) {
     if (!keyboard_waiting)
         KeyboardService();
     return 1;
+}
+
+/* Caller must keep interrupts disabled through the OSD capture SPI write.
+ * Service the final ACK/timeout before checking the queue and held keys.
+ */
+int KeyboardIdle(void) {
+    KeyboardService();
+    return keyboard_head == keyboard_tail && !keyboard_waiting &&
+        !(keyboard_held[0] | keyboard_held[1] | keyboard_held[2] | keyboard_held[3]);
 }
 
 /* Main-context entry points. The callers here run with interrupts enabled;

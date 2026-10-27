@@ -87,6 +87,8 @@ extern const char *config_scanline_msg[];
 
 void InsertFloppy(adfTYPE *drive);
 void HandleUI(void);
+/* Deferred until HandleUI returns to the main loop. */
+void RequestColdBoot(void);
 void PrintDirectory(void);
 void ScrollLongName(void);
 void ShowError();

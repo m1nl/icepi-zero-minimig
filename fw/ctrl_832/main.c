@@ -133,11 +133,26 @@ int Init() {
 	return(result);
 }
 
-void ColdBoot() {
+static int coldboot_pending;
+
+/* UI callbacks request a boot; only the main loop executes it. */
+void RequestColdBoot(void) {
+	coldboot_pending=1;
+}
+
+static void ColdBoot(void) {
 	int result=0;
 	int key;
 	int override;
 	char s[40];
+
+	if (!Init()) {
+		if (ErrorMask & (1<<ERROR_SDCARD)) ErrorFatal=1;
+		else FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
+	}
+
+	if (ErrorFatal)
+		return; // The main loop keeps the diagnostic UI available for retries.
 
 	fpga_init();	// Display splashscreen
 
@@ -189,7 +204,6 @@ void ColdBoot() {
 
 	OsdDoReset(SPI_RST_USR | SPI_RST_CPU,0);
 
-	SetIntHandler(inthandler);
 	EnableInterrupts();
 
 	audio_clear();
@@ -210,27 +224,20 @@ int main(void) {
 	int cartridge=PLATFORM & (1<<PLATFORM_C64CARTRIDGE);
 
 	ClearError(ERROR_ALL);
-
-	if (!Init()) {
-        if (ErrorMask & (1<<ERROR_SDCARD)) ErrorFatal=1;
-        else FatalError(ERROR_SDCARD,"SD initialisation failed",0,0);
-    }
-
+	SetIntHandler(inthandler);
 	if (clockport && cartridge)
 		FatalError(ERROR_GENERAL,"C64: use non-clockport core",0,0);
 
-	if (ErrorFatal) {
-		while (ErrorFatal) {
-			ShowError();
-			HandleUI(); // Allow diagnostic pages and reboot after startup failures.
-		}
-	} else {
-		DISKLED_ON;
-		ColdBoot();
-	}
+	DISKLED_ON;
+	RequestColdBoot();
 
 	while(1)
 	{
+		if (coldboot_pending) {
+			coldboot_pending=0;
+			ColdBoot();
+		}
+
 		KeyboardPoll();
 		drivesounds_fill();
 

@@ -80,32 +80,32 @@ unsigned char MMC_ReadImpl(unsigned long lba, unsigned char *pReadBuffer, int qu
 unsigned char MMC_ReadMultipleImpl(unsigned long lba, unsigned char *pReadBuffer, unsigned long nBlockCount, int quiet);
 unsigned char MMC_WriteImpl(unsigned long lba, unsigned char *pWriteBuffer, int quiet);
 
-unsigned inline char MMC_Read(unsigned long lba, unsigned char *buffer)
+static inline unsigned char MMC_Read(unsigned long lba, unsigned char *buffer)
 {
     return MMC_ReadImpl(lba, buffer, 0);
 }
 
-unsigned inline char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer)
+static inline unsigned char MMC_ReadQuiet(unsigned long lba, unsigned char *buffer)
 {
     return MMC_ReadImpl(lba, buffer, 1);
 }
 
-unsigned inline char MMC_ReadMultiple(unsigned long lba, unsigned char *buffer, unsigned long count)
+static inline unsigned char MMC_ReadMultiple(unsigned long lba, unsigned char *buffer, unsigned long count)
 {
     return MMC_ReadMultipleImpl(lba, buffer, count, 0);
 }
 
-unsigned inline char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count)
+static inline unsigned char MMC_ReadMultipleQuiet(unsigned long lba, unsigned char *buffer, unsigned long count)
 {
     return MMC_ReadMultipleImpl(lba, buffer, count, 1);
 }
 
-unsigned inline char MMC_Write(unsigned long lba, unsigned char *buffer)
+static inline unsigned char MMC_Write(unsigned long lba, unsigned char *buffer)
 {
     return MMC_WriteImpl(lba, buffer, 0);
 }
 
-unsigned inline char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer)
+static inline unsigned char MMC_WriteQuiet(unsigned long lba, unsigned char *buffer)
 {
     return MMC_WriteImpl(lba, buffer, 1);
 }

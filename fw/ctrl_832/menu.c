@@ -110,7 +110,6 @@ const char *helptexts[]={
 
 void SanityCheck();
 
-void ColdBoot();
 void (*confirmfunc)();
 
 // file selection menu variables
@@ -243,6 +242,10 @@ void HandleUI(void)
 	static char osd_item;
 	static unsigned char configuration_exists;
 	char s[40];
+
+    /* Preserve the requested menu state until input can be captured safely. */
+    if (!OsdPoll())
+        return;
 
     // get user control codes
     c = OsdGetCtrl();
@@ -756,7 +759,7 @@ void HandleUI(void)
             {
                 menusub = 0;
 				strcpy(s,"         Reboot Minimig?");
-				confirmfunc=ColdBoot;
+				confirmfunc=RequestColdBoot;
 				menustate=MENU_CONFIRM1;
 			}
             if (menusub == 2)	// Reconfig
@@ -2228,7 +2231,7 @@ void HandleUI(void)
             int fatal=ErrorFatal;
             ClearError(ERROR_ALL);
             OsdHide();
-            if (fatal) ColdBoot();
+            if (fatal) RequestColdBoot();
             menustate=MENU_NONE1;
         }
         break;
