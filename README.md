@@ -1,6 +1,8 @@
 # Minimig AGA
 Ported to IcePi Zero and FleaFPGA Ohm
 
+For support visit [Icy Electronics Discord](https://discord.com/channels/1381526195925024780/1529492140198199479).
+
 ### Foreword
 
 [minimig](http://en.wikipedia.org/wiki/Minimig) (short for Mini Amiga) is an open source re-implementation of an Amiga using a field-programmable gate array (FPGA). Original minimig author is Dennis van Weeren.
