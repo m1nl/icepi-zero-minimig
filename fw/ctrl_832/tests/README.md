@@ -6,6 +6,15 @@ The native tests use AddressSanitizer and UndefinedBehaviorSanitizer; leak
 checking is disabled because it fails in ptraced execution environments.
 Override `SANITIZE=` only when the compiler lacks sanitizer support.
 
+- `boot_retry_test.c` runs the production main loop with mocked hardware and UI.
+  It checks 128 failed SD initializations, a failed filesystem mount, successful
+  recovery and a later normal reboot. UI reboot requests return before starting
+  another boot, pending requests coalesce, fatal errors block disk servicing,
+  and the interrupt handler is installed before the first initialization attempt.
+  Cold-boot checks cover Space overriding loaded video modes, release during
+  configuration loading, a press detected after loading, a Space press during
+  ROM loading restoring mode 0 before reset release, and a later ordinary boot
+  preserving its loaded mode.
 - `atapi_test.c` exercises the production image and packet modules using
   in-memory files and scripted SPI: ISO/random/end reads, single- and multi-file
   mixed CUE tracks, raw Mode 1/XA Form 1 payloads, Form 2 rejection, invalid images,
@@ -14,6 +23,8 @@ Override `SANITIZE=` only when the compiler lacks sanitizer support.
   fragmented disk, including buffered and direct cluster crossings, exact EOF,
   recoverable failures, exact filenames, and relative directory lookup. FAT
   numeric directory fields are modeled with the controller's byte swapping.
+  FAT and HDD tests mock the MMC `Impl` functions so the production inline
+  wrappers pass through the quiet/error mode; HDD transfer mocks assert quiet I/O.
 - `hdd_bounds_test.c` includes production HDD code with mocked hardware/storage.
   It covers capacity calculation at open/remount, synthetic-RDB capacity, complete
   transfer bounds, partition offsets, failure invalidation, and the seek-index
@@ -126,17 +137,32 @@ Electrical timing validation still needs card/board timing data and hardware
 measurement rather than assumed delay values.
 
 - `keyboard_queue_test.c` checks FIFO ordering and send-once delivery, guest
-  acknowledgements, the 20 ms timeout boundary, timer/queue wrap, bounded
-  overflow, mouse bypass and interrupt protection. The queue holds 127 keys,
+  acknowledgements, the 75 ms timeout boundary, timer/queue wrap, bounded
+  overflow, mouse bypass, shared raw-key state and interrupt protection. The queue holds 127 keys,
   including its in-flight head; overflow rejects the newest key and increments
   `keyboard_queue_overflows`.
 
 The head event is sent unchanged through the existing FPGA interface exactly
-once. ACK or 20 ms without ACK discards it and permits the next queued key.
-The timeout uses `GetTimer(20)` and `CheckTimer()`. The wait starts at
+once. ACK or 75 ms without ACK discards it and permits the next queued key.
+The timeout uses `GetTimer(KEYBOARD_TIMEOUT_MS)` and `CheckTimer()`. The wait starts at
 transmission and is not extended by new arrivals; each
 subsequent transmission starts a fresh wait. Expiry is checked by the next
 cooperative service call, with the existing hardware timer resolution. Mouse
 and OSD-only (type-3) events bypass the queue; ordinary type-2 keys reach the
 OSD with their single queued delivery. No new FPGA status bits are required.
-The timeout deliberately permits replacement of an unread key after 20 ms.
+The timeout deliberately permits replacement of an unread key after 75 ms.
+
+- `osd_capture_test.c` exercises the production keyboard queue and OSD control
+  with mocked MMIO/SPI. Opening a capturing menu or error dialog stays pending
+  until all 128 raw-key bits are clear and the queue, including its in-flight
+  event, has drained. New presses and releases continue to reach the guest
+  during the wait. The final idle check and capture write run with interrupts
+  disabled. Coverage includes modifiers, the OSD trigger release, continued
+  input, final ACK/75 ms timeout, cancellation by hide/noncapturing overlays,
+  and immediate noncapturing overlays. UI navigation waits until capture is
+  active; hiding OSD cancels a pending request. The shared bitmap covers keys
+  submitted through `KeyboardSend`, including USB, AUX and mapped gamepad keys.
+  Reset checks cover Space restoring video mode 0 and its offsets, preservation
+  of filters/scanlines, ordinary resets preserving the selected mode, and calls
+  from interrupt context preserving interrupt state.
+  No RTL change is required; guest behavior still needs hardware validation.

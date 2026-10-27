@@ -73,13 +73,17 @@ unsigned int FileWrite(fileTYPE *file,unsigned char *buffer)
 {
     (void)buffer;assert(file->sector<file->size/512);++writes;return 1;
 }
-unsigned char MMC_ReadMultiple(unsigned long lba,unsigned char *buffer,unsigned long count)
+unsigned char MMC_ReadMultipleImpl(unsigned long lba,unsigned char *buffer,unsigned long count,int quiet)
 {
+    assert(quiet); /* HDD transport must use recoverable SD I/O. */
+    if (fail_read) return 0;
     (void)buffer;assert(lba<card_size && count<=card_size-lba);
     disk_lba=lba;disk_count=count;reads+=count;return 1;
 }
-unsigned char MMC_Write(unsigned long lba,unsigned char *buffer)
+unsigned char MMC_WriteImpl(unsigned long lba,unsigned char *buffer,int quiet)
 {
+    assert(quiet);
+    if (fail_write) return 0;
     (void)buffer;assert(lba<card_size);disk_lba=lba;++writes;return 1;
 }
 void SetError(int type,const char *message,int a,int b)
@@ -119,14 +123,6 @@ unsigned int FileWriteChecked(fileTYPE *f,unsigned char *b)
 {
     if (cancel_after_write) transport_state=next_transport;
     return fail_write ? 0 : FileWrite(f,b);
-}
-unsigned char MMC_ReadMultipleQuiet(unsigned long sector,unsigned char *b,unsigned long count)
-{
-    return fail_read ? 0 : MMC_ReadMultiple(sector,b,count);
-}
-unsigned char MMC_WriteQuiet(unsigned long sector,unsigned char *b)
-{
-    return fail_write ? 0 : MMC_Write(sector,b);
 }
 static void clear_io(void) { reads=writes=seeks=last_status=last_error=0; }
 int main(void)

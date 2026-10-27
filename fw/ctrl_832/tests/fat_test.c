@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "fat.h"
+#include "mmc.h"
 #include "swap.h"
 extern unsigned long fat_start, data_start, root_directory_start, root_directory_size;
 extern unsigned long root_directory_cluster;
@@ -12,29 +13,19 @@ static int failures, direct_reads, fail_read;
 static unsigned char out[1536];
 void FatalError(int e,const char *s,int a,int b) { (void)e;(void)s;(void)a;(void)b;++failures; }
 void SetError(int e,const char *s,int a,int b) { (void)e;(void)s;(void)a;(void)b; }
-unsigned char MMC_Read(unsigned long lba,unsigned char *buffer)
+unsigned char MMC_ReadImpl(unsigned long lba,unsigned char *buffer,int quiet)
 {
-    assert(lba<32);if(fail_read){++failures;return 0;}memcpy(buffer,disk[lba],512);return 1;
+    assert(lba<32);if(fail_read){if(!quiet)++failures;return 0;}memcpy(buffer,disk[lba],512);return 1;
 }
-unsigned char MMC_ReadQuiet(unsigned long lba,unsigned char *buffer)
+unsigned char MMC_ReadMultipleImpl(unsigned long lba,unsigned char *buffer,unsigned long count,int quiet)
 {
-    assert(lba<32);if(fail_read)return 0;memcpy(buffer,disk[lba],512);return 1;
-}
-unsigned char MMC_ReadMultiple(unsigned long lba,unsigned char *buffer,unsigned long count)
-{
+    if(quiet && fail_read)return 0;
     unsigned long i;for(i=0;i<count;++i){if(buffer)memcpy(buffer+i*512,disk[lba+i],512);else ++direct_reads;}return 1;
 }
-unsigned char MMC_ReadMultipleQuiet(unsigned long lba,unsigned char *buffer,unsigned long count)
+unsigned char MMC_WriteImpl(unsigned long lba,unsigned char *buffer,int quiet)
 {
-    if(fail_read)return 0;return MMC_ReadMultiple(lba,buffer,count);
-}
-unsigned char MMC_Write(unsigned long lba,unsigned char *buffer)
-{
+    if(quiet && fail_read)return 0;
     assert(lba<32);memcpy(disk[lba],buffer,512);return 1;
-}
-unsigned char MMC_WriteQuiet(unsigned long lba,unsigned char *buffer)
-{
-    if(fail_read)return 0;return MMC_Write(lba,buffer);
 }
 static void entry(unsigned int slot,const char *name,unsigned int cluster,unsigned int bytes,unsigned char attributes)
 {
