@@ -538,6 +538,14 @@ always @ (posedge clk, negedge rstn) begin
           cpu_sm_adr_i <= #1 {cpu_adr_idx, cpu_adr_blk};
           // prepare data for tag
           cpu_sm_tag_dat_w <= #1 {!(itag0_valid && itag0_match), itram_cpu_dat_r[30:0]};
+          // Prepare return data independently of hit/ACK qualification.
+          if (itag0_valid && itag0_match) begin
+            cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
+            cpu_dat_r_hi <= #1 idram0_cpu_dat_r[15:0];
+          end else begin
+            cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
+            cpu_dat_r_hi <= #1 idram1_cpu_dat_r[15:0];
+          end
         end else cpu_sm_adr_i <= #1 cacheline_sm_adr_i;
         if (level1_d && data_cache) begin
           cacheline_valid_d <= #1 1'b1;
@@ -546,6 +554,14 @@ always @ (posedge clk, negedge rstn) begin
           cpu_sm_adr_d <= #1 {cpu_adr_idx, cpu_adr_blk};
           // prepare data for tag
           cpu_sm_tag_dat_w <= #1 {!(dtag0_valid && dtag0_match), dtram_cpu_dat_r[30:0]};
+          // Prepare return data independently of hit/ACK qualification.
+          if (dtag0_valid && dtag0_match) begin
+            cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
+            cpu_dat_r_hi <= #1 ddram0_cpu_dat_r[15:0];
+          end else begin
+            cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
+            cpu_dat_r_hi <= #1 ddram1_cpu_dat_r[15:0];
+          end
         end else cpu_sm_adr_d <= #1 cacheline_sm_adr_d;
         if (cpu_cs)
            cpu_sm_state <= CPU_SM_WAIT;
@@ -557,32 +573,24 @@ always @ (posedge clk, negedge rstn) begin
         if (cc_en && level1_i && itag0_valid && itag0_match) begin
           // data is already in instruction cache way 0
           cpu_sm_itag_we <= #1 1'b1;
-          cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram0_cpu_dat_r[31:16] : idram0_cpu_dat_r[15:0];
-          cpu_dat_r_hi <= #1 idram0_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b0;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_i && itag1_valid && itag1_match) begin
           // data is already in instruction cache way 1
           cpu_sm_itag_we <= #1 1'b1;
-          cpu_dat_r <= (pair_cand || cpu_adr[1]) ? idram1_cpu_dat_r[31:16] : idram1_cpu_dat_r[15:0];
-          cpu_dat_r_hi <= #1 idram1_cpu_dat_r[15:0];
           cacheline_way_i <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_d && dtag0_valid && dtag0_match && data_cache) begin
           // data is already in data cache way 0
           cpu_sm_dtag_we <= #1 1'b1;
-          cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram0_cpu_dat_r[31:16] : ddram0_cpu_dat_r[15:0];
-          cpu_dat_r_hi <= #1 ddram0_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b0;
           cpu_cache_ack <= #1 1'b1;
 
         end else if (cc_en && level1_d && dtag1_valid && dtag1_match && data_cache) begin
           // data is already in data cache way 1
           cpu_sm_dtag_we <= #1 1'b1;
-          cpu_dat_r <= (pair_cand || cpu_adr[1]) ? ddram1_cpu_dat_r[31:16] : ddram1_cpu_dat_r[15:0];
-          cpu_dat_r_hi <= #1 ddram1_cpu_dat_r[15:0];
           cacheline_way_d <= #1 1'b1;
           cpu_cache_ack <= #1 1'b1;
 
