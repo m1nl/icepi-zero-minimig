@@ -606,7 +606,7 @@ begin
 		end if;
 	end process;
 
-	chipset_cycle <= '1' when chipset_req='1' and slower(0)='0' and skipfetch='0' and clkena_in='1' else '0';
+	chipset_cycle <= '1' when chipset_req='1' and slower(0)='0' and cpu_internal='0' and clkena_in='1' else '0';
 
 	process (clk) begin
 		if rising_edge(clk) then

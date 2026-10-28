@@ -5,8 +5,7 @@
 `default_nettype none
 module sdram_write_queue (
   input wire clk,
-  input wire rst,             // active high: discard queue on SDRAM reset
-  input wire source_reset,    // reset source handshake, retain accepted writes
+  input wire rstn,
 
   input wire req,
   output reg ack,
@@ -36,8 +35,7 @@ wire pop = valid && ready;
 wire merge_tail = valid && addresses[tail] == addr &&
                   !(count == 1 && pop);
 
-wire accept = !source_reset && (req != ack) &&
-              (merge_tail || count != 3'd4 || pop);
+wire accept = (req != ack) && (merge_tail || count != 3'd4 || pop);
 
 wire push = accept && !merge_tail;
 
@@ -48,16 +46,15 @@ assign head_addr = addresses[rd_ptr];
 assign head_data = payloads[rd_ptr];
 assign head_dqm = masks[rd_ptr];
 
-always @(posedge clk) begin
-  if (rst) begin
+always @(posedge clk, negedge rstn) begin
+  if (!rstn) begin
     ack <= 1'b0;
     rd_ptr <= 0;
     wr_ptr <= 0;
     count <= 0;
 
   end else begin
-    if (source_reset) ack <= 1'b0;
-    else if (accept) ack <= req;
+    if (accept) ack <= req;
     if (pop) rd_ptr <= rd_ptr + 2'd1;
     if (push) begin
       addresses[wr_ptr] <= addr;

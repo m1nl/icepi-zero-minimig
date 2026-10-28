@@ -1279,7 +1279,7 @@ minimig_syscontrol CONTROL1
 	.clk(clk),
 	.clk7_en (clk7_en),
 	.cnt(sof),
-	.mrst(kbdrst | usrrst | rst_ext | !kbd_reset_n),// | ~_cpu_reset_in),
+	.mrstn(!kbdrst & !usrrst & !rst_ext & kbd_reset_n),// | ~_cpu_reset_in),
 	.reset(sys_reset)
 );
 

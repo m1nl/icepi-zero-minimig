@@ -201,7 +201,8 @@ wire           sdctl_rst;
 // tg68
 wire           tg68_rst;
 reg            tg68_rst_d;
-reg            tg68_rst_sync;
+reg    [2-1:0] tg68_rstn_sync = 2'b00;
+wire           tg68_rstn;
 wire [ 16-1:0] tg68_dat_in;
 wire [ 16-1:0] tg68_dat_in2;
 wire [ 16-1:0] tg68_dat_out;
@@ -354,12 +355,12 @@ generate
 
 		// Reset RTG on either system/CPU reset or the CPU RESET instruction.
 		// TG68K's nResetOut is generated in CLK_114.
-		wire rtg_cpu_resetn = tg68_rst_sync && tg68_nrst_out;
+		wire rtg_cpu_resetn = tg68_rstn && tg68_nrst_out;
 
 		wire rtg_resetn = rtg_resetn_sync[1];
 
-		always @(posedge CLK_RTG_IN, negedge sdctl_rst) begin
-			if (!sdctl_rst)
+		always @(posedge CLK_RTG_IN, negedge reset_out) begin
+			if (!reset_out)
 				rtg_resetn_sync <= 2'b00;
 			else begin
 				/* sample CPU reset synchronously in the video domain */
@@ -375,8 +376,8 @@ generate
 		(* ASYNC_REG = "TRUE" *)
 		reg [1:0] rtg_irq_28_sync;
 
-		always @(posedge CLK_28 or negedge sdctl_rst) begin
-			if (!sdctl_rst)
+		always @(posedge CLK_28 or negedge reset_out) begin
+			if (!reset_out)
 				rtg_irq_28_sync <= 0;
 			else begin
 				/* sample CPU reset synchronously in the IRQ domain */
@@ -391,7 +392,7 @@ generate
 
 		rtg_video rtg (
 			.clk_sys(CLK_114),
-			.resetn_sys(sdctl_rst && rtg_cpu_resetn),
+			.resetn_sys(reset_out && rtg_cpu_resetn),
 			.clk_rtg(CLK_RTG_IN),
 			.resetn_rtg(rtg_resetn),
 
@@ -573,10 +574,14 @@ assign tg68_cin_lo=16'b0;
 assign tg68_nrst_out=1'b1;
 `else
 
-always @(posedge CLK_114) begin
-	tg68_rst_d <= tg68_rst;
-	tg68_rst_sync <= tg68_rst_d;
+always @(posedge CLK_114, negedge tg68_rst) begin
+	if (!tg68_rst)
+		tg68_rstn_sync <= 2'b00;
+	else
+		tg68_rstn_sync <= {tg68_rstn_sync[0], 1'b1};
 end
+
+assign tg68_rstn = tg68_rstn_sync[1];
 
 TG68K #(
 	.usethrottle(usethrottle),
@@ -588,7 +593,7 @@ TG68K #(
 	.sdram64meg(ram_64meg)
 ) tg68k (
 	.clk          (CLK_114          ),
-	.reset        (tg68_rst_sync    ),
+	.reset        (tg68_rstn        ),
 	.clkena_in    (tg68_ena28       ),
 	.IPL          (tg68_IPL         ),
 	.dtack        (tg68_dtack       ),
@@ -674,6 +679,8 @@ wire		host_hwack;
 wire		host_hwreq;
 wire		host_we;
 
+wire cache_rstn = tg68_rstn && tg68_nrst_out;
+
 //sdram sdram (
 sdram_ctrl #(
 `ifdef MINIMIG_SDRAM_WRITE_QUEUE
@@ -681,10 +688,10 @@ sdram_ctrl #(
 `endif
 	.addr_max_bits(addr_max_bits)
 ) sdram (
-	.cache_rst    (tg68_rst_sync    ),
+	.cache_rstn   (cache_rstn       ),
 	.cache_inhibit(cache_inhibit    ),
 	.cacheline_clr(cacheline_clr    ),
-	.cpu_cache_ctrl (tg68_CACR_out    ),
+	.cpu_cache_ctrl(tg68_CACR_out   ),
 	.sdata        (SDRAM_DQ         ),
 	.sdaddr       (SDRAM_A[12:0]    ),
 	.dqm          (sdram_dqm        ),

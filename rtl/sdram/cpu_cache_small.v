@@ -18,7 +18,8 @@ module cpu_cache_new #(
 ) (
   // system
   input  wire           clk,            // clock
-  input  wire           rst,            // cache reset
+  input  wire           rstn,           // cache reset
+  input  wire           clr,            // cache clear
   input  wire           cache_en,       // cache enable
   input  wire           clk28_en,       // 28MHz enable signal
   input  wire [  4-1:0] cpu_cache_ctrl, // CPU cache control
@@ -68,6 +69,7 @@ endgenerate
 
 // cache init
 reg           cache_init_done;
+reg           cache_init_done_seen;
 // state
 reg  [ 4-1:0] cpu_sm_state;
 reg  [ 2-1:0] sdr_sm_state;
@@ -112,13 +114,11 @@ reg           read_pair_pending;
 wire          pair_cand = cpu_long_cand && (cpu_adr[1:0] == 2'b00) && (&cpu_bs);
 
 // cpu cache control
-reg  [ 2-1:0] cc_clr_r;
 wire          cpu_cache_enable;
 wire          cpu_cache_freeze;
 wire          cpu_cache_clear;
 reg           cc_en;
 reg           cc_fr;
-reg           cc_clr;
 // cpu address
 reg  [26+addr_prefix_bits-1:0] cpu_adr_l;
 reg  [ 3-1:0] cpu_adr_blk_ptr;
@@ -263,27 +263,40 @@ localparam [1:0]
 
 //// cpu side ////
 
+reg  [ 2-1:0] cc_clr_r;
+reg           cc_clr_pending;
+
+reg           cache_clear_req;
+reg           cache_clear_start;
+
 // cpu cache control
-always @ (posedge clk) begin
-  if (rst)
+always @ (posedge clk, negedge rstn) begin
+  if (!rstn) begin
     cc_clr_r <= #1 2'd0;
-  else if (!cpu_cs)
-    cc_clr_r <= #1 {cc_clr_r[0], cpu_cache_ctrl[3]};
+    cache_clear_req <= #1 1'b0;
+    cache_clear_start <= #1 1'b0;
+
+  end else begin
+    // edge detector for cache clear request
+    if (!cpu_cs) cc_clr_r <= #1 {cc_clr_r[0], cpu_cache_ctrl[3]};
+    // mark request of cache clear request
+    cache_clear_req <= #1 cc_clr_pending || cpu_cache_clear;
+    // mark start of cache clear phase
+    cache_clear_start <= #1 cache_clear_req && cpu_sm_state == CPU_SM_INIT;
+  end
 end
 
 assign cpu_cache_enable = cpu_cache_ctrl[0];
 assign cpu_cache_freeze = cpu_cache_ctrl[1];
 assign cpu_cache_clear  = cc_clr_r[0] && !cc_clr_r[1];
 
-always @ (posedge clk) begin
-  if (rst) begin
-    cc_en  <= #1 1'b0;
-    cc_fr  <= #1 1'b0;
-    cc_clr <= #1 1'b0;
+always @ (posedge clk, negedge rstn) begin
+  if (!rstn) begin
+    cc_en <= #1 1'b0;
+    cc_fr <= #1 1'b0;
   end else if (!cpu_cs) begin
-    cc_en  <= #1 cpu_cache_enable;
-    cc_fr  <= #1 cpu_cache_freeze;
-    cc_clr <= #1 cpu_cache_clear;
+    cc_en <= #1 cpu_cache_enable;
+    cc_fr <= #1 cpu_cache_freeze;
   end
 end
 
@@ -323,48 +336,59 @@ always @(posedge clk) begin
 	cpu_bs_l <= cpu_bs;
 end
 
-
 // cpu side state machine
-always @ (posedge clk) begin
-  if (rst) begin
+always @ (posedge clk, negedge rstn) begin
+  if (!rstn) begin
     sdr_read_req      <= #1 1'b0;
-    sdr_write_req     <= #1 1'b0;
-    cpu_cache_ack     <= #1 1'b0;
     cpu_sm_state      <= #1 CPU_SM_INIT;
+    cc_clr_pending    <= #1 1'b0;
     cpu_sm_itag_we    <= #1 1'b0;
     cpu_sm_dtag_we    <= #1 1'b0;
     cpu_sm_iram0_we   <= #1 1'b0;
     cpu_sm_iram1_we   <= #1 1'b0;
     cpu_sm_dram0_we   <= #1 1'b0;
     cpu_sm_dram1_we   <= #1 1'b0;
-    cpu_sm_bs         <= #1 4'b1111;
-    cpu_adr_blk_ptr   <= #1 3'b000;
-    cpu_pair          <= #1 1'b0;
-    read_pair_pending <= #1 1'b0;
+    sdr_write_req     <= #1 1'b0;
+    cpu_cache_ack     <= #1 1'b0;
     cacheline_valid_i <= #1 1'b0;
     cacheline_valid_d <= #1 1'b0;
     cacheline_ready_i <= #1 1'b0;
     cacheline_ready_d <= #1 1'b0;
+
+    cache_init_done_seen <= #1 1'b0;
   end else begin
     // default values
-    sdr_read_req      <= #1 1'b0;
-    cpu_sm_itag_we    <= #1 1'b0;
-    cpu_sm_dtag_we    <= #1 1'b0;
-    cpu_sm_iram0_we   <= #1 1'b0;
-    cpu_sm_iram1_we   <= #1 1'b0;
-    cpu_sm_dram0_we   <= #1 1'b0;
-    cpu_sm_dram1_we   <= #1 1'b0;
-    cpu_sm_bs         <= #1 4'b1111;
-    cpu_cache_ack     <= #1 1'b0;
+    sdr_read_req    <= #1 1'b0;
+    cpu_sm_itag_we  <= #1 1'b0;
+    cpu_sm_dtag_we  <= #1 1'b0;
+    cpu_sm_iram0_we <= #1 1'b0;
+    cpu_sm_iram1_we <= #1 1'b0;
+    cpu_sm_dram0_we <= #1 1'b0;
+    cpu_sm_dram1_we <= #1 1'b0;
+    cpu_cache_ack   <= #1 1'b0;
+
+    if (clr || cpu_cache_clear)
+      cc_clr_pending <= #1 1'b1;
 
     // state machine
     case (cpu_sm_state)
       CPU_SM_INIT : begin
+        // invalidate cachelines
+        cacheline_valid_i <= #1 1'b0;
+        cacheline_valid_d <= #1 1'b0;
+        cacheline_ready_i <= #1 1'b0;
+        cacheline_ready_d <= #1 1'b0;
+
+        // clear pending flag
+        cc_clr_pending <= #1 1'b0;
+
+        // register that cache clear has completed
+        if (cache_init_done)
+          cache_init_done_seen <= #1 1'b1;
+
         // waiting for cache init
-        if (cache_init_done) begin
+        if (cache_init_done_seen && !clr) begin
           cpu_sm_state <= #1 CPU_SM_IDLE;
-        end else begin
-          cpu_sm_state <= #1 CPU_SM_INIT;
         end
       end
       CPU_SM_IDLE : begin
@@ -380,7 +404,6 @@ always @ (posedge clk) begin
           cpu_sm_adr_d <= #1 {cpu_adr_idx, cpu_adr_blk};
         end
         level1_i <= cpu_ir;
-        // waiting for CPU access
         if (cpu_cs && addr_prefix_match) begin
           // speculatively move cacheline pointer to next word
           if (!cpu_we) begin
@@ -427,23 +450,39 @@ always @ (posedge clk) begin
             cpu_sm_state <= #1 CPU_SM_READ;
           end
         end else begin
-          if (cc_clr)
+          if (cache_clear_req) begin
+            cache_init_done_seen <= #1 1'b0;
             cpu_sm_state <= #1 CPU_SM_INIT;
+          end
         end
       end
       CPU_SM_WAIT_LOWORD : begin
+        // cache clear during combined write is anomaly
+        // we don't need to handle it gracefully
+        // but we don't want missing cpu_cs to block the fsm
+        if (cache_clear_req) begin
+          cache_init_done_seen <= #1 1'b0;
+          cpu_sm_state <= #1 CPU_SM_INIT;
+        end
         if (!cpu_cs) begin
           cpu_sm_state <= #1 CPU_SM_WRITE_32BIT;
         end
       end
       CPU_SM_WRITE_32BIT : begin
+        // cache clear during combined write is anomaly
+        // we don't need to handle it gracefully
+        // but we don't want missing cpu_cs to block the fsm
+        if (cache_clear_req) begin
+          cache_init_done_seen <= #1 1'b0;
+          cpu_sm_state <= #1 CPU_SM_INIT;
+        end
         sdr_dqm_w[3:2] <= #1 ~cpu_bs;
         sdr_dat_w[31:16] <= #1 cpu_dat_w;
+        if (itag0_match || itag1_match) cacheline_ready_i <= #1 0;
+        if (dtag0_match || dtag1_match) cacheline_ready_d <= #1 0;
         if (cpu_cs) begin
           cpu_adr_l <= cpu_adr;
           cpu_adr_blk_ptr <= #1 cpu_adr_blk;
-          if (itag0_match || itag1_match) cacheline_ready_i <= #1 0;
-          if (dtag0_match || dtag1_match) cacheline_ready_d <= #1 0;
           // on hit update cache, on miss no update neccessary; tags don't get updated on writes
           if (!cpu_adr_blk[0]) begin
             // unaligned 32 bit write, hi word
@@ -686,8 +725,8 @@ end
 //// sdram side ////
 
 // sdram side state machine
-always @ (posedge clk) begin
-  if (rst) begin
+always @ (posedge clk, negedge rstn) begin
+  if (!rstn) begin
     cache_init_done   <= #1 1'b0;
     sdr_sm_state      <= #1 SDR_SM_INIT0;
     sdr_sm_itag_we    <= #1 1'b0;
@@ -696,22 +735,21 @@ always @ (posedge clk) begin
     sdr_sm_iram1_we   <= #1 1'b0;
     sdr_sm_dram0_we   <= #1 1'b0;
     sdr_sm_dram1_we   <= #1 1'b0;
-    sdr_sm_bs         <= #1 4'b1111;
+
   end else begin
     // default values
-    cache_init_done   <= #1 1'b1;
     sdr_sm_itag_we    <= #1 1'b0;
     sdr_sm_dtag_we    <= #1 1'b0;
     sdr_sm_iram0_we   <= #1 1'b0;
     sdr_sm_iram1_we   <= #1 1'b0;
     sdr_sm_dram0_we   <= #1 1'b0;
     sdr_sm_dram1_we   <= #1 1'b0;
-    sdr_sm_bs         <= #1 4'b1111;
+    cache_init_done   <= #1 1'b0;
+
     // state machine
     case (sdr_sm_state)
       SDR_SM_INIT0 : begin
         // prepare to clear cache
-        cache_init_done <= #1 1'b0;
         sdr_sm_adr <= #1 10'd0;
         sdr_sm_tag_dat_w <= #1 32'd0;
         sdr_sm_itag_we <= #1 1'b1;
@@ -720,11 +758,11 @@ always @ (posedge clk) begin
       end
       SDR_SM_INIT1 : begin
         // clear cache
-        cache_init_done <= #1 1'b0;
         sdr_sm_adr <= #1 sdr_sm_adr + 10'd4;
         sdr_sm_itag_we <= #1 1'b1;
         sdr_sm_dtag_we <= #1 1'b1;
         if (&sdr_sm_adr[9:2]) begin
+          cache_init_done <= #1 1'b1;
           sdr_sm_state <= #1 SDR_SM_IDLE;
         end else begin
           sdr_sm_state <= #1 SDR_SM_INIT1;
@@ -732,9 +770,8 @@ always @ (posedge clk) begin
       end
       SDR_SM_IDLE : begin
         // wait for action
-        cache_init_done <= #1 1'b1;
         sdr_sm_adr <= #1 snoop_adr[11:2];
-        if (cc_clr) begin
+        if (cache_clear_start) begin
           sdr_sm_state <= #1 SDR_SM_INIT0;
         end
         else if (snoop_act) begin

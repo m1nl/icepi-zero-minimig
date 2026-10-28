@@ -3,7 +3,7 @@
 //the boot signal puts gary in a special mode so that the bootrom
 //is mapped into the system memory map.	The firmware in the bootrom
 //then loads the kickstart via the diskcontroller into the kickstart ram area.
-//When kickstart has been loaded, the bootrom asserts bootdone by selecting both cia's at once. 
+//When kickstart has been loaded, the bootrom asserts bootdone by selecting both cia's at once.
 //This resets the system for a second time but it also de-asserts boot.
 //Thus, the system now boots as a regular amiga.
 //Subsequent resets by asserting mrst will not assert boot again.
@@ -16,45 +16,30 @@
 
 module minimig_syscontrol
 (
-	input	clk,			//bus clock
-  input clk7_en,
-	input	cnt,			//pulses for counting
-	input	mrst,			//master/user reset input
-	output	reset			//global synchronous system reset
+	input	clk,			// bus clock
+	input	clk7_en,		// 7MHz clock enable
+	input	cnt,			// pulses for counting
+	input	mrstn,			// master/user reset input
+	output	reset			// global synchronous system reset
 );
 
-//local signals
-reg		smrst0, smrst1;					//registered input
-reg		[2:0] rst_cnt = 0;		//reset timer SHOULD BE CLEARED BY CONFIG
-wire	_rst;					//local reset signal
+reg [7:0] rstn_sync = 8'b0;
 
-//asynchronous mrst input synchronizer
-always @(posedge clk) begin
-  if (clk7_en) begin
-    smrst0 <= mrst;
-  	smrst1 <= smrst0;
-  end
-end
-
-//reset timer and mrst control
-always @(posedge clk) begin
-  if (clk7_en) begin
-  	if (smrst1)
-  		rst_cnt <= 3'd0;
+always @(posedge clk, negedge mrstn) begin
+  if (!mrstn)
+    rstn_sync <= 8'b0;
 `ifdef VERILATOR
-	else if (!_rst)
+  else if (clk7_en)
 `else
-  	else if (!_rst && cnt)
+  else if (clk7_en && cnt)
 `endif
-  		rst_cnt <= rst_cnt + 3'd1;
-  end
+    rstn_sync <= {rstn_sync[6:0], 1'b1};
 end
 
-assign _rst = rst_cnt[2];
+wire rstn = rstn_sync[7];
 
-//global reset output
-assign reset = ~_rst;
-
+// global reset output
+assign reset = ~rstn;
 
 endmodule
 

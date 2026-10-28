@@ -34,7 +34,7 @@ module sdram_ctrl #(
   input  wire           clk7_en,
   input  wire           clk28_en,
   input  wire           reset_in,
-  input  wire           cache_rst,
+  input  wire           cache_rstn,
   input  wire           cache_inhibit,
   input  wire           cacheline_clr,
   input  wire [  4-1:0] cpu_cache_ctrl,
@@ -225,7 +225,7 @@ wire cpu_writes_busy = cpu_write_queue && (queue_valid || (cache_write_req != ca
 generate
 if (cpu_write_queue) begin : queued_cpu_writes
 	sdram_write_queue queue (
-		.clk(sysclk), .rst(!reset), .source_reset(!cache_rst || !init_done),
+		.clk(sysclk), .rstn(reset_out),
 		.req(cache_write_req), .ack(cache_write_ack),
 		.addr(cache_write_addr), .data(cache_write_data), .dqm(cache_write_dqm),
 		.valid(queue_valid), .ready(queue_ready), .head_addr(writebufferAddr),
@@ -264,28 +264,28 @@ assign cpuCSn      = cpustate[2];
 // reset
 ////////////////////////////////////////
 
-always @(posedge sysclk) begin
+always @(posedge sysclk, negedge reset_in) begin
 	if(!reset_in) begin
-		reset_cnt       <= #1 8'b00000000;
-		reset           <= #1 1'b0;
-		reset_sdstate   <= #1 1'b0;
+		reset <= #1 1'b0;
+		reset_cnt <= #1 8'b00000000;
+		reset_sdstate <= #1 1'b0;
+
 	end else begin
 		if(reset_cnt == 8'b00101010) begin
 			reset_sdstate <= #1 1'b1;
 		end
 		if(reset_cnt == 8'b10101010) begin
 			if(sdram_state == ph15) begin
-				reset       <= #1 1'b1;
+				reset <= #1 1'b1;
 			end
 		end else begin
-			reset_cnt     <= #1 reset_cnt + 8'd1;
-			reset         <= #1 1'b0;
+			reset_cnt <= #1 reset_cnt + 8'd1;
+			reset <= #1 1'b0;
 		end
 	end
 end
 
 assign reset_out = init_done;
-
 
 // RTG access
 
@@ -353,7 +353,8 @@ cpu_cache_new #(
 	.unaligned_write_combine(unaligned_write_combine)
 ) cache (
 	.clk              (sysclk),                       // clock
-	.rst              (!reset || !cache_rst),         // cache reset
+	.rstn             (reset_out),                    // cache reset
+	.clr              (!cache_rstn),                  // cache clear
 	.cache_en         (1'b1),                         // cache enable
 	.clk28_en         (clk28_en),
 	.cpu_cache_ctrl   (cpu_cache_ctrl),               // CPU cache control
@@ -481,11 +482,7 @@ end
 
 //// sdram state ////
 always @ (posedge sysclk) begin
-	// Use the early reset: the later reset releases only after reaching ph15.
-	// Holding ph0 with that later reset would prevent initialization starting.
-	if(!reset_sdstate) begin
-		sdram_state <= #1 ph0;
-	end else case(sdram_state) // LATENCY=3
+	case(sdram_state) // LATENCY=3
 		ph0     : begin
 				if(!init_done)	// Use a shorter cycle during init (removes a comparison with init_done from critical paths)
 					sdram_state <= #1 ph10;
