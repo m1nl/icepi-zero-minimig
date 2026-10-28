@@ -2,7 +2,8 @@
 module sdram_write_queue_tb;
 	reg clk=0;
 	always #4.386 clk=~clk;
-	reg rst=1, source_reset=0, req=0, ready=0;
+	reg rst=1, req=0, ready=0;
+	wire rstn=~rst;
 	reg [25:1] addr=0;
 	reg [31:0] data=0;
 	reg [3:0] dqm=15;
@@ -61,9 +62,11 @@ module sdram_write_queue_tb;
 		// A,B,A must remain three entries: do not reorder across another address.
 		offer(25'd30,32'd1,0); offer(25'd32,32'd2,0); offer(25'd30,32'd3,0);
 		if(dut.count!=3) $fatal(1,"merge reordered intervening address");
-		@(negedge clk); source_reset=1; req=0; tick;
-		if(ack!==0 || dut.count!=3) $fatal(1,"source reset lost posted writes");
-		@(negedge clk); source_reset=0; ready=1;
+		// A cache-only clear no longer resets either request toggle. Posted
+		// entries stay queued until the controller accepts them.
+		@(negedge clk); tick;
+		if(ack!==req || dut.count!=3) $fatal(1,"idle queue lost posted writes");
+		@(negedge clk); ready=1;
 		tick; expect_head(25'd32,32'd2,0);
 		tick; expect_head(25'd30,32'd3,0); tick;
 		@(negedge clk); ready=0;

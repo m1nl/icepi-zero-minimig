@@ -46,7 +46,7 @@ generate if(CACHE_RAM) begin: cached_ram
  wire [31:0] write_data;
  wire [3:0] write_mask;
  integer beats=0, first=0, delay_count=0;
- cpu_cache_new #(.data_cache(DATA_CACHE),.unaligned_write_combine(LEGACY_WRITE_COMBINE)) cache(.clk(clk),.rst(!reset_n),.cache_en(1'b1),.clk28_en(1'b1),
+ cpu_cache_new #(.data_cache(DATA_CACHE),.unaligned_write_combine(LEGACY_WRITE_COMBINE)) cache(.clk(clk),.rstn(reset_n),.clr(1'b0),.cache_en(1'b1),.clk28_en(1'b1),
   .cpu_cache_ctrl(cacr),.cache_inhibit(1'b0),.cacheline_clr(1'b0),
   .cpu_cs(!cpustate[2]),.cpu_restore(cpu_restore),.cpu_adr({ramaddr[26:1],1'b0}),.cpu_bs({!ramuds,!ramlds}),
   .cpu_longword(cpustate[4]),.cpu_long_cand(ram_long_cand),

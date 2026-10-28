@@ -64,7 +64,7 @@ module hdmi_rtg_tb;
     always @(posedge sys) div<=div+1'b1;
     sdram_ctrl memory_controller (
         .sysclk(sys),.clk7_en(&div[3:2]),.clk28_en(div[1:0]==0),
-        .reset_in(reset_n),.cache_rst(reset_n),.reset_out(mem_ready),
+        .reset_in(reset_n),.cache_rstn(reset_n),.reset_out(mem_ready),
         .cache_inhibit(1'b0),.cacheline_clr(1'b0),.cpu_cache_ctrl(4'd0),
         .sdaddr(),.sd_cs(),.ba(),.sd_we(),.sd_ras(),.sd_cas(),.dqm(),.sdata(),
         .hostWR(32'd0),.hostAddr(24'd0),.hostce(1'b0),.hostwe(1'b0),

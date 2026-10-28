@@ -34,6 +34,13 @@ I/D accesses, both ways, peripheral restoration, prediction clear/reset, fill
 handshakes, inhibited misses, write-through, byte masks and legacy combining.
 `valid` records the saved line/way; `ready` qualifies the fast BRAM read.
 
+The production interface has active-low asynchronous `rstn` and a separate
+active-high `clr`. The bench drives `rstn` from its reset stimulus and tests
+external clear plus CACR software clear on warm instruction lines. Backing RAM
+is changed before each clear to verify that resident tags and predictions are
+discarded. Reset during an incomplete paired read checks ACK/write suppression;
+a subsequent narrow read checks that stale paired-read state cannot leak out.
+
 With D-cache disabled, the bench requires every repeated narrow/paired data
 read to fetch SDRAM, while instruction reads remain cached and their saved
 prediction survives data accesses. It also checks direct return to an instruction

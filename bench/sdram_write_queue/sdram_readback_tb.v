@@ -24,7 +24,7 @@ module sdram_readback_tb #(parameter QUEUED=1);
 	assign dq=read_drive ? read_data : 16'bz;
 	sdram_ctrl #(.addr_max_bits(25), .cpu_write_queue(QUEUED)) dut (
 		.sysclk(clk), .clk7_en(&div[3:2]), .clk28_en(div[1:0]==0),
-		.reset_in(reset_n), .cache_rst(reset_n), .reset_out(ready),
+		.reset_in(reset_n), .cache_rstn(reset_n), .reset_out(ready),
 		.cache_inhibit(1'b1), .cacheline_clr(1'b0), .cpu_cache_ctrl(4'd0),
 		.sdaddr(a), .sd_cs(cs), .ba(bank), .sd_we(we), .sd_ras(ras), .sd_cas(cas), .dqm(dqm), .sdata(dq),
 		.hostWR(32'd0), .hostAddr(24'd0), .hostce(1'b0), .hostwe(1'b0), .hostinterrupt(1'b0),

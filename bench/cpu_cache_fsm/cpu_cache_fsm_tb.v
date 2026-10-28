@@ -13,7 +13,8 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
     cpu_ir_r <= cpu_ir;
     cpu_dr_r <= cpu_dr;
   end
-  reg cache_inhibit=0, cacheline_clr=0;
+  reg cache_inhibit=0, cacheline_clr=0, cache_clear=0;
+  reg [3:0] cpu_cache_ctrl=4'b0001;
   reg [26:0] cpu_adr=0;
   reg [15:0] cpu_dat_w=0, sdr_dat_r=0;
   reg [1:0] cpu_bs=3;
@@ -39,8 +40,14 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
   #(.data_cache(DATA_CACHE), .unaligned_write_combine(LEGACY_WRITE_COMBINE))
 `endif
   dut (
-    .clk(clk), .rst(rst), .cache_en(1'b1), .clk28_en(1'b1),
-    .cpu_cache_ctrl(4'b0001), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
+    .clk(clk),
+`ifdef SMALL_CACHE
+    .rstn(!rst), .clr(cache_clear),
+`else
+    .rst(rst),
+`endif
+    .cache_en(1'b1), .clk28_en(1'b1),
+    .cpu_cache_ctrl(cpu_cache_ctrl), .cache_inhibit(cache_inhibit), .cacheline_clr(cacheline_clr),
     .cpu_cs(cpu_cs), .cpu_adr(cpu_adr), .cpu_bs(cpu_bs),
 `ifdef SMALL_CACHE
     .cpu_restore(cpu_restore),
@@ -265,6 +272,40 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
         $fatal(1,"Wide write did not store exactly one big-endian pair");
     end
   endtask
+`ifdef SMALL_CACHE
+  task check_cache_clear;
+    input software;
+    integer before_requests, timeout;
+    reg saw_init;
+    begin
+      wide_read('he80,1); wide_read('he80,1);
+      // Change backing RAM without updating the cache. A successful clear
+      // must discard both the resident tag and its fast prediction.
+      memory['h740]=memory['h740]^16'h5aa5;
+      saw_init=0;
+      if(software) cpu_cache_ctrl[3]=1;
+      else cache_clear=1;
+      repeat(4) tick;
+      if(dut.cpu_sm_state==0) saw_init=1;
+      cpu_cache_ctrl[3]=0; cache_clear=0;
+      begin: await_clear
+        for(timeout=0;timeout<350;timeout=timeout+1) begin
+          tick;
+          if(dut.cpu_sm_state==0) saw_init=1;
+          if(saw_init && dut.cpu_sm_state==1) disable await_clear;
+        end
+        $fatal(1,"Cache clear did not complete: software=%b",software);
+      end
+      if(dut.cacheline_valid_i!==0 || dut.cacheline_ready_i!==0 ||
+         dut.cacheline_valid_d!==0 || dut.cacheline_ready_d!==0)
+        $fatal(1,"Cache clear retained a fast prediction");
+      before_requests=requests;
+      wide_read('he80,1);
+      if(requests!=before_requests+1)
+        $fatal(1,"Cache clear retained a resident tag");
+    end
+  endtask
+`endif
 `endif
   initial begin
     for(index=0;index<8192;index=index+1) memory[index]=(index*31)^16'habcd;
@@ -317,7 +358,8 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
       wide_write('he00,32'h1234abcd);
       wide_read('he00,1); wide_read('he00,0);
       legacy_write('he02,3,2);
-      $display("PASS D-cache disabled: paired/narrow bypass, I prediction preservation and fast ACK, write-through");
+      check_cache_clear(0); check_cache_clear(1);
+      $display("PASS D-cache disabled: paired/narrow bypass, I prediction preservation and fast ACK, write-through, external/software clear");
       $finish;
     end
 `endif
@@ -478,9 +520,11 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
     end
     if(cpu_ack!==0) $fatal(1,"Pair acknowledged before second beat");
     rst=1; tick;
-    if(cpu_ack!==0 || dut.cpu_pair!==0 || dut.read_pair_pending!==0)
-      $fatal(1,"Reset retained incomplete pair/ACK");
+    if(cpu_ack!==0 || dut.cpu_sm_state!==0 || dut.cpu_sm_iram0_we!==0 ||
+       dut.cpu_sm_iram1_we!==0 || dut.cpu_sm_dram0_we!==0 || dut.cpu_sm_dram1_we!==0)
+      $fatal(1,"Reset retained an ACK or active RAM write");
     cpu_cs=0; rst=0; idle(280); cpu_long_cand=0;
+    start_read('hb02,0); finish_read('hb02);
     wide_read('hb00,0);
 `endif
     // Deposit unexpected states to exercise the fallback transitions.
@@ -505,7 +549,11 @@ module cpu_cache_fsm_tb #(parameter LEGACY_WRITE_COMBINE=0, DATA_CACHE=1);
     if(dut.cacheline_valid_d!==0 || dut.cacheline_valid_i!==0)
       $fatal(1,"Reset did not invalidate BRAM fast hits");
 `endif
-    $display("PASS FSM: first-cycle fast ACKs, launch gating, I/D narrow and paired accesses, write-through, inhibited reads, reset");
+`ifdef SMALL_CACHE
+    cpu_cs=0; rst=0; idle(280);
+    check_cache_clear(0); check_cache_clear(1);
+`endif
+    $display("PASS FSM: first-cycle fast ACKs, launch gating, I/D narrow and paired accesses, write-through, inhibited reads, reset and clear");
     $finish;
   end
   initial begin #100000; $fatal(1,"Global timeout"); end

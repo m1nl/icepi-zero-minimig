@@ -20,7 +20,8 @@ module cpu_cache_new #(
 ) (
   // system
   input  wire           clk,            // clock
-  input  wire           rst,            // cache reset
+  input  wire           rstn,           // cache reset
+  input  wire           clr,            // cache clear preserves posted toggles
   input  wire           cache_en,       // cache enable
   input  wire           clk28_en,       // 28MHz enable signal
   input  wire [  4-1:0] cpu_cache_ctrl, // CPU cache control

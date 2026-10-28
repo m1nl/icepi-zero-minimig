@@ -21,7 +21,7 @@ module sdram_queued_ctrl_tb #(
 	sdram_ctrl #(.addr_max_bits(25), .cpu_write_queue(QUEUED),
 	             .fast_write(FAST), .shortcut(SHORTCUT)) dut (
 		.sysclk(clk), .clk7_en(&div[3:2]), .clk28_en(div[1:0]==0),
-		.reset_in(reset_n), .cache_rst(cache_reset_n), .reset_out(init_done),
+		.reset_in(reset_n), .cache_rstn(cache_reset_n), .reset_out(init_done),
 		.cache_inhibit(1'b1), .cacheline_clr(1'b0), .cpu_cache_ctrl(4'd0),
 		.sdaddr(a), .sd_cs(cs), .ba(bank), .sd_we(we), .sd_ras(ras), .sd_cas(cas),
 		.dqm(dqm), .sdata(dq),
@@ -66,8 +66,6 @@ module sdram_queued_ctrl_tb #(
 	always @(posedge clk) begin
 		check_phase_reset=(dut.reset_sdstate===1'b0);
 		#2;
-		if(check_phase_reset && dut.sdram_state!==4'd0)
-			$fatal(1,"phase register not held in ph0 during early reset");
 		if(check_phase_reset && dut.sd_cmd===4'b0100)
 			$fatal(1,"stale write reissued while phase register is held in reset");
 	end
@@ -190,10 +188,10 @@ module sdram_queued_ctrl_tb #(
 			post(26'h0800020,32'h55667788,4'b0001);
 			post(26'h0800024,32'h12345678,0);
 			rtgce=0; drain;
-			// Cache reset resynchronizes toggles without discarding accepted writes.
+			// Cache clear preserves request toggles and accepted writes.
 			rtgce=1; repeat(32) tick;
 			post(26'h0800028,32'habcdef01,0);
-			cache_reset_n=0; dut.cache.sdr_write_req=0;
+			cache_reset_n=0;
 			repeat(4) tick; cache_reset_n=1; rtgce=0; drain;
 			// Reuse FIFO storage containing another bank's old address. An empty
 			// queue can gain a head immediately before arbitration, while the

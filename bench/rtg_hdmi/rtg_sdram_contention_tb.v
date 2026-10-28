@@ -57,7 +57,7 @@ module rtg_sdram_contention_tb #(parameter CPU_WRITE_QUEUE=0);
     assign dq=16'd0;
     sdram_ctrl #(.cpu_write_queue(CPU_WRITE_QUEUE)) mem (
         .sysclk(sys),.clk7_en(&div[3:2]),.clk28_en(div[1:0]==0),
-        .reset_in(reset_n),.cache_rst(reset_n),.reset_out(mem_ready),
+        .reset_in(reset_n),.cache_rstn(reset_n),.reset_out(mem_ready),
         .cache_inhibit(1'b0),.cacheline_clr(1'b0),.cpu_cache_ctrl(4'd0),
         .sdaddr(),.sd_cs(),.ba(),.sd_we(),.sd_ras(),.sd_cas(),.dqm(),.sdata(dq),
         .hostWR(32'd0),.hostAddr(24'd0),.hostce(host_req),.hostwe(1'b0),

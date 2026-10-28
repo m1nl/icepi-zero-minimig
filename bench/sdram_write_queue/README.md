@@ -17,7 +17,7 @@ old data and active-low masks.
 Controller tests run the production controller and queue with a synthetic cache
 request source. They check both four-halfword drains, normal fallback, masks
 merged during allocation, late FIFO heads versus registered bank eligibility,
-row/bank boundaries, competing reads, refresh, phase reset/reinitialization, and
+row/bank boundaries, competing reads, refresh, reset/reinitialization, and
 CPU read exclusion while queued or in-flight writes remain. The command checker
 uses W9825G6KH-6I limits at 114 MHz: tRCD/tRP=18 ns, tRAS=42 ns, tRC=60 ns,
 tRRD=2 clocks, and write recovery=2 clocks. Tests also cover disabled operation,
@@ -40,8 +40,11 @@ controller. Standard IcePi Zero and FleaOhm retain the disabled path.
 The cache's existing request/acknowledge toggles feed a four-entry queue. A write
 is acknowledged after copying or merging its bytes. The controller captures a
 complete payload and masks into per-slot registers before popping an entry.
-Source/cache reset resynchronizes its toggles without discarding queued writes;
-SDRAM reset clears the queue along with controller initialization.
+Cache-only clear preserves its request toggle and does not reset the queue, so
+accepted writes remain posted. The queue now uses active-low asynchronous
+`rstn`, driven by SDRAM initialization readiness. SDRAM reset clears the queue
+along with controller initialization. Reset checks reject stale WRITE commands;
+the current phase sequencer is not required to stay in ph0 during reset.
 
 If the next entry shares the active bank and row and the opposite slot has no
 read, slot 1 issues WRITEs at ph8/ph10/ph11/ph12, or slot 2 at ph0/ph2/ph3/ph4.
