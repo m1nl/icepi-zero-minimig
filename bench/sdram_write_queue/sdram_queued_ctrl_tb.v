@@ -57,9 +57,40 @@ module sdram_queued_ctrl_tb #(
 		end
 	endtask
 	always @(posedge clk) begin
-		phase=dut.sdram_state;
+		phase=-1;
+		for(integer bit_index=0;bit_index<16;bit_index=bit_index+1)
+			if(dut.sdram_state[bit_index]) phase=bit_index;
 		if(init_done && QUEUED && dut.cache_req && dut.cpu_writes_busy)
 			read_blocked=read_blocked+1;
+	end
+	// Check the encoding and original binary phase schedule independently of
+	// command checking, including startup, ph0 holds, init jumps and shortcuts.
+	integer expected_phase;
+	always @(posedge clk) begin
+		if((^dut.sdram_state === 1'bx) || dut.sdram_state == 0 ||
+		   (dut.sdram_state & (dut.sdram_state - 16'd1)) != 0)
+			$fatal(1,"invalid one-hot SDRAM phase %h",dut.sdram_state);
+		case(dut.sdram_state)
+			16'h0001: begin
+				expected_phase=0;
+				if(!dut.init_done) expected_phase=10;
+				else if(SHORTCUT || (dut.clk7_enD && !dut.clk7_en)) expected_phase=1;
+			end
+			16'h0004: begin
+				if(dut.init_done && SHORTCUT && !rtgce &&
+				   dut.slot1_type==dut.IDLE && dut.slot2_type==dut.IDLE)
+					expected_phase=0;
+				else expected_phase=3;
+			end
+			default: begin
+				expected_phase=0;
+				for(integer bit_index=1;bit_index<15;bit_index=bit_index+1)
+					if(dut.sdram_state[bit_index]) expected_phase=bit_index+1;
+			end
+		endcase
+		#2;
+		if(dut.sdram_state !== (16'h0001 << expected_phase))
+			$fatal(1,"SDRAM phase transition mismatch expected=%d got=%h",expected_phase,dut.sdram_state);
 	end
 	// Sample reset at the edge, then check the delayed register assignment.
 	reg check_phase_reset;
@@ -126,7 +157,7 @@ module sdram_queued_ctrl_tb #(
 		begin @(posedge clk); #2; end
 	endtask
 	task phase_at(input integer p);
-		begin @(negedge clk); while(dut.sdram_state!=p) @(negedge clk); #0.1; end
+		begin @(negedge clk); while(dut.sdram_state[p]!==1'b1) @(negedge clk); #0.1; end
 	endtask
 	task post(input [25:0] address, input [31:0] data, input [3:0] mask);
 		integer timeout, n, ix;

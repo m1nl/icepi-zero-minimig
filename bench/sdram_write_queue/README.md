@@ -22,6 +22,8 @@ CPU read exclusion while queued or in-flight writes remain. The command checker
 uses W9825G6KH-6I limits at 114 MHz: tRCD/tRP=18 ns, tRAS=42 ns, tRC=60 ns,
 tRRD=2 clocks, and write recovery=2 clocks. Tests also cover disabled operation,
 shortcut operation, and the queue overriding legacy `fast_write` scheduling.
+They also check the one-hot phase encoding and original phase transitions,
+including initialization jumps, phase-0 holds, shortcuts and reinitialization.
 The readback test uses the real small CPU cache and behavioral memory to check
 paired and narrow inhibited CPU reads after full and byte writes. The separate
 RTG contention case uses the real cache, controller and RTG producer.

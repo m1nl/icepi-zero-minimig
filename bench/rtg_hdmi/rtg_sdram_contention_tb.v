@@ -97,7 +97,7 @@ module rtg_sdram_contention_tb #(parameter CPU_WRITE_QUEUE=0);
             if(refresh_wait>max_refresh_wait) max_refresh_wait=refresh_wait;
             if(refresh_wait>8192) $fatal(1,"SDRAM refresh starved by RTG");
         end else refresh_wait=0;
-        if(mem.slot1_type==0 && mem.sdram_state==1) refresh_count=refresh_count+1;
+        if(mem.slot1_type==0 && mem.sdram_state[1]) refresh_count=refresh_count+1;
         if(ack) burst_count=burst_count+1;
         if(rtg.keep_fill && fill && (rtg.owner?rtg.bottom_fifo.full:rtg.top_fifo.full))
             $fatal(1,"RTG FIFO overflow under contention");

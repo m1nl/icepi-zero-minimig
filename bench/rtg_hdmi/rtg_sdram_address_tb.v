@@ -110,7 +110,7 @@ module rtg_sdram_address_tb #(
             if(refresh_wait>max_refresh_wait) max_refresh_wait=refresh_wait;
             if(refresh_wait>8192) $fatal(1,"SDRAM refresh starved by RTG");
         end else refresh_wait=0;
-        if(mem.slot1_type==0 && mem.sdram_state==1) refresh_count=refresh_count+1;
+        if(mem.slot1_type==0 && mem.sdram_state[1]) refresh_count=refresh_count+1;
         if(ack) burst_count=burst_count+1;
         if(rtg.keep_fill && fill && (rtg.owner?rtg.bottom_fifo.full:rtg.top_fifo.full))
             $fatal(1,"RTG FIFO overflow under contention");
@@ -135,9 +135,9 @@ module rtg_sdram_address_tb #(
             open_row[mem.ba]=mem.sdaddr;
         end else if(mem.sd_cmd==mem.CMD_READ || mem.sd_cmd==mem.CMD_WRITE) begin
             if(mem.sd_cmd==mem.CMD_READ &&
-               ((mem.sdram_state==5 && mem.slot1_type==mem.RTG) ||
-                (mem.sdram_state==13 && mem.slot2_type==mem.RTG))) begin
-                command_address=mem.sdram_state==5 ? mem.slot1_addr : mem.slot2_addr;
+               ((mem.sdram_state[5] && mem.slot1_type==mem.RTG) ||
+                (mem.sdram_state[13] && mem.slot2_type==mem.RTG))) begin
+                command_address=mem.sdram_state[5] ? mem.slot1_addr : mem.slot2_addr;
                 if(!bank_open[mem.ba] || open_row[mem.ba]!==command_address[22:10])
                     $fatal(1,"RTG read without correct open SDRAM row addr=%h bank=%d row=%h open=%b",command_address,mem.ba,open_row[mem.ba],bank_open[mem.ba]);
                 command_checks=command_checks+1;
@@ -177,8 +177,8 @@ module rtg_sdram_address_tb #(
             source_row=0;
         end else if(ack && rtg.keep_fill) begin
             expected_address=26'h800000+source_row*ROW_BURSTS*16+burst_column*16;
-            if((mem.sdram_state==4 ? mem.slot1_addr : mem.slot2_addr)!==expected_address)
-                $fatal(1,"wrong SDRAM accepted address got=%h expected=%h state=%d burst=%d vphase=%d config_sys_repeat=%h row_bursts=%d clut=%b addr=%h left=%d repeat=%d base=%h",mem.sdram_state==4 ? mem.slot1_addr : mem.slot2_addr,expected_address,rtg.state,burst_column,repeat_row_index,rtg.config_sys_repeat,rtg.row_bursts,rtg.config_sys_indexed,addr,rtg.row_left_top,rtg.repeat_top,rtg.row_base_top);
+            if((mem.sdram_state[4] ? mem.slot1_addr : mem.slot2_addr)!==expected_address)
+                $fatal(1,"wrong SDRAM accepted address got=%h expected=%h state=%d burst=%d vphase=%d config_sys_repeat=%h row_bursts=%d clut=%b addr=%h left=%d repeat=%d base=%h",mem.sdram_state[4] ? mem.slot1_addr : mem.slot2_addr,expected_address,rtg.state,burst_column,repeat_row_index,rtg.config_sys_repeat,rtg.row_bursts,rtg.config_sys_indexed,addr,rtg.row_left_top,rtg.repeat_top,rtg.row_base_top);
             address_checks=address_checks+1;
             if(burst_column==ROW_BURSTS-1) begin
                 burst_column=0;
