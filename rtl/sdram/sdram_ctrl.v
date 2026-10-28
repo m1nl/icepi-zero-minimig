@@ -124,7 +124,8 @@ localparam [2:0]
   AUDIO = 6,
   IDLE = 7;
 
-localparam [3:0]
+// One-hot phase bit indices. Consumers test individual bits directly.
+localparam
   ph0 = 0,
   ph1 = 1,
   ph2 = 2,
@@ -175,7 +176,8 @@ reg           reset_sdstate;
 reg           clk7_enD;
 reg  [ 9-1:0] refreshcnt;
 reg           refresh_pending;
-reg  [ 4-1:0] sdram_state;
+// Power up in ph0; SDRAM reset retains the existing phase progression.
+reg  [15:0] sdram_state = 16'h0001;
 // writebuffer
 reg           slot1_write;
 reg           slot2_write;
@@ -275,7 +277,7 @@ always @(posedge sysclk, negedge reset_in) begin
 			reset_sdstate <= #1 1'b1;
 		end
 		if(reset_cnt == 8'b10101010) begin
-			if(sdram_state == ph15) begin
+			if(sdram_state[ph15]) begin
 				reset <= #1 1'b1;
 			end
 		end else begin
@@ -291,10 +293,10 @@ assign reset_out = init_done;
 
 assign rtgRd=sdata_reg;
 assign rtgfill=(slot1_type==RTG && cache_fill_1) || (slot2_type==RTG && cache_fill_2) ? 1'b1 : 1'b0;
-assign rtgack=(slot1_type==RTG && sdram_state==ph4) || (slot2_type==RTG && sdram_state==ph12) ? 1'b1 : 1'b0;
+assign rtgack=(slot1_type==RTG && sdram_state[ph4]) || (slot2_type==RTG && sdram_state[ph12]) ? 1'b1 : 1'b0;
 assign audRd=sdata_reg;
 assign audfill=slot1_type==AUDIO ? cache_fill_1 : 1'b0;
-assign audack=(slot1_type==AUDIO && sdram_state==ph4) ? 1'b1 : 1'b0;
+assign audack=(slot1_type==AUDIO && sdram_state[ph4]) ? 1'b1 : 1'b0;
 
 ////////////////////////////////////////
 // host access
@@ -328,7 +330,7 @@ reg [31:0] cache_snoop_dat_w;
 reg [3:0] cache_snoop_bs;
 reg snoop_act;
 
-wire cache_req_pre = (sdram_state == ph15 || sdram_state == ph7);
+wire cache_req_pre = (sdram_state[ph15] || sdram_state[ph7]);
 
 localparam data_cache =
 `ifdef MINIMIG_NO_DATA_CACHE
@@ -396,11 +398,11 @@ assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_
 //// chip line read ////
 always @ (posedge sysclk) begin
 	if(slot1_type == CHIP) begin
-		case(sdram_state)
-			ph9  : chipRD   <= #1 sdata_reg;
-			ph10 : chip48_1 <= #1 sdata_reg;
-			ph11 : chip48_2 <= #1 sdata_reg;
-			ph12 : chip48_3 <= #1 sdata_reg;
+		case (1'b1) /* synthesis parallel_case */
+			sdram_state[ph9]  : chipRD   <= #1 sdata_reg;
+			sdram_state[ph10] : chip48_1 <= #1 sdata_reg;
+			sdram_state[ph11] : chip48_2 <= #1 sdata_reg;
+			sdram_state[ph12] : chip48_3 <= #1 sdata_reg;
 			default: ;
 		endcase
 	end
@@ -434,18 +436,18 @@ always @ (posedge sysclk) begin
 		enaWRreg      <= #1 1'b0;
 		ena7RDreg     <= #1 1'b0;
 		ena7WRreg     <= #1 1'b0;
-		case(sdram_state) // LATENCY=3
-			ph2 : begin
+		case (1'b1) /* synthesis parallel_case */ // LATENCY=3
+			sdram_state[ph2] : begin
 				enaWRreg  <= #1 1'b1;
 			end
-			ph6 : begin
+			sdram_state[ph6] : begin
 				enaWRreg  <= #1 1'b1;
 				ena7RDreg <= #1 1'b1;
 			end
-			ph10 : begin
+			sdram_state[ph10] : begin
 				enaWRreg  <= #1 1'b1;
 			end
-			ph14 : begin
+			sdram_state[ph14] : begin
 				enaWRreg  <= #1 1'b1;
 				ena7WRreg <= #1 1'b1;
 			end
@@ -464,8 +466,8 @@ always @ (posedge sysclk) begin
 		initstate <= #1 {5{1'b0}};
 		init_done <= #1 1'b0;
 	end else begin
-		case(sdram_state) // LATENCY=3
-		ph15: begin
+		case (1'b1) /* synthesis parallel_case */ // LATENCY=3
+		sdram_state[ph15]: begin
 			if(initstate != 5'b11111) begin
 				initstate <= #1 initstate + 5'd1;
 			end else begin
@@ -482,33 +484,33 @@ end
 
 //// sdram state ////
 always @ (posedge sysclk) begin
-	case(sdram_state) // LATENCY=3
-		ph0     : begin
+	case (1'b1) /* synthesis parallel_case */ // LATENCY=3
+		sdram_state[ph0]     : begin
 				if(!init_done)	// Use a shorter cycle during init (removes a comparison with init_done from critical paths)
-					sdram_state <= #1 ph10;
+					sdram_state <= #1 (16'h0001 << ph10);
 				else if(shortcut || (clk7_enD & ~clk7_en))
-					sdram_state <= #1 ph1;
+					sdram_state <= #1 (16'h0001 << ph1);
 			end
-		ph1     : sdram_state <= #1 ph2;
-		ph2     : begin
+		sdram_state[ph1]     : sdram_state <= #1 (16'h0001 << ph2);
+		sdram_state[ph2]     : begin
 				if(init_done && shortcut==1 && (!rtgce) && slot1_type==IDLE && slot2_type==IDLE)	// Shortcut back to ph0 if both slots are idle.
-					sdram_state <= #1 ph0;
+					sdram_state <= #1 (16'h0001 << ph0);
 				else
-					sdram_state <= #1 ph3;
+					sdram_state <= #1 (16'h0001 << ph3);
 			end
-		ph3     : sdram_state <= #1 ph4;
-		ph4     : sdram_state <= #1 ph5;
-		ph5     : sdram_state <= #1 ph6;
-		ph6     : sdram_state <= #1 ph7;
-		ph7     : sdram_state <= #1 ph8;
-		ph8     : sdram_state <= #1 ph9;
-		ph9     : sdram_state <= #1 ph10;
-		ph10    : sdram_state <= #1 ph11;
-		ph11    : sdram_state <= #1 ph12;
-		ph12    : sdram_state <= #1 ph13;
-		ph13    : sdram_state <= #1 ph14;
-		ph14    : sdram_state <= #1 ph15;
-		default : sdram_state <= #1 ph0;
+		sdram_state[ph3]     : sdram_state <= #1 (16'h0001 << ph4);
+		sdram_state[ph4]     : sdram_state <= #1 (16'h0001 << ph5);
+		sdram_state[ph5]     : sdram_state <= #1 (16'h0001 << ph6);
+		sdram_state[ph6]     : sdram_state <= #1 (16'h0001 << ph7);
+		sdram_state[ph7]     : sdram_state <= #1 (16'h0001 << ph8);
+		sdram_state[ph8]     : sdram_state <= #1 (16'h0001 << ph9);
+		sdram_state[ph9]     : sdram_state <= #1 (16'h0001 << ph10);
+		sdram_state[ph10]    : sdram_state <= #1 (16'h0001 << ph11);
+		sdram_state[ph11]    : sdram_state <= #1 (16'h0001 << ph12);
+		sdram_state[ph12]    : sdram_state <= #1 (16'h0001 << ph13);
+		sdram_state[ph13]    : sdram_state <= #1 (16'h0001 << ph14);
+		sdram_state[ph14]    : sdram_state <= #1 (16'h0001 << ph15);
+		default : sdram_state <= #1 (16'h0001 << ph0);
 	endcase
 end
 
@@ -517,7 +519,7 @@ reg  [ 8-1:0] hostslot_cnt;
 
 always @(posedge sysclk) begin
 
-	if(sdram_state==ph2) begin
+	if(sdram_state[ph2]) begin
 		if(|hostslot_cnt)
 			hostslot_cnt        <= #1 hostslot_cnt - 8'd1;
 		if(slot1_type==HOST)
@@ -605,10 +607,10 @@ wire append_slot2 = cpu_write_queue && init_done && slot2_write &&
                     writebufferAddr[25:10] == slot2_addr[25:10];
 
 assign queue_ready = cpu_write_queue && init_done && (
-                    (sdram_state == ph2 && slot1_write && slot1_type == CPU_WRITECACHE) ||
-                    (sdram_state == ph9 && slot2_type == CPU_WRITECACHE) ||
-                    (sdram_state == ph10 && slot1_append) ||
-                    (sdram_state == ph2 && slot2_append));
+                    (sdram_state[ph2] && slot1_write && slot1_type == CPU_WRITECACHE) ||
+                    (sdram_state[ph9] && slot2_type == CPU_WRITECACHE) ||
+                    (sdram_state[ph10] && slot1_append) ||
+                    (sdram_state[ph2] && slot2_append));
 
 always @ (posedge sysclk) begin
 	if(!reset) begin
@@ -632,8 +634,8 @@ always @ (posedge sysclk) begin
 	snoop_act                   <= #1 1'b0;
 
 	// Time slot control
-	case(sdram_state)
-		ph0 : begin
+	case (1'b1) /* synthesis parallel_case */
+		sdram_state[ph0] : begin
 			cache_fill_2          <= #1 1'b1; // slot 2
 			if(slot2_write) begin // Write cycle
 				sdata_oe            <= #1 1'b1;
@@ -702,7 +704,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph1 : begin
+		sdram_state[ph1] : begin
 			cache_fill_2          <= #1 1'b1; // slot 2
 			slot1_write           <= #1 1'b0;
 			// we give the chipset first priority
@@ -747,7 +749,7 @@ always @ (posedge sysclk) begin
 			end
 		end
 
-		ph2 : begin
+		sdram_state[ph2] : begin
 			// Capture/pop after ph1 has registered the chipset override. This
 			// keeps the long clk28 chipset DMA decode out of FIFO merge enables.
 			// Head merges through ph1 are included in both payload and masks.
@@ -780,7 +782,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph3 : begin
+		sdram_state[ph3] : begin
 			// slot 2
 			cache_fill_2                <= #1 1'b1;
 
@@ -803,7 +805,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph4 : begin
+		sdram_state[ph4] : begin
 			cache_fill_2                <= #1 1'b1;
 			if(slot1_type!=IDLE && slot1_type!=REFRESH && !slot1_write) begin // Read cycle
 				ba                  <= #1 slot1_bank;
@@ -831,7 +833,7 @@ always @ (posedge sysclk) begin
 			end
 	end
 
-		ph5 : begin
+		sdram_state[ph5] : begin
 			cache_fill_2                <= #1 1'b1;
 			if(fast_write && !cpu_write_queue && slot1_write && (slot2_write || slot2_type == IDLE)) begin // Write cycle (2nd word)
 				if(slot1_type == CHIP || slot1_type == HOST) snoop_act <= #1 1'b1;
@@ -846,11 +848,11 @@ always @ (posedge sysclk) begin
 			if(slot1_type == REFRESH) slot1_type <= #1 IDLE;
 		end
 
-		ph6 : begin
+		sdram_state[ph6] : begin
 			cache_fill_2                <= #1 1'b1;
 		end
 
-		ph7 : begin
+		sdram_state[ph7] : begin
 			cache_fill_2                <= #1 1'b1;
 			if(slot1_write) begin // Write cycle
 				if(slot1_type == CHIP || slot1_type == HOST) snoop_act <= #1 1'b1;
@@ -864,7 +866,7 @@ always @ (posedge sysclk) begin
 			end
 		end
 
-		ph8 : begin
+		sdram_state[ph8] : begin
 			if(slot1_write) begin // Write cycle
 				ba                  <= #1 slot1_bank;
 				dqm                 <= #1 slot1_dqm;
@@ -912,7 +914,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph9 : begin
+		sdram_state[ph9] : begin
 			cache_fill_1          <= #1 1'b1;
 			slot2_write           <= #1 1'b0;
 
@@ -943,7 +945,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph10 : begin
+		sdram_state[ph10] : begin
 			if(slot1_write) begin // Write cycle (2nd word)
 				ba              <= #1 slot1_bank;
 				sdata_oe            <= #1 1'b1;
@@ -963,7 +965,7 @@ always @ (posedge sysclk) begin
 
 		end
 
-		ph11 : begin
+		sdram_state[ph11] : begin
 			cache_fill_1          <= #1 1'b1;
 
 			case(initstate)
@@ -1007,7 +1009,7 @@ always @ (posedge sysclk) begin
 		end
 
 		// slot 2 CAS
-		ph12 : begin
+		sdram_state[ph12] : begin
 			cache_fill_1          <= #1 1'b1;
 			if (slot2_type!=IDLE && !slot2_write) begin // Read cycle
 				ba                  <= #1 slot2_bank;
@@ -1030,7 +1032,7 @@ always @ (posedge sysclk) begin
 			end
 		end
 
-		ph13 : begin
+		sdram_state[ph13] : begin
 			cache_fill_1          <= #1 1'b1;
 			if(fast_write && !cpu_write_queue && slot2_write && (slot1_write || slot1_type == IDLE)) begin // Write cycle (2nd word)
 				sdata_oe            <= #1 1'b1;
@@ -1042,11 +1044,11 @@ always @ (posedge sysclk) begin
 			end
 		end
 
-		ph14 : begin
+		sdram_state[ph14] : begin
 			cache_fill_1          <= #1 1'b1;
 		end
 
-		ph15 : begin
+		sdram_state[ph15] : begin
 			cache_fill_1          <= #1 1'b1;
 			if(slot2_write) begin // Write cycle
 				sdaddr_next[12:3]        <= #1 {1'b0, 1'b0, 1'b0, slot2_addr[25], slot2_addr[9:4]}; // Can't auto-precharge, since we need to interrupt the burst
@@ -1065,8 +1067,8 @@ always @ (posedge sysclk) begin
 	// Final AP at ph12/ph4 leaves >=5 clocks to the next same-bank ACTIVATE:
 	// W9825G6KH-6I at 114 MHz needs tWR=2 clocks plus tRP=18 ns.
 	if (cpu_write_queue && init_done) begin
-		if ((sdram_state == ph10 && slot1_append) ||
-		    (sdram_state == ph2 && slot2_append)) begin
+		if ((sdram_state[ph10] && slot1_append) ||
+		    (sdram_state[ph2] && slot2_append)) begin
 			append_addr <= #1 writebufferAddr;
 			append_data_hi <= #1 writebufferWR2;
 			append_dqm <= #1 {writebuffer_dqm2, writebuffer_dqm};
@@ -1074,9 +1076,9 @@ always @ (posedge sysclk) begin
 			sdaddr_next <= #1 {3'b000, writebufferAddr[25], writebufferAddr[9:1]};
 		end
 
-		if ((sdram_state == ph11 && slot1_append) ||
-		    (sdram_state == ph3 && slot2_append)) begin
-			ba <= #1 sdram_state == ph11 ? slot1_bank : slot2_bank;
+		if ((sdram_state[ph11] && slot1_append) ||
+		    (sdram_state[ph3] && slot2_append)) begin
+			ba <= #1 sdram_state[ph11] ? slot1_bank : slot2_bank;
 			dqm <= #1 append_dqm[1:0];
 			sd_cmd <= #1 CMD_WRITE;
 			sdata_oe <= #1 1'b1;
@@ -1085,9 +1087,9 @@ always @ (posedge sysclk) begin
 			sdaddr_next[2:0] <= #1 append_addr[3:1] + 1'd1;
 		end
 
-		if ((sdram_state == ph12 && slot1_append) ||
-		    (sdram_state == ph4 && slot2_append)) begin
-			ba <= #1 sdram_state == ph12 ? slot1_bank : slot2_bank;
+		if ((sdram_state[ph12] && slot1_append) ||
+		    (sdram_state[ph4] && slot2_append)) begin
+			ba <= #1 sdram_state[ph12] ? slot1_bank : slot2_bank;
 			dqm <= #1 append_dqm[3:2];
 			sd_cmd <= #1 CMD_WRITE;
 			sdata_oe <= #1 1'b1;
