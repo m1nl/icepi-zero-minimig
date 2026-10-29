@@ -7,7 +7,7 @@ module rtg_register_tb;
     // Model the qualification supplied by TG68K, not by rtg_video itself.
     wire qualified_req=req && (addr[10] || addr[9:8]==2'b01);
     rtg_video dut (
-        .clk_sys(clk),.clk_rtg(clk),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(1'b0),.video_reset(1'b1),
+        .clk_sys(clk),.clk_rtg(clk),.resetn_sys(reset_n),.cpu_resetn(reset_n),.resetn_rtg(reset_n),.rtg_active(1'b0),.video_reset(1'b1),
         .frame_start_toggle(1'b0),.vblank_start_toggle(1'b0),.pixel_request(1'b0),.frame_request(1'b0),.line_prepare(1'b0),
         .reg_addr(addr),.reg_wr(wr),.reg_req(qualified_req),.reg_d(d),.reg_ack(ack),.reg_q(q),
         .fetch_addr(),.fetch_req(),.fetch_pri(),.fetch_d(16'd0),.fetch_ack(1'b0),.fetch_fill(1'b0),

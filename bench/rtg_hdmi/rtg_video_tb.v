@@ -5,6 +5,7 @@ module rtg_video_tb;
     reg sys=0,vid=0;
     always #4.375 sys=~sys;
     always #7.575757 vid=~vid;
+    reg cpu_reset_n=1;
     reg reset_n=0,ena=0,video_reset=1;
     reg [10:0] cx=0; reg [9:0] cy=0;
     wire [10:0] px = cx >= HT-3 ? cx-(HT-3) : cx+3;
@@ -41,7 +42,7 @@ module rtg_video_tb;
     reg [15:0] data=0; reg ack=0,fill=0;
     wire [7:0] r,g,b; wire pixel,de;
     rtg_video #(.PREPARE_DELAY(32)) dut (
-        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
+        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.cpu_resetn(cpu_reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),
         .fetch_addr(addr),.fetch_req(req),.fetch_pri(pri),.fetch_d(data),.fetch_ack(ack),.fetch_fill(fill),
@@ -149,7 +150,21 @@ module rtg_video_tb;
         repeat(50) @(negedge sys);
         if(req || pri || dut.pop_top || dut.pop_bottom) $fatal(1,"disabled RTG still active");
         @(negedge vid);ena=1;video_reset=0;check_frame(0,H);
-        $display("PASS: RTG formats, pixel alignment, split rows, frame restart, starvation and disable");$finish;
+        // CPU-only reset during a returning burst must flush prepared data.
+        write_reg(11'h110,1);
+        wait(fill);@(negedge sys);cpu_reset_n=0;
+        repeat(6) @(negedge sys);
+        if(dut.state!==dut.OFF || dut.fifo_reset!==1 || dut.frame_ready!==0 ||
+           dut.rtg_enable!==0 || req!==0 || pri!==0 || dut.keep_fill!==0 ||
+           dut.pop_top!==0 || dut.pop_bottom!==0 || {r,g,b}!==24'd0)
+            $fatal(1,"CPU reset failed to stop an active transfer/scanout");
+        @(negedge vid);ena=0;video_reset=1;
+        repeat(50) @(negedge sys);
+        cpu_reset_n=1;
+        write_reg(11'h110,1);
+        @(negedge vid);ena=1;video_reset=0;
+        check_frame(2,6);check_frame(0,H);
+        $display("PASS: RTG formats, pixel alignment, split rows, frame restart, starvation, disable and CPU reset during transfer");$finish;
     end
     initial begin #200000000;$fatal(1,"timeout");end
 endmodule

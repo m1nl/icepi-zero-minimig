@@ -44,7 +44,7 @@ module rtg_viewport_tb;
     reg [15:0] data=0; reg ack=0,fill=0;
     wire [7:0] r,g,b; wire pixel,de;
     rtg_video #(.PREPARE_DELAY(32)) dut (
-        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.rtg_enable(),.video_reset(video_reset),
+        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.cpu_resetn(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.rtg_enable(),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(scan_pixel),.frame_request(scan_frame),.line_prepare(scan_line),
         .reg_addr(reg_addr),.reg_wr(reg_wr),.reg_req(reg_req),.reg_d(reg_d),.reg_ack(),.reg_q(),
         .fetch_addr(addr),.fetch_req(req),.fetch_pri(pri),.fetch_d(data),.fetch_ack(ack),.fetch_fill(fill),

@@ -4,6 +4,7 @@ module rtg_vblank_tb;
     always #4.375 sys=~sys;
     always #7.575757 vid=~vid;
     always #17.5 amiga=~amiga;
+    reg cpu_reset_n=1;
     reg reset_n=0,ena=0,video_reset=1,sof=0,vb=0;
     wire pixel_clk = ena ? vid : amiga;
     reg sof_toggle=0,vb_toggle=0;
@@ -17,7 +18,7 @@ module rtg_vblank_tb;
     reg [10:0] addr=0;reg [15:0] d=0;reg req=0,wr=0;
     wire ack,irq;wire [15:0] q;
     rtg_video #(.PREPARE_DELAY(128)) dut (
-        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
+        .clk_sys(sys),.clk_rtg(vid),.resetn_sys(reset_n),.cpu_resetn(cpu_reset_n),.resetn_rtg(reset_n),.rtg_active(ena),.video_reset(video_reset),
         .frame_start_toggle(sof_toggle),.vblank_start_toggle(vb_toggle),.pixel_request(1'b0),.frame_request(1'b0),.line_prepare(1'b0),
         .reg_addr(addr),.reg_wr(wr),.reg_req(req),.reg_d(d),.reg_ack(ack),.reg_q(q),.irq(irq),
         .fetch_addr(),.fetch_req(),.fetch_pri(),.fetch_d(16'd0),.fetch_ack(1'b0),.fetch_fill(1'b0),
@@ -132,7 +133,29 @@ module rtg_vblank_tb;
         if(irq) $fatal(1,"HDMI reset generated a spurious frame IRQ");
         video_reset=0;repeat(6) @(negedge sys);frame_event(0);status(12);
         frame_event(1);status(15);
-        $display("PASS: native startup IRQ, HDMI blank, sticky/W1C IRQ, PORTS, native VERTB and clock restart");
+        // CPU reset must clear a pending IRQ and an acknowledged, held request
+        // while system reset remains released and HDMI still reports RTG active.
+        access(11'h110,1,1);
+        @(negedge sys);addr=11'h110;d=1;wr=1;req=1;
+        @(posedge sys);#1;
+        if(!ack || !dut.reg_served || !irq || !dut.rtg_enable)
+            $fatal(1,"CPU reset setup failed");
+        @(negedge sys);cpu_reset_n=0;
+        repeat(6) @(negedge sys);
+        if(dut.rtg_enable!==0 || irq!==0 || dut.irq_enabled!==0 ||
+           dut.irq_pending!==0 || ack!==0 || dut.reg_served!==0 ||
+           dut.state!==dut.OFF || dut.fifo_reset!==1 || dut.frame_ready!==0 ||
+           dut.fetch_req!==0 || dut.keep_fill!==0)
+            $fatal(1,"CPU reset failed to disable RTG, IRQ, handshake or DMA");
+        req=0;wr=0;ena=0;
+        repeat(6) @(negedge sys);
+        cpu_reset_n=1;
+        repeat(6) @(negedge sys);
+        if(irq!==0 || dut.rtg_enable!==0 || dut.state!==dut.OFF)
+            $fatal(1,"CPU reset release restored stale RTG state");
+        access(11'h10c,1,3);frame_event(0);frame_event(1);
+        if(irq!==1) $fatal(1,"IRQ did not recover after CPU reset");
+        $display("PASS: native startup IRQ, HDMI blank, sticky/W1C IRQ, PORTS, native VERTB, clock restart and CPU reset");
         $finish;
     end
     initial begin #100000;$fatal(1,"timeout");end
