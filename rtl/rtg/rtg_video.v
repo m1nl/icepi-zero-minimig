@@ -9,6 +9,7 @@ module rtg_video #(
 ) (
   input wire clk_sys,
   input wire resetn_sys,
+  input wire cpu_resetn,
   input wire clk_rtg,
   input wire resetn_rtg,
 
@@ -129,12 +130,14 @@ reg [6:0] h_start, h_stop;
 reg [5:0] v_start, v_stop;
 reg [7:0] source_bursts;
 
-always @(posedge clk_sys or negedge resetn_sys) begin
-  if (!resetn_sys) begin
+wire reg_resetn = resetn_sys && cpu_resetn;
+
+always @(posedge clk_sys or negedge reg_resetn) begin
+  if (!reg_resetn) begin
     rtg_enable <= 0;
     split_line <= 11'h7ff;
-    prescale   <= 4'b0;
-    stride     <= 0;
+    prescale <= 4'b0;
+    stride <= 0;
     h_start <= 0;
     h_stop <= 0;
     v_start <= 0;
@@ -164,11 +167,10 @@ reg irq_pending;
 // Keep frame interrupts independent of the display switch and FIFO DMA.
 assign irq = irq_enabled && irq_pending;
 
-always @(posedge clk_sys or negedge resetn_sys) begin
-  if (!resetn_sys) begin
+always @(posedge clk_sys or negedge reg_resetn) begin
+  if (!reg_resetn) begin
     reg_ack <= 0;
     reg_served <= 0;
-    reg_q <= 16'hffff;
 
   end else begin
     // Like rtl/soc/akiko.v, completion is a registered one-clock pulse.
@@ -182,20 +184,22 @@ always @(posedge clk_sys or negedge resetn_sys) begin
       reg_ack <= 1;
       reg_served <= 1;  // Do not replay a held request or its writes.
     end
-
-    // We can set req_q regardless if we're writing or reading as
-    // reading register does not clear any flag here
-    // Configuration is write-only; retain status, ID and display readback.
-    case (reg_addr)
-      11'h10c: reg_q <= {12'd0, ena_sys, irq_enabled, irq_pending, in_vblank};
-      11'h110: reg_q <= {15'd0, rtg_enable};
-      default: reg_q <= 16'h8321;
-    endcase
   end
 end
 
-always @(posedge clk_sys or negedge resetn_sys) begin
-  if (!resetn_sys) begin
+always @(posedge clk_sys) begin
+  // We can set req_q regardless if we're writing or reading as
+  // reading register does not clear any flag here
+  // Configuration is write-only; retain status, ID and display readback.
+  case (reg_addr)
+    11'h10c: reg_q <= {12'd0, ena_sys, irq_enabled, irq_pending, in_vblank};
+    11'h110: reg_q <= {15'd0, rtg_enable};
+    default: reg_q <= 16'h8321;
+  endcase
+end
+
+always @(posedge clk_sys or negedge reg_resetn) begin
+  if (!reg_resetn) begin
     irq_enabled <= 0;
     irq_pending <= 0;
 
@@ -258,7 +262,7 @@ reg [9:0] config_sys_split;
 // config_sys_* registers feed only pixel-domain consumers, so the complete
 // prefix can be excluded from timing without hiding any clk_sys DMA paths.
 reg [1:0] config_sys_repeat;
-reg [1:0] vertical_repeat;
+reg [1:0] vrepeat;
 
 // Coarse bounds eliminate the low four bits from viewport comparisons.
 // Boundary-minus-one is prepared here, never on the FIFO read-enable path.
@@ -331,7 +335,6 @@ localparam RUN_BOTTOM     = 8;
 
 reg [3:0] state;
 reg [5:0] quiet;
-reg [2:0] reset_count;
 
 localparam PREPARE_COUNT_BITS = PREPARE_DELAY > 0 ? $clog2(PREPARE_DELAY + 1) : 1;
 
@@ -366,19 +369,11 @@ wire fetching = state == PREFILL_BOTTOM || state == RUN_TOP || state == RUN_BOTT
 reg top_room, bottom_room;
 reg top_hungry, bottom_hungry;
 
-always @(posedge clk_sys or negedge resetn_sys) begin
-  if (!resetn_sys) begin
-    top_room <= 0;
-    bottom_room <= 0;
-    top_hungry <= 0;
-    bottom_hungry <= 0;
-
-  end else begin
-    top_room <= used_top < fetch_limit;
-    bottom_room <= used_bottom < fetch_limit;
-    top_hungry <= used_top < priority_limit;
-    bottom_hungry <= used_bottom < priority_limit;
-  end
+always @(posedge clk_sys) begin
+  top_room <= used_top < fetch_limit;
+  bottom_room <= used_bottom < fetch_limit;
+  top_hungry <= used_top < priority_limit;
+  bottom_hungry <= used_bottom < priority_limit;
 end
 
 wire selected_room = owner ? bottom_room : top_room;
@@ -405,7 +400,7 @@ wire [21:0] selected_row_base = owner ? row_base_bottom : row_base_top;
 wire  [7:0] selected_row_left = owner ? row_left_bottom : row_left_top;
 wire  [1:0] selected_repeat   = owner ? repeat_bottom   : repeat_top;
 
-wire repeat_row = selected_repeat != vertical_repeat;
+wire repeat_row = selected_repeat != vrepeat;
 
 wire [21:0] next_row_base = selected_row_base + frame_stride;
 wire [21:0] next_addr     = selected_row_left != 1 ? linear_addr :
@@ -423,43 +418,9 @@ always @(posedge clk_sys or negedge resetn_sys) begin
     state <= OFF;
     fifo_reset <= 1;
     frame_ready <= 0;
-    owner <= 0;
-    quiet <= 0;
-    reset_count <= 0;
-    prepare_count <= 0;
-    config_sys_split <= 0;
-    config_sys_h_start_last <= 0;
-    config_sys_h_stop_last <= 0;
-    config_sys_h_zero <= 0;
-    config_sys_v_start <= 0;
-    config_sys_v_stop <= 0;
-    config_sys_indexed <= 0;
-    config_sys_rgb565 <= 1;
-    config_sys_repeat <= 0;
-    vertical_repeat <= 0;
-    row_bursts <= 0;
-    frame_stride <= 0;
-    row_base_top <= 0;
-    row_base_bottom <= 0;
-    row_left_top <= 0;
-    row_left_bottom <= 0;
-    repeat_top <= 0;
-    repeat_bottom <= 0;
-    fetch_limit <= 480;
-    priority_limit <= 256;
-    addr_top <= 0;
-    addr_bottom <= 0;
-    rows_remaining_top <= 0;
-    rows_remaining_bottom <= 0;
-    top_has_work <= 0;
-    bottom_has_work <= 0;
-    has_bottom <= 0;
-    prefill_left <= 0;
-    prefill_has_work <= 0;
-    prefill_words <= 0;
 
   end else begin
-    if (!ena_sys || vreset_sys) begin
+    if (!cpu_resetn || !ena_sys || vreset_sys) begin
       state <= OFF;
       fifo_reset <= 1;
       frame_ready <= 0;
@@ -539,84 +500,72 @@ always @(posedge clk_sys or negedge resetn_sys) begin
         end
         DRAIN: if (prepare_count >= PREPARE_DELAY && quiet == 32 && !fetch_ack && !fetch_fill) begin
           fifo_reset <= 1;
-          reset_count <= 0;
           state <= RESET_FIFO;
         end
         RESET_FIFO: begin
-          reset_count <= reset_count + 1'b1;
+          addr_top <= rtg_base;
+          addr_bottom <= rtg_base2;
 
-          if (reset_count == 0) begin
-            addr_top <= rtg_base;
-            addr_bottom <= rtg_base2;
+          rows_remaining_top <= top_rows;
+          rows_remaining_bottom <= split_valid ? bottom_rows : 0;
+          top_has_work <= top_rows != 0;
+          bottom_has_work <= split_valid && (bottom_rows != 0);
 
-            config_sys_indexed <= rtg_clut;
-            config_sys_rgb565 <= rtg_16bit;
+          row_base_top <= rtg_base;
+          row_base_bottom <= rtg_base2;
+          row_left_top <= source_bursts;
+          row_left_bottom <= source_bursts;
 
-            rows_remaining_top <= top_rows;
-            rows_remaining_bottom <= split_valid ? bottom_rows : 0;
-            top_has_work <= top_rows != 0;
-            bottom_has_work <= split_valid && (bottom_rows != 0);
+          repeat_top <= 0;
+          repeat_bottom <= 0;
 
-            has_bottom <= split_valid;
-            config_sys_split <= split_valid ? split_line[9:0] : viewport_bottom;
-            config_sys_h_start_last <= h_start - 1'b1;
-            config_sys_h_stop_last <= h_stop - 1'b1;
-            config_sys_h_zero <= h_start == 0;
-            config_sys_v_start <= v_start;
-            config_sys_v_stop <= v_stop;
+          config_sys_indexed <= rtg_clut;
+          config_sys_rgb565 <= rtg_16bit;
+          config_sys_split <= split_valid ? split_line[9:0] : viewport_bottom;
+          config_sys_h_start_last <= h_start - 1'b1;
+          config_sys_h_stop_last <= h_stop - 1'b1;
+          config_sys_h_zero <= h_start == 0;
+          config_sys_v_start <= v_start;
+          config_sys_v_stop <= v_stop;
+          config_sys_repeat <= prescale[1:0];
+          vrepeat <= prescale[3:2];
 
-            config_sys_repeat <= prescale[1:0];
-            vertical_repeat <= prescale[3:2];
+          has_bottom <= split_valid;
+          row_bursts <= source_bursts;
+          frame_stride <= stride;
+          prefill_words <= {prefill_limit, 3'd0};
 
-            row_bursts <= source_bursts;
-            frame_stride <= stride;
-            row_base_top <= rtg_base;
-            row_base_bottom <= rtg_base2;
-            row_left_top <= source_bursts;
-            row_left_bottom <= source_bursts;
+          case (prescale[1:0])
+            2'd1: begin
+              fetch_limit <= 240;
+              priority_limit <= 128;
+            end
+            2'd2: begin
+              fetch_limit <= 160;
+              priority_limit <= 88;
+            end
+            2'd3: begin
+              fetch_limit <= 120;
+              priority_limit <= 64;
+            end
+            default: begin
+              fetch_limit <= 480;
+              priority_limit <= 256;
+            end
+          endcase
 
-            repeat_top <= 0;
-            repeat_bottom <= 0;
+          // The driver selects maximal repetition for source sizes >=320x192.
+          // Even one indexed row meets these targets, including a one-line
+          // split section. No short-section accumulator/clamp is required.
+          prefill_left <= prefill_limit;
+          prefill_has_work <= prefill_limit != 0;
 
-            // The driver selects maximal repetition for source sizes >=320x192.
-            // Even one indexed row meets these targets, including a one-line
-            // split section. No short-section accumulator/clamp is required.
-            prefill_left <= prefill_limit;
-            prefill_has_work <= prefill_limit != 0;
-            prefill_words <= {prefill_limit, 3'd0};
-
-            case (prescale[1:0])
-              2'd1: begin
-                fetch_limit <= 240;
-                priority_limit <= 128;
-              end
-              2'd2: begin
-                fetch_limit <= 160;
-                priority_limit <= 88;
-              end
-              2'd3: begin
-                fetch_limit <= 120;
-                priority_limit <= 64;
-              end
-              default: begin
-                fetch_limit <= 480;
-                priority_limit <= 256;
-              end
-            endcase
-          end
-
-          if (reset_count == 7) begin
-            fifo_reset <= 0;
-            reset_count <= 0;
-            state <= RELEASE_FIFO;
-          end
+          fifo_reset <= 0;
+          state <= RELEASE_FIFO;
         end
         RELEASE_FIFO: begin
-          reset_count <= reset_count + 1'b1;
-          if (reset_count == 7) begin
-            owner <= has_bottom;
-            state <= has_bottom ? PREFILL_BOTTOM : RUN_TOP;
-          end
+          owner <= has_bottom;
+          state <= has_bottom ? PREFILL_BOTTOM : RUN_TOP;
         end
         PREFILL_BOTTOM: if (prefill_left == 0) begin
           state <= DRAIN_BOTTOM;
@@ -777,6 +726,14 @@ always @(posedge clk_rtg) begin
           {word_1[14:10], word_1[14:12], word_1[ 9:5], word_1[ 9:7], word_1[4:0], word_1[4:2]};
 end
 
+// Validity masks metadata until both pipeline stages have refilled.
+always @(posedge clk_rtg) begin
+  bottom_1 <= selected_bottom;
+  low_byte_1 <= byte_phase;
+  source_1 <= source_request && valid_req;
+  source_2 <= source_1;
+end
+
 always @(posedge clk_rtg or negedge resetn_rtg) begin
   if (!resetn_rtg) begin
     ready_vid <= 0;
@@ -790,19 +747,15 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
     scan_block <= 0;
     horizontal_window <= 0;
     vertical_window <= 0;
-    source_1 <= 0;
-    source_2 <= 0;
     valid_1 <= 0;
     valid_2 <= 0;
 
-    bottom_1 <= 0;
-    low_byte_1 <= 0;
     red <= 0;
     green <= 0;
     blue <= 0;
 
   end else begin
-    ready_vid   <= {ready_vid[0], frame_ready};
+    ready_vid <= {ready_vid[0], frame_ready};
 
     if (!rtg_active || video_reset_rtg || reset_top_r || reset_bottom_r) begin
       frame_active <= 0;
@@ -815,8 +768,6 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       scan_block <= 0;
       horizontal_window <= 0;
       vertical_window <= 0;
-      source_1 <= 0;
-      source_2 <= 0;
       valid_1 <= 0;
       valid_2 <= 0;
 
@@ -876,12 +827,6 @@ always @(posedge clk_rtg or negedge resetn_rtg) begin
       // Frame request starts scanout without resetting prepared FIFOs.
       valid_1 <= valid_req;
       valid_2 <= valid_1;
-
-      source_1 <= source_request && valid_req;
-      source_2 <= source_1;
-
-      bottom_1 <= selected_bottom;
-      low_byte_1 <= byte_phase;
 
       // Hold the decoded RGB through repetitions, with unchanged latency.
       if (!valid_2)

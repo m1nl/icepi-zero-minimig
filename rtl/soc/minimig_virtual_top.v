@@ -392,7 +392,8 @@ generate
 
 		rtg_video rtg (
 			.clk_sys(CLK_114),
-			.resetn_sys(reset_out && rtg_cpu_resetn),
+			.resetn_sys(reset_out),
+			.cpu_resetn(rtg_cpu_resetn),
 			.clk_rtg(CLK_RTG_IN),
 			.resetn_rtg(rtg_resetn),
 
