@@ -70,11 +70,10 @@ Run the driver callbacks on the simulated TG68K/RTG core with
 ### Installing the RTG driver
 
 1. Install Picasso96 on the Amiga. The driver works with P96 2.0. If the installer requires a board choice, select PicassoIV to obtain a monitor executable.
-2. Mount `amiga_sw/rtg/minimig-rtg.adf` (1024x768) or `minimig-rtg-720p.adf` (1280x720) and copy the matching driver from an Amiga Shell:
+2. Mount `amiga_sw/rtg/minimig-rtg.adf` and copy the matching driver from an Amiga Shell:
 
    ```text
    Copy MinimigRTG:Libs/Picasso96/minimig.card LIBS:Picasso96/minimig.card
-   ; For 720p, use MinimigRTG720p: instead of MinimigRTG:
    ```
 
 3. Rename the installed monitor executable and its icon from `DEVS:Monitors/PicassoIV` and `PicassoIV.info` to `DEVS:Monitors/Minimig` and `Minimig.info`. The monitor executable comes from the P96 installer.
