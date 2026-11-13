@@ -185,6 +185,12 @@ architecture mix of ecp5pll is
                 if fvco >= sfreq(channel) then
                   div := fvco/sfreq(channel);
                 end if;
+                -- Compare output-frequency errors instead of truncating the divider.
+                if div < 128 then
+                  if abs(fvco/(div+1)-sfreq(channel)) < abs(fvco/div-sfreq(channel)) then
+                    div := div+1;
+                  end if;
+                end if;
                 freq  := fvco/div;
                 error := error + abs(freq-sfreq(channel));
               end if;
@@ -217,6 +223,12 @@ architecture mix of ecp5pll is
           div := 1;
           if params.fvco >= sfreq(channel) then
             div := params.fvco/sfreq(channel);
+          end if;
+          -- Use the same nearest-frequency choice as the candidate search.
+          if div < 128 then
+            if abs(params.fvco/(div+1)-sfreq(channel)) < abs(params.fvco/div-sfreq(channel)) then
+              div := div+1;
+            end if;
           end if;
           freq := params.fvco/div;
           phase_compensation := div*8-8;

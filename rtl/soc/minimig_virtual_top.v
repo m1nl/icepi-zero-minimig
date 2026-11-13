@@ -539,8 +539,6 @@ generate
 	end
 endgenerate
 
-wire clk_56;
-
 //// amiga clocks ////
 amiga_clk amiga_clk (
 	.rst          (1'b0             ), // async reset input
@@ -548,7 +546,7 @@ amiga_clk amiga_clk (
 	.clk_sdram    (clk_sdram        ), // output clock c0 (114.750000MHz, -146.25 deg)
 	.clk_114      (CLK_114          ), // output clock c1 (114.750000MHz)
 	.clk_28       (CLK_28           ), // output clock c2 ( 28.375160MHz)
-	.clk_56       (clk_56           ), // output clock c3
+	.clk_56       (                 ), // output clock c3
 	.clk_142      (CLK_142          ), // output clock c4 (141.8758MHz)
 	.clk7_en      (clk7_en          ), // output clock 7 enable (on 28MHz clock domain)
 	.clk7n_en     (clk7n_en         ), // 7MHz negedge output clock enable (on 28MHz clock domain)

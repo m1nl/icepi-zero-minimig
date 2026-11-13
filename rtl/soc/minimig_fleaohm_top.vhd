@@ -68,14 +68,14 @@ port(
 
 	-- Sigma Delta ADC ('Enhanced' Ohm-specific GPIO functionality)
 	-- NOTE: Must comment out GPIO_5, GPIO_7, GPIO_10 AND GPIO_24 as instructed in the pin constraints file (.LPF) in order to use
-	--ADC0_input	:	in		std_logic;
-	--ADC0_error	:	buffer	std_logic;
-	--ADC1_input	:	in		std_logic;
-	--ADC1_error	:	buffer	std_logic;
-	--ADC2_input	:	in		std_logic;
-	--ADC2_error	:	buffer	std_logic;
-	--ADC3_input	:	in		std_logic;
-	--ADC3_error	:	buffer	std_logic;
+	-- ADC0_input	:	in		std_logic;
+	-- ADC0_error	:	buffer	std_logic;
+	-- ADC1_input	:	in		std_logic;
+	-- ADC1_error	:	buffer	std_logic;
+	-- ADC2_input	:	in		std_logic;
+	-- ADC2_error	:	buffer	std_logic;
+	-- ADC3_input	:	in		std_logic;
+	-- ADC3_error	:	buffer	std_logic;
 
 	-- SD/MMC Interface (Support either SPI or nibble-mode)
 	mmc_dat1	:	in	std_logic;
@@ -92,20 +92,23 @@ port(
 end entity;
 
 architecture rtl of minimig_fleaohm_top is
-	-- RTG raster configuration. Match the driver profile and clock constraints.
-	constant RTG_PIXEL_HZ            : natural := 54000000;
-	constant RTG_PIXELX5_HZ          : natural := 5 * RTG_PIXEL_HZ;
-	constant RTG_FRAME_WIDTH         : natural := 1344;
-	constant RTG_FRAME_HEIGHT        : natural := 806;
-	constant RTG_SCREEN_WIDTH        : natural := 1024;
-	constant RTG_SCREEN_HEIGHT       : natural := 768;
-	constant RTG_HSYNC_PULSE_START   : natural := 24;
-	constant RTG_HSYNC_PULSE_SIZE    : natural := 136;
-	constant RTG_VSYNC_PULSE_START   : natural := 3;
-	constant RTG_VSYNC_PULSE_SIZE    : natural := 6;
+-- RTG raster configuration. Match the driver profile and clock constraints.
+	constant RTG_PIXEL_HZ	:	natural := 54000000;
+	constant RTG_PIXELX5_HZ	:	natural := 5 * RTG_PIXEL_HZ;
+	constant RTG_FRAME_WIDTH	:	natural := 1344;
+	constant RTG_FRAME_HEIGHT	:	natural := 806;
+	constant RTG_SCREEN_WIDTH	:	natural := 1024;
+	constant RTG_SCREEN_HEIGHT	:	natural := 768;
+	constant RTG_HSYNC_PULSE_START	:	natural := 24;
+	constant RTG_HSYNC_PULSE_SIZE	:	natural := 136;
+	constant RTG_VSYNC_PULSE_START	:	natural := 3;
+	constant RTG_VSYNC_PULSE_SIZE	:	natural := 6;
 	-- Bit 0 inverts HSync; bit 1 inverts VSync. CEA mode 0 is unspecified.
-	constant RTG_POLARITY_INVERT     : std_logic_vector(1 downto 0) := "11";
-	constant RTG_CEA_MODE            : natural := 0;
+	constant RTG_POLARITY_INVERT	:	std_logic_vector(1 downto 0) := "11";
+	constant RTG_CEA_MODE	:	natural := 0;
+
+-- Optional analog audio output
+	constant USE_ANALOG_AUDIO	:	boolean := true;
 
 -- SPI signals
 	signal led_power	:	std_logic;
@@ -139,7 +142,6 @@ architecture rtl of minimig_fleaohm_top is
 	signal n_joy2	:	std_logic_vector(6 downto 0);
 
 -- System clocks
-
 	signal clk_sys	:	std_logic;
 	signal clk_usb	:	std_logic;
 	signal clk_28m	:	std_logic;
@@ -217,7 +219,7 @@ usb_pull <= '0';
 -- SPI
 n_led1 <= NOT led_power;
 
-auxpll	:	entity work.ecp5pll
+auxpll : entity work.ecp5pll
 generic map (
 	in_hz => natural(base_frequency),
 	out0_hz => RTG_PIXELX5_HZ,
@@ -437,9 +439,9 @@ genvideo: block
 		sample	:	out std_logic_vector(31 downto 0)
 	);
 	end component;
+
 	signal hdmi_audio_sample	:	std_logic_vector(31 downto 0);
 	signal hdmi_audio_sample_en	:	std_logic;
-
 
 	signal tmds_clock	:	std_logic;
 	signal tmds	:	std_logic_vector(2 downto 0);
@@ -581,39 +583,40 @@ begin
 	lvds_dp <= tmds_clock & tmds;
 end block;
 
-genaudio	:	block
-	signal DAC_L	:	std_logic;
-	signal DAC_R	:	std_logic;
+genaudio : if USE_ANALOG_AUDIO generate
+	analog_audio : block
+		signal DAC_L	:	std_logic;
+		signal DAC_R	:	std_logic;
 
-	component hybrid_pwm_sd
-		PORT
+		component hybrid_pwm_sd
+			PORT
+			(
+				clk	:	 in std_logic;
+				terminate	:	in std_logic := '0';
+				d_l	:	 in std_logic_vector(15 downto 0);
+				q_l	:	 out std_logic;
+				d_r	:	 in std_logic_vector(15 downto 0);
+				q_r	:	 out std_logic
+			);
+		end component;
+	begin
+		-- Audio output mapped to GPIO header
+		GPIO_13 <= DAC_R;
+		GPIO_19 <= DAC_L;
+
+		audiosd : component hybrid_pwm_sd
+		PORT map
 		(
-			clk	:	 in std_logic;
-			terminate	:	in std_logic:='0';
-			d_l	:	 in std_logic_vector(15 downto 0);
-			q_l	:	 out std_logic;
-			d_r	:	 in std_logic_vector(15 downto 0);
-			q_r	:	 out std_logic
+			clk => clk_sys,
+			terminate => '0',
+			d_l(15) => not audio_l(15),
+			d_l(14 downto 0) => audio_l(14 downto 0),
+			q_l => DAC_L,
+			d_r(15) => not audio_r(15),
+			d_r(14 downto 0) => audio_r(14 downto 0),
+			q_r => DAC_R
 		);
-	END component;
-
-begin
-	-- Audio output mapped to GPIO header
-	GPIO_13 <= DAC_R;
-	GPIO_19 <= DAC_L;
-
-	audiosd : component hybrid_pwm_sd
-	PORT map
-	(
-		clk => clk_sys,
-		terminate => '0',
-		d_l(15) => not audio_l(15),
-		d_l(14 downto 0) => audio_l(14 downto 0),
-		q_l => DAC_L,
-		d_r(15) => not audio_r(15),
-		d_r(14 downto 0) => audio_r(14 downto 0),
-		q_r => DAC_R
-	);
-end block;
+	end block;
+end generate;
 
 end architecture;
