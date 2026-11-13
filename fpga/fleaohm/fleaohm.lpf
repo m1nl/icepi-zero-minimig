@@ -186,12 +186,12 @@ LOCATE COMP "sdram_dq[13]" SITE "B15" ;
 LOCATE COMP "sdram_dq[14]" SITE "B16" ;
 LOCATE COMP "sdram_dq[15]" SITE "A16" ;
 ## SD/MMC PORT
-IOBUF PORT "mmc_miso" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW;
-IOBUF PORT "mmc_dat1" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW;
-IOBUF PORT "mmc_dat2" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW;
-IOBUF PORT "mmc_n_cs" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW;
-IOBUF PORT "mmc_mosi" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW ;
-IOBUF PORT "mmc_clk" IO_TYPE=LVCMOS33 PULLMODE=NONE SLEWRATE=SLOW;
+IOBUF PORT "mmc_miso" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW DRIVE=8;
+IOBUF PORT "mmc_dat1" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW DRIVE=8;
+IOBUF PORT "mmc_dat2" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW DRIVE=8;
+IOBUF PORT "mmc_n_cs" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW DRIVE=8;
+IOBUF PORT "mmc_mosi" IO_TYPE=LVCMOS33 PULLMODE=UP SLEWRATE=SLOW DRIVE=8;
+IOBUF PORT "mmc_clk" IO_TYPE=LVCMOS33 PULLMODE=NONE SLEWRATE=SLOW DRIVE=8;
 LOCATE COMP "mmc_miso" SITE "C2" ;
 LOCATE COMP "mmc_clk" SITE "C3" ;
 LOCATE COMP "mmc_mosi" SITE "B2" ;
@@ -353,6 +353,11 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_to
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/mycfide/amiga_buffer*" 2X ;
 
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/itram/dpram_256x32_0_0_1" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/itram/dpram_256x32_0_1_0" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/dtram/dpram_256x32_0_0_1" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/dtram/dpram_256x32_0_1_0" PIN "*" TO CELL "*" 2X ;
+
 MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
 
 MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
@@ -369,6 +374,40 @@ MULTICYCLE TO CELL "virtual_top/hostcpu/nodebug.my832/alu/*mulresult*" CLKNET "c
 
 MULTICYCLE FROM CELL "genvideo.hdmi_inst/tmds_gen*.tmds_channel/*" TO CELL "genvideo.hdmi_inst/serializer/g_ser*.shift*" 2X ;
 BLOCK PATH TO CELL "genvideo.hdmi_inst/serializer/pixel_toggle_sync[0]" ;
+
+# HDMI serializer output-register placement (LFE5U-25F, BG381).
+# TMDS pins A4/A2/C1/G2 use IOL_L2A/L14A/L17A/L26A respectively.
+# Keep blue near its existing R2C2 placement; pull the other output pairs
+# toward their left-edge I/O rows. These are initial regions for timing trials.
+# Small groups keep each DDR input pair together; regions allow local movement
+# and do not reserve exclusive space. Recheck setup AND hold after routing.
+REGION "tmds_blue_out_region" "R2C2D" 4 4 DEVSIZE ;
+UGROUP "tmds_blue_out"
+    BBOX 2 2
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[0].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[0].out[1]" ;
+LOCATE UGROUP "tmds_blue_out" REGION "tmds_blue_out_region" ;
+
+REGION "tmds_green_out_region" "R11C2D" 4 7 DEVSIZE ;
+UGROUP "tmds_green_out"
+    BBOX 2 2
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[1].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[1].out[1]" ;
+LOCATE UGROUP "tmds_green_out" REGION "tmds_green_out_region" ;
+
+REGION "tmds_red_out_region" "R15C2D" 4 7 DEVSIZE ;
+UGROUP "tmds_red_out"
+    BBOX 2 2
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[2].out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/g_ser[2].out[1]" ;
+LOCATE UGROUP "tmds_red_out" REGION "tmds_red_out_region" ;
+
+REGION "tmds_clock_out_region" "R23C2D" 4 7 DEVSIZE ;
+UGROUP "tmds_clock_out"
+    BBOX 2 2
+    BLKNAME "genvideo.hdmi_inst/serializer/clk_out[0]"
+    BLKNAME "genvideo.hdmi_inst/serializer/clk_out[1]" ;
+LOCATE UGROUP "tmds_clock_out" REGION "tmds_clock_out_region" ;
 
 # HDMI package-pin data-to-forwarded-clock skew target: +/- 300 ps.
 # 54 MHz pixels, 270 MHz DDR serializer clock, 540 Mb/s per data lane.

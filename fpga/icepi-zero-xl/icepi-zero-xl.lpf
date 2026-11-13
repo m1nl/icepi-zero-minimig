@@ -405,6 +405,11 @@ MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_to
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/tg68k/u_akiko/*" 2X ;
 MULTICYCLE FROM CELL "virtual_top/tg68k/pf68K_Kernel_inst/*" TO CELL "virtual_top/mycfide/amiga_buffer*" 2X ;
 
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/itram/dpram_256x32_0_0_1" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/itram/dpram_256x32_0_1_0" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/dtram/dpram_256x32_0_0_1" PIN "*" TO CELL "*" 2X ;
+MULTICYCLE FROM ASIC "virtual_top/sdram/cache/dtram/dpram_256x32_0_1_0" PIN "*" TO CELL "*" 2X ;
+
 MULTICYCLE FROM CELL "virtual_top/hostcpu/nodebug.my832/*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;
 
 MULTICYCLE FROM ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1[0:35]" PIN "*" TO ASIC "virtual_top/hostcpu/nodebug.my832/alu/genmult.mulresult_1_add[18:71]" PIN "*" 2X ;

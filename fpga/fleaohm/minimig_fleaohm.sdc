@@ -70,6 +70,9 @@ set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.tg68k.u_akiko.*}] 3
 set_multicycle_path -from [get_cells -regexp {virtual_top\.tg68k\..*}] -to [get_cells {virtual_top.mycfide.amiga_buffer*}] 3
 
+set_multicycle_path -from [get_cells -regexp {virtual_top\.sdram\.cache\.itram\..*}] 2
+set_multicycle_path -from [get_cells -regexp {virtual_top\.sdram\.cache\.dtram\..*}] 2
+
 set_false_path -to [get_ports {led[*]}]
 
 set_false_path -from [get_cells {virtual_top.mycfide.usbblock\.u_usb_hid_host_0.typ[*]}]

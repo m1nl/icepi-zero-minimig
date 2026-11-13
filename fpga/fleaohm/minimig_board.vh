@@ -1,4 +1,5 @@
 `define LATTICE
+`define LATTICE_TMDS_REGISTER_STAGE
 
 `define MINIMIG_VIRTUAL
 `define MINIMIG_STATIC_HDMI_TIMING
@@ -6,3 +7,4 @@
 
 // Use combinational ECP5 DSPs for the blitter barrel shifters.
 `define MINIMIG_ECP5_BLITTER_DSP
+
