@@ -246,12 +246,28 @@ localparam TMDS_CLOCK_INIT = 10'b0000011111;
                     shift <= {2'b0, shift[9:2]}; // shift by 2: DDR outputs 2 bits per cycle
             end
 
-            always_ff @(posedge clk_pixel_x5)
+`ifdef LATTICE_TMDS_REGISTER_STAGE
+            reg [1:0] shift_r;
+
+            always_ff @(posedge clk_pixel_x5) begin
 `ifdef TMDS_INVERT
-                out <= ~(shift[1:0]);
+                shift_r <= ~shift[1:0];
 `else
-                out <=   shift[1:0];
+                shift_r <=  shift[1:0];
 `endif
+            end
+`else
+
+`ifdef TMDS_INVERT
+            wire [1:0] shift_r = ~shift[1:0];
+`else
+            wire [1:0] shift_r =  shift[1:0];
+`endif
+
+`endif
+
+            always_ff @(posedge clk_pixel_x5)
+                out <= shift_r;
 
             ODDRX1F u_oddr (
                 .Q    (tmds[i]),
@@ -276,8 +292,18 @@ localparam TMDS_CLOCK_INIT = 10'b0000011111;
                 clk_shift <= {2'b0, clk_shift[9:2]};
         end
 
+        // Match the optional data pipeline to preserve clock/data word alignment.
+`ifdef LATTICE_TMDS_REGISTER_STAGE
+        reg [1:0] clk_shift_r;
+
         always_ff @(posedge clk_pixel_x5)
-            clk_out <= clk_shift[1:0];
+            clk_shift_r <= clk_shift[1:0];
+`else
+        wire [1:0] clk_shift_r = clk_shift[1:0];
+`endif
+
+        always_ff @(posedge clk_pixel_x5)
+            clk_out <= clk_shift_r;
 
         ODDRX1F u_clk (
             .Q    (tmds_clock),
